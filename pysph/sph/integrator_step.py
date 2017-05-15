@@ -20,6 +20,9 @@ class IntegratorStep(object):
 ###############################################################################
 class EulerStep(IntegratorStep):
     """Fast but inaccurate integrator. Use this for testing"""
+    def initialize(self):
+        pass
+
     def stage1(self, d_idx, d_u, d_v, d_w, d_au, d_av, d_aw, d_x, d_y,
                   d_z, d_rho, d_arho, dt):
         d_u[d_idx] += dt*d_au[d_idx]
@@ -31,6 +34,9 @@ class EulerStep(IntegratorStep):
         d_z[d_idx] += dt*d_w[d_idx]
 
         d_rho[d_idx] += dt*d_arho[d_idx]
+
+    def stage2(self):
+        pass
 
 ###############################################################################
 # `WCSPHStep` class
