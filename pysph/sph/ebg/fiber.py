@@ -134,14 +134,17 @@ class Bending(Equation):
 
     """
 
-    def __init__(self, dest, sources, ei):
+    def __init__(self, dest, sources, ei, k=0):
         r"""
         Parameters
         ----------
         ei : float
             bending stiffness (elastic modulus x 2nd order moment)
+        k : float
+            friction coefficient for torque from vorticity
         """
         self.ei = ei
+        self.k = k
         super(Bending, self).__init__(dest, sources)
 
     def initialize(self, d_idx, d_au, d_av, d_aw):
@@ -166,7 +169,7 @@ class Bending(Equation):
     def post_loop(self, d_idx, d_tag, d_m, d_phi0,
                 d_rxnext, d_rynext, d_rznext, d_rnext,
                 d_rxprev, d_ryprev, d_rzprev, d_rprev,
-                d_au, d_av, d_aw):
+                d_au, d_av, d_aw, d_omegax, d_omegay, d_omegaz):
         if d_rnext[d_idx] > 1E-14 and d_rprev[d_idx] > 1E-14:
             # vector to previous particle
             xab = d_rxprev[d_idx]
@@ -192,9 +195,9 @@ class Bending(Equation):
             nz = (xab*ybc-yab*xbc)/norm
 
             # momentum 
-            Mx = 2*self.ei*(phi-d_phi0[d_idx])/(rab+rbc)*nx
-            My = 2*self.ei*(phi-d_phi0[d_idx])/(rab+rbc)*ny
-            Mz = 2*self.ei*(phi-d_phi0[d_idx])/(rab+rbc)*nz
+            Mx = 2*self.ei*(phi-d_phi0[d_idx])/(rab+rbc)*nx + self.k*d_omegax[d_idx]
+            My = 2*self.ei*(phi-d_phi0[d_idx])/(rab+rbc)*ny + self.k*d_omegay[d_idx]
+            Mz = 2*self.ei*(phi-d_phi0[d_idx])/(rab+rbc)*nz + self.k*d_omegaz[d_idx]
 
             # forces on neighbouring particles
             Fabx = (My*zab-Mz*yab)/(rab**2)
