@@ -45,6 +45,22 @@ class HoldPoints(Equation):
                 d_aw[d_idx] = 0
                 d_awhat[d_idx] = 0
 
+class Vorticity(Equation):
+    r"""** Computes vorticity of velocity field**
+
+    According to Monaghan 1992 (2.12).
+    """
+
+    def initialize(self, d_idx, d_omegax, d_omegay, d_omegaz):
+        d_omegax[d_idx] = 0.0
+        d_omegay[d_idx] = 0.0
+        d_omegaz[d_idx] = 0.0
+
+    def loop(self, d_idx, s_idx, d_rho, s_m, d_omegax, d_omegay, d_omegaz, DWIJ, VIJ):
+        d_omegax[d_idx] += s_m[s_idx]/d_rho[d_idx]*(VIJ[1]*DWIJ[2]-VIJ[2]*DWIJ[1])
+        d_omegay[d_idx] += s_m[s_idx]/d_rho[d_idx]*(VIJ[2]*DWIJ[0]-VIJ[0]*DWIJ[2])
+        d_omegaz[d_idx] += s_m[s_idx]/d_rho[d_idx]*(VIJ[0]*DWIJ[1]-VIJ[1]*DWIJ[0])
+
 class Tension(Equation):
     r"""**Linear elastic fiber tension**
 
