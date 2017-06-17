@@ -195,24 +195,31 @@ class Bending(Equation):
             nz = (xab*ybc-yab*xbc)/norm
 
             # momentum 
-            Mx = 2*self.ei*(phi-d_phi0[d_idx])/(rab+rbc)*nx + self.k*d_omegax[d_idx]
-            My = 2*self.ei*(phi-d_phi0[d_idx])/(rab+rbc)*ny + self.k*d_omegay[d_idx]
-            Mz = 2*self.ei*(phi-d_phi0[d_idx])/(rab+rbc)*nz + self.k*d_omegaz[d_idx]
+            Mx = 2*self.ei*(phi-d_phi0[d_idx])/(rab+rbc)*nx
+            My = 2*self.ei*(phi-d_phi0[d_idx])/(rab+rbc)*ny
+            Mz = 2*self.ei*(phi-d_phi0[d_idx])/(rab+rbc)*nz
 
             # forces on neighbouring particles
             Fabx = (My*zab-Mz*yab)/(rab**2)
             Faby = (Mz*xab-Mx*zab)/(rab**2)
             Fabz = (Mx*yab-My*xab)/(rab**2)
-            Fbcx = -(My*zbc-Mz*ybc)/(rbc**2)
-            Fbcy = -(Mz*xbc-Mx*zbc)/(rbc**2)
-            Fbcz = -(Mx*ybc-My*xbc)/(rbc**2)
+            Fbcx = (My*zbc-Mz*ybc)/(rbc**2)
+            Fbcy = (Mz*xbc-Mx*zbc)/(rbc**2)
+            Fbcz = (Mx*ybc-My*xbc)/(rbc**2)
 
-            d_au[d_idx] += (Fabx+Fbcx)/d_m[d_idx]
-            d_av[d_idx] += (Faby+Fbcy)/d_m[d_idx]
-            d_aw[d_idx] += (Fabz+Fbcz)/d_m[d_idx]
-            d_au[d_idx+1] -= Fbcx/d_m[d_idx+1]
-            d_av[d_idx+1] -= Fbcy/d_m[d_idx+1]
-            d_aw[d_idx+1] -= Fbcz/d_m[d_idx+1]
-            d_au[d_idx-1] -= Fabx/d_m[d_idx-1]
-            d_av[d_idx-1] -= Faby/d_m[d_idx-1]
-            d_aw[d_idx-1] -= Fabz/d_m[d_idx-1]
+            kabx = (self.k*d_omegay[d_idx]*zab-self.k*d_omegaz[d_idx]*yab)/(rab**2)
+            kaby = (self.k*d_omegaz[d_idx]*xab-self.k*d_omegax[d_idx]*zab)/(rab**2)
+            kabz = (self.k*d_omegax[d_idx]*yab-self.k*d_omegay[d_idx]*xab)/(rab**2)
+            kbcx = -(self.k*d_omegay[d_idx]*zbc-self.k*d_omegaz[d_idx]*ybc)/(rbc**2)
+            kbcy = -(self.k*d_omegaz[d_idx]*xbc-self.k*d_omegax[d_idx]*zbc)/(rbc**2)
+            kbcz = -(self.k*d_omegax[d_idx]*ybc-self.k*d_omegay[d_idx]*xbc)/(rbc**2)
+
+            d_au[d_idx] += (Fabx-Fbcx)/d_m[d_idx]
+            d_av[d_idx] += (Faby-Fbcy)/d_m[d_idx]
+            d_aw[d_idx] += (Fabz-Fbcz)/d_m[d_idx]
+            d_au[d_idx+1] += (Fbcx+kbcx)/d_m[d_idx+1]
+            d_av[d_idx+1] += (Fbcy+kbcy)/d_m[d_idx+1]
+            d_aw[d_idx+1] += (Fbcz+kbcz)/d_m[d_idx+1]
+            d_au[d_idx-1] -= (Fabx+kabx)/d_m[d_idx-1]
+            d_av[d_idx-1] -= (Faby+kaby)/d_m[d_idx-1]
+            d_aw[d_idx-1] -= (Fabz+kabz)/d_m[d_idx-1]
