@@ -134,17 +134,14 @@ class Bending(Equation):
 
     """
 
-    def __init__(self, dest, sources, ei, k=0):
+    def __init__(self, dest, sources, ei):
         r"""
         Parameters
         ----------
         ei : float
             bending stiffness (elastic modulus x 2nd order moment)
-        k : float
-            friction coefficient for torque from vorticity
         """
         self.ei = ei
-        self.k = k
         super(Bending, self).__init__(dest, sources)
 
     def initialize(self, d_idx, d_au, d_av, d_aw):
@@ -207,19 +204,87 @@ class Bending(Equation):
             Fbcy = (Mz*xbc-Mx*zbc)/(rbc**2)
             Fbcz = (Mx*ybc-My*xbc)/(rbc**2)
 
-            kabx = (self.k*d_omegay[d_idx]*zab-self.k*d_omegaz[d_idx]*yab)/(rab**2)
-            kaby = (self.k*d_omegaz[d_idx]*xab-self.k*d_omegax[d_idx]*zab)/(rab**2)
-            kabz = (self.k*d_omegax[d_idx]*yab-self.k*d_omegay[d_idx]*xab)/(rab**2)
-            kbcx = -(self.k*d_omegay[d_idx]*zbc-self.k*d_omegaz[d_idx]*ybc)/(rbc**2)
-            kbcy = -(self.k*d_omegaz[d_idx]*xbc-self.k*d_omegax[d_idx]*zbc)/(rbc**2)
-            kbcz = -(self.k*d_omegax[d_idx]*ybc-self.k*d_omegay[d_idx]*xbc)/(rbc**2)
-
             d_au[d_idx] += (Fabx-Fbcx)/d_m[d_idx]
             d_av[d_idx] += (Faby-Fbcy)/d_m[d_idx]
             d_aw[d_idx] += (Fabz-Fbcz)/d_m[d_idx]
-            d_au[d_idx+1] += (Fbcx+kbcx)/d_m[d_idx+1]
-            d_av[d_idx+1] += (Fbcy+kbcy)/d_m[d_idx+1]
-            d_aw[d_idx+1] += (Fbcz+kbcz)/d_m[d_idx+1]
-            d_au[d_idx-1] -= (Fabx+kabx)/d_m[d_idx-1]
-            d_av[d_idx-1] -= (Faby+kaby)/d_m[d_idx-1]
-            d_aw[d_idx-1] -= (Fabz+kabz)/d_m[d_idx-1]
+            d_au[d_idx+1] += Fbcx/d_m[d_idx+1]
+            d_av[d_idx+1] += Fbcy/d_m[d_idx+1]
+            d_aw[d_idx+1] += Fbcz/d_m[d_idx+1]
+            d_au[d_idx-1] -= Fabx/d_m[d_idx-1]
+            d_av[d_idx-1] -= Faby/d_m[d_idx-1]
+            d_aw[d_idx-1] -= Fabz/d_m[d_idx-1]
+
+class Friction(Equation):
+    r"""**Fiber bending based on friction**
+
+    Particle acceleration based on fiber bending is computed. The source particles must be 
+    chosen to be the same as the destination particles 
+
+    """
+
+    def __init__(self, dest, sources, k):
+        r"""
+        Parameters
+        ----------
+        k : float
+            friction coefficient for torque from vorticity
+        """
+        self.k = k
+        super(Friction, self).__init__(dest, sources)
+
+    def initialize(self, d_idx, d_au, d_av, d_aw):
+        d_au[d_idx] = 0.0
+        d_av[d_idx] = 0.0
+        d_aw[d_idx] = 0.0
+
+    def loop(self, d_idx, s_idx, d_rxnext, d_rynext, d_rznext, d_rnext,
+                d_rxprev, d_ryprev, d_rzprev, d_rprev, XIJ, RIJ):
+        '''The loop saves vectors to previous and next particle only.'''
+        if d_idx == s_idx+1:
+            d_rxprev[d_idx] = XIJ[0]
+            d_ryprev[d_idx] = XIJ[1]
+            d_rzprev[d_idx] = XIJ[2]
+            d_rprev[d_idx] = RIJ
+        if d_idx == s_idx-1:
+            d_rxnext[d_idx] = XIJ[0]
+            d_rynext[d_idx] = XIJ[1]
+            d_rznext[d_idx] = XIJ[2]
+            d_rnext[d_idx] = RIJ
+
+    def post_loop(self, d_idx, d_m,
+                d_rxnext, d_rynext, d_rznext, d_rnext,
+                d_rxprev, d_ryprev, d_rzprev, d_rprev,
+                d_au, d_av, d_aw, d_omegax, d_omegay, d_omegaz):
+        if d_rnext[d_idx] > 1E-14 and d_rprev[d_idx] > 1E-14:
+            # vector to previous particle
+            xab = d_rxprev[d_idx]
+            yab = d_ryprev[d_idx]
+            zab = d_rzprev[d_idx]
+            rab = d_rprev[d_idx]
+            # vector to next particle
+            xbc = d_rxnext[d_idx]
+            ybc = d_rynext[d_idx]
+            zbc = d_rznext[d_idx]
+            rbc = d_rnext[d_idx]
+
+            # Averaged vorticity
+            #ox = (d_omegax[d_idx-1]+d_omegax[d_idx]+d_omegax[d_idx+1])/3
+            #oy = (d_omegay[d_idx-1]+d_omegay[d_idx]+d_omegay[d_idx+1])/3
+            #oz = (d_omegaz[d_idx-1]+d_omegaz[d_idx]+d_omegaz[d_idx+1])/3
+            ox = d_omegax[d_idx]
+            oy = d_omegay[d_idx]
+            oz = d_omegaz[d_idx]
+
+            kabx = self.k*(oy*zab-oz*yab)/(rab**2)
+            kaby = self.k*(oz*xab-ox*zab)/(rab**2)
+            kabz = self.k*(ox*yab-oy*xab)/(rab**2)
+            kbcx = -self.k*(oy*zbc-oz*ybc)/(rbc**2)
+            kbcy = -self.k*(oz*xbc-ox*zbc)/(rbc**2)
+            kbcz = -self.k*(ox*ybc-oy*xbc)/(rbc**2)
+
+            d_au[d_idx+1] += kbcx/d_m[d_idx+1]
+            d_av[d_idx+1] += kbcy/d_m[d_idx+1]
+            d_aw[d_idx+1] += kbcz/d_m[d_idx+1]
+            d_au[d_idx-1] -= kabx/d_m[d_idx-1]
+            d_av[d_idx-1] -= kaby/d_m[d_idx-1]
+            d_aw[d_idx-1] -= kabz/d_m[d_idx-1]
