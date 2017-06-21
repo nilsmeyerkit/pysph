@@ -75,9 +75,7 @@ ro = 1000.0
 import numpy as np
 import sys
 import os
-# Need this to import db_geometry.
-sys.path.append(os.pardir)
-from db_geometry import DamBreak2DGeometry
+from _db_geometry import DamBreak2DGeometry
 
 from pysph.base.kernels import CubicSpline
 from pysph.sph.equation import Group
@@ -179,7 +177,7 @@ equations = [
                 dest='fluid', sources=['boundary'], nu=nu, rho0=ro,
             ),
             ComputeDII(dest='fluid', sources=['fluid']),
-            #ComputeDIIBoundary(dest='fluid', sources=['boundary'], rho0=ro),
+            ComputeDIIBoundary(dest='fluid', sources=['boundary'], rho0=ro),
         ]
     ),
 
@@ -188,7 +186,7 @@ equations = [
             ComputeRhoAdvection(dest='fluid', sources=['fluid']),
             ComputeRhoBoundary(dest='fluid', sources=['boundary'], rho0=ro),
             ComputeAII(dest='fluid', sources=['fluid']),
-            #ComputeAIIBoundary(dest='fluid', sources=['boundary'], rho0=ro),
+            ComputeAIIBoundary(dest='fluid', sources=['boundary'], rho0=ro),
         ]
     ),
 
@@ -205,9 +203,9 @@ equations = [
                         dest='fluid', sources=['fluid'], rho0=ro,
                         tolerance=1e-3, debug=False
                     ),
-                    #PressureSolveBoundary(
-                    #    dest='fluid', sources=['boundary'], rho0=ro,
-                    #),
+                    PressureSolveBoundary(
+                        dest='fluid', sources=['boundary'], rho0=ro,
+                    ),
                   ]
             ),
         ],
