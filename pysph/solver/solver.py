@@ -11,6 +11,8 @@ from pysph.sph.sph_compiler import SPHCompiler
 
 from pysph.solver.utils import FloatPBar, load, dump
 
+from pysph.solver.vtk_output import dump_vtk
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -23,7 +25,8 @@ class Solver(object):
                  n_damp=0, tf=1.0, dt=1e-3,
                  adaptive_timestep=False, cfl=0.3,
                  output_at_times=(),
-                 fixed_h=False, **kwargs):
+                 fixed_h=False,
+                 vtk=False,**kwargs):
         """**Constructor**
 
         Any additional keyword args are used to set the values of any
@@ -67,6 +70,9 @@ class Solver(object):
 
         fixed_h : bint
             Flag for constant smoothing lengths `h`
+
+        vtk: bool
+            Flag indicating wether VTK files should be dumped as well
 
         Example
         -------
@@ -163,6 +169,9 @@ class Solver(object):
 
         # flag for constant smoothing lengths
         self.fixed_h = fixed_h
+
+        # flag indicating VTK output
+        self.vtk =vtk
 
         # Set all extra keyword arguments
         for attr, value in kwargs.items():
@@ -539,9 +548,14 @@ class Solver(object):
             comm = self.comm
 
         dump(fname, self.particles, self._get_solver_data(),
-             detailed_output=self.detailed_output,
-             only_real=self.output_only_real, mpi_comm=comm,
-             compress=self.compress_output)
+            detailed_output=self.detailed_output,
+            only_real=self.output_only_real, mpi_comm=comm,
+            compress=self.compress_output)
+        if self.vtk:
+            dump_vtk(fname, self.particles, 
+                scalars=['rho', 'p'],
+                velocity=['u', 'v', 'w'],
+                vorticity=['omegax', 'omegay', 'omegaz'])
 
     def load_output(self, count):
         """Load particle data from dumped output file.
