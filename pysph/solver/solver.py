@@ -552,9 +552,10 @@ class Solver(object):
             only_real=self.output_only_real, mpi_comm=comm,
             compress=self.compress_output)
         if self.vtk:
-            dump_vtk(fname, self.particles, 
-                scalars=['rho', 'p'],
+            dump_vtk(fname, self.particles,
+                scalars=['rho', 'p', 'tag'],
                 velocity=['u', 'v', 'w'],
+                acceleration=['au','av','aw'],
                 vorticity=['omegax', 'omegay', 'omegaz'])
 
     def load_output(self, count):
