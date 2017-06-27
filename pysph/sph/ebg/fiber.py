@@ -33,8 +33,8 @@ class HoldPoints(Equation):
         self.z = z
         super(HoldPoints, self).__init__(dest, sources)
 
-    def loop(self, d_idx, d_holdtag, d_au, d_av, d_aw, d_auhat, d_avhat, 
-            d_awhat):
+    def loop(self, d_idx, d_holdtag, d_au, d_av, d_aw, d_auhat, d_avhat,
+             d_awhat):
         if d_holdtag[d_idx] == self.tag :
             if self.x :
                 d_au[d_idx] = 0
@@ -323,7 +323,7 @@ class Friction(Equation):
         d_aw[d_idx] = 0.0
 
     def loop(self, d_idx, d_x, d_y, d_z, d_omegax, d_omegay, d_omegaz,
-                d_au, d_av, d_aw, d_m, d_tag):
+                d_au, d_av, d_aw, d_m, d_tag, d_testx, d_testy, d_testz):
 
         if ((d_idx+1)%(self.N+1) == 0 and d_idx > 0):
             xx = 0.0; yy = 0.0; zz = 0.0
@@ -352,3 +352,8 @@ class Friction(Equation):
                 d_au[idx] += k*(oy*zab-oz*yab)
                 d_av[idx] += k*(oz*xab-ox*zab)
                 d_aw[idx] += k*(ox*yab-oy*xab)
+
+                # just for Debugging:
+                d_testx[idx] = d_au[idx]
+                d_testy[idx] = d_av[idx]
+                d_testz[idx] = d_aw[idx]
