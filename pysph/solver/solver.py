@@ -553,7 +553,7 @@ class Solver(object):
             compress=self.compress_output)
         if self.vtk:
             dump_vtk(fname, self.particles,
-                scalars=['rho', 'p', 'tag'],
+                scalars=['rho', 'p', 'holdtag'],
                 velocity=['u', 'v', 'w'],
                 acceleration=['au','av','aw'],
                 vorticity=['omegax', 'omegay', 'omegaz'])
