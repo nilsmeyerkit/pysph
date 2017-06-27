@@ -53,14 +53,14 @@ class EBGStep(IntegratorStep):
 class RK2Step(IntegratorStep):
     """General 2nd order Runge-Kutta Integrator
 
-    In the predictor step the particles are advanced to `t + dt/2`. The 
+    In the predictor step the particles are advanced to `t + dt/2`. The
     particles are then advanced with the new force computed at this position.
     .. math::
 
         y_{n+\frac{1}{2}} = y_n + \frac{\Delta t}{2} f(t_n, y_n)
         y_{n+1} = y_n + \Delta t f{y_{n+\frac{1}{2}}}
 
-    This integrator should be used in EPEC mode to mimic a 2nd order 
+    This integrator should be used in EPEC mode to mimic a 2nd order
     Runge-Kutta Scheme.
 
     """
@@ -87,7 +87,7 @@ class RK2Step(IntegratorStep):
         d_z[d_idx] = d_z0[d_idx] + dtb2 * d_w[d_idx]
 
     def stage2(self, d_idx, d_x0, d_y0, d_z0, d_x, d_y, d_z,
-                            d_u0, d_v0, d_w0, d_u, d_v, d_w, 
+                            d_u0, d_v0, d_w0, d_u, d_v, d_w,
                             d_au, d_av, d_aw, dt):
 
         d_u[d_idx] = d_u0[d_idx] + dt * d_au[d_idx]
