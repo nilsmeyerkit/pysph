@@ -130,10 +130,10 @@ class Damping(Equation):
         d_av[d_idx] = 0.0
         d_aw[d_idx] = 0.0
 
-    def loop(self, d_idx, d_m, d_u, d_v, d_w, d_au, d_av, d_aw):
-        d_au[d_idx] -= 2*self.d*d_u[d_idx]/d_m[d_idx]
-        d_av[d_idx] -= 2*self.d*d_v[d_idx]/d_m[d_idx]
-        d_aw[d_idx] -= 2*self.d*d_w[d_idx]/d_m[d_idx]
+    def loop(self, d_idx, d_m, d_eu, d_ev, d_ew, d_au, d_av, d_aw):
+        d_au[d_idx] -= 2*self.d*d_eu[d_idx]/d_m[d_idx]
+        d_av[d_idx] -= 2*self.d*d_ev[d_idx]/d_m[d_idx]
+        d_aw[d_idx] -= 2*self.d*d_ew[d_idx]/d_m[d_idx]
 
 
 class Bending(Equation):
