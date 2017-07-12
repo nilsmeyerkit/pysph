@@ -276,7 +276,11 @@ class Friction(Equation):
         A : float
             shell surface area (2D: 2*dx and 3D: dx*pi*d/2)
         mu : float
-            viscosity
+            absolute viscosity
+        d : float
+            fiber diameter
+        ar : float
+            fiber aspect ratio
         """
         self.J = J
         self.A = A
@@ -314,6 +318,7 @@ class Friction(Equation):
                 d_testx, d_testy, d_testz, d_dudx, d_dudy, d_dudz, d_dvdx,
                 d_dvdy, d_dvdz, d_dwdx, d_dwdy, d_dwdz):
         if d_rnext[d_idx] > 1E-14 and d_rprev[d_idx] > 1E-14:
+
             mu = self.nu*d_rho[d_idx]
 
             dx = d_rxnext[d_idx]-d_rxprev[d_idx]
@@ -326,7 +331,7 @@ class Friction(Equation):
 
             # ensuring that [sx sy sz] is not parallel to [1 0 0]
             if abs(s2) > 1E-14 or abs(s3) > 1E-14:
-                fac = (self.A * self.d/2 * mu)/(s2**2+s3**2)
+                fac = (2*self.A * self.d/2 * mu)/(s2**2+s3**2)
 
                 Mx = fac*((s1*s2**2*s3+s1*s3**3)*d_dvdx[d_idx]
                     +(-s1**2*s2*s3+s2*s3)*d_dvdy[d_idx]
@@ -347,7 +352,7 @@ class Friction(Equation):
                     +(-s1*s2**3-s1*s2*s3**2)*d_dvdy[d_idx]
                     +(-s1*s2**2*s3-s1*s3**3)*d_dvdz[d_idx])
             else:
-                fac = (self.A * self.d/2 * mu)/(s1**2+s3**2)
+                fac = (2*self.A * self.d/2 * mu)/(s1**2+s3**2)
 
                 Mx = fac*((-s1*s2**2*s3+s1*s3)*d_dvdx[d_idx]
                     +(s1**2*s2*s3+s2*s3**3)*d_dvdy[d_idx]
@@ -383,126 +388,3 @@ class Friction(Equation):
             d_testx[d_idx-1] -= (My*d_rzprev[d_idx]-Mz*d_ryprev[d_idx])/(2*self.J)
             d_testy[d_idx-1] -= (Mz*d_rxprev[d_idx]-Mx*d_rzprev[d_idx])/(2*self.J)
             d_testz[d_idx-1] -= (Mx*d_ryprev[d_idx]-My*d_rxprev[d_idx])/(2*self.J)
-
-
-    # def post_loop(self, d_idx, d_m, d_rho, d_x, d_y, d_z,
-    #             d_rxnext, d_rynext, d_rznext, d_rnext,
-    #             d_rxprev, d_ryprev, d_rzprev, d_rprev,
-    #             d_au, d_av, d_aw, d_omegax, d_omegay, d_omegaz,
-    #             d_testx, d_testy, d_testz, d_dudx, d_dudy, d_dudz, d_dvdx,
-    #             d_dvdy, d_dvdz, d_dwdx, d_dwdy, d_dwdz):
-    #     if d_rnext[d_idx] > 1E-14 and d_rprev[d_idx] > 1E-14:
-    #         mu = self.nu*d_rho[d_idx]
-    #
-    #         dx = d_rxnext[d_idx]-d_rxprev[d_idx]
-    #         dy = d_rynext[d_idx]-d_ryprev[d_idx]
-    #         dz = d_rznext[d_idx]-d_rzprev[d_idx]
-    #         r = sqrt(dx**2+dy**2+dz**2)
-    #         epsilon = 0.001*r
-    #
-    #         phiz = atan(dy/(dx+epsilon))
-    #         phiy = atan(dz/(dx+epsilon))
-    #         phix = atan(dz/(dy+epsilon))
-    #
-    #         nx = sin(phiz) * sin(phiy)
-    #         ny = cos(phiz) * cos(phix)
-    #         nz = cos(phiy) * sin(phix)
-    #
-    #         tx = mu * (d_dudx[d_idx]*nx + d_dudy[d_idx]*ny + d_dudz[d_idx]*nz)
-    #         ty = mu * (d_dvdx[d_idx]*nx + d_dvdy[d_idx]*ny + d_dudz[d_idx]*nz)
-    #         tz = mu * (d_dwdx[d_idx]*nx + d_dwdy[d_idx]*ny + d_dwdz[d_idx]*nz)
-    #
-    #         Mx = self.A * self.d/2 * (ty*nz - tz*ny)
-    #         My = self.A * self.d/2 * (tz*nx - tx*nz)
-    #         Mz = self.A * self.d/2 * (tx*ny - ty*nx)
-    #
-    #         d_au[d_idx+1] += (My*d_rznext[d_idx]-Mz*d_rynext[d_idx])/(2*self.J)
-    #         d_av[d_idx+1] += (Mz*d_rxnext[d_idx]-Mx*d_rznext[d_idx])/(2*self.J)
-    #         d_aw[d_idx+1] += (Mx*d_rynext[d_idx]-My*d_rxnext[d_idx])/(2*self.J)
-    #
-    #         d_au[d_idx-1] += (My*d_rzprev[d_idx]-Mz*d_ryprev[d_idx])/(2*self.J)
-    #         d_av[d_idx-1] += (Mz*d_rxprev[d_idx]-Mx*d_rzprev[d_idx])/(2*self.J)
-    #         d_aw[d_idx-1] += (Mx*d_ryprev[d_idx]-My*d_rxprev[d_idx])/(2*self.J)
-    #
-    #         # just for debugging
-    #         d_testx[d_idx+1] += (My*d_rznext[d_idx]-Mz*d_rynext[d_idx])/(2*self.J)
-    #         d_testy[d_idx+1] += (Mz*d_rxnext[d_idx]-Mx*d_rznext[d_idx])/(2*self.J)
-    #         d_testz[d_idx+1] += (Mx*d_rynext[d_idx]-My*d_rxnext[d_idx])/(2*self.J)
-    #
-    #         d_testx[d_idx-1] += (My*d_rzprev[d_idx]-Mz*d_ryprev[d_idx])/(2*self.J)
-    #         d_testy[d_idx-1] += (Mz*d_rxprev[d_idx]-Mx*d_rzprev[d_idx])/(2*self.J)
-    #         d_testz[d_idx-1] += (Mx*d_ryprev[d_idx]-My*d_rxprev[d_idx])/(2*self.J)
-
-
-
-# class Friction(Equation):
-#     r"""**Fiber bending based on friction**
-#
-#     Rigid rotation based on friction. Does not work across periodic boundaries!
-#     """
-#
-#     def __init__(self, dest, sources, J, k, n=2):
-#         r"""
-#         Parameters
-#         ----------
-#         J : float
-#             moment of inertia
-#         k : float
-#             friction coefficient for torque from vorticity
-#         n : int
-#             rigid motion rod length
-#         """
-#         self.J = J
-#         self.k = k
-#         self.N = n-1
-#         self.hold_tag_count = 1
-#         super(Friction, self).__init__(dest, sources)
-#
-#     def initialize(self, d_idx, d_au, d_av, d_aw):
-#         d_au[d_idx] = 0.0
-#         d_av[d_idx] = 0.0
-#         d_aw[d_idx] = 0.0
-#
-#     def loop(self, d_idx, d_x, d_y, d_z, d_omegax, d_omegay, d_omegaz,
-#                 d_au, d_av, d_aw, d_m, d_tag, d_testx, d_testy, d_testz,
-#                 d_holdtag):
-#         if ((d_idx+self.hold_tag_count)%(self.N+1) == 0 and d_idx > 0):
-#             xx = 0.0; yy = 0.0; zz = 0.0
-#             Mx = 0.0; My = 0.0; Mz = 0.0
-#
-#             # temporary workaround for angles
-#             #ddx = d_x[d_idx-self.N] - d_x[d_idx+1]
-#             #ddy = d_y[d_idx-self.N] - d_y[d_idx+1]
-#             #phi = atan(ddx/(ddy+0.001*ddx))
-#
-#             n = self.N+1
-#             for idx in range(d_idx-self.N, d_idx+1):
-#                 xx += 1.0/n * d_x[idx]
-#                 yy += 1.0/n * d_y[idx]
-#                 zz += 1.0/n * d_z[idx]
-#                 # ox += 1.0/n * d_omegax[idx]
-#                 # oy += 1.0/n * d_omegay[idx]
-#                 # oz += 1.0/n * d_omegaz[idx]
-#                 Mx += 1.0/n*self.k*d_omegax[idx]
-#                 My += 1.0/n*self.k*d_omegay[idx]
-#                 Mz += 1.0/n*self.k*d_omegaz[idx]
-#
-#
-#             for idx in range(d_idx-self.N, d_idx+1):
-#                 xab = d_x[idx]-xx
-#                 yab = d_y[idx]-yy
-#                 zab = d_z[idx]-zz
-#
-#                 d_au[idx] += (My*zab-Mz*yab)/self.J
-#                 d_av[idx] += (Mz*xab-Mx*zab)/self.J
-#                 d_aw[idx] += (Mx*yab-My*xab)/self.J
-#
-#                 # just for Debugging:
-#                 if d_holdtag[idx] == 0:
-#                     d_testx[idx] = (My*zab-Mz*yab)/self.J
-#                     d_testy[idx] = (Mz*xab-Mx*zab)/self.J
-#                     d_testz[idx] = (Mx*yab-My*xab)/self.J
-#
-#         # handle holds
-#         if not d_holdtag[d_idx] == 0:
-#             self.hold_tag_count +=1
