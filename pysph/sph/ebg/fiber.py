@@ -300,7 +300,7 @@ class Friction(Equation):
     particles.
     """
 
-    def __init__(self, dest, sources, J, A, nu, d, ar):
+    def __init__(self, dest, sources, J, A, mu, d, ar):
         r"""
         Parameters
         ----------
@@ -308,8 +308,8 @@ class Friction(Equation):
             moment of inertia
         A : float
             shell surface area (2D: 2*dx and 3D: dx*pi*d/2)
-        nu : float
-            kinematic viscosity
+        mu : float
+            absolute viscosity
         d : float
             fiber diameter
         ar : float
@@ -317,7 +317,7 @@ class Friction(Equation):
         """
         self.J = J
         self.A = A
-        self.nu = nu
+        self.mu = mu
         self.d = d
         self.ar = ar
         super(Friction, self).__init__(dest, sources)
@@ -347,7 +347,7 @@ class Friction(Equation):
                 d_dvdy, d_dvdz, d_dwdx, d_dwdy, d_dwdz):
         if d_rnext[d_idx] > 1E-14 and d_rprev[d_idx] > 1E-14:
 
-            mu = self.nu*d_rho[d_idx]
+            #mu = self.nu*d_rho[d_idx]
 
             dx = d_rxnext[d_idx]-d_rxprev[d_idx]
             dy = d_rynext[d_idx]-d_ryprev[d_idx]
@@ -359,7 +359,7 @@ class Friction(Equation):
 
             # ensuring that [sx sy sz] is not parallel to [1 0 0]
             if abs(s2) > 1E-14 or abs(s3) > 1E-14:
-                fac = (2*self.A * self.d/2 * mu)/(s2**2+s3**2)
+                fac = (2*self.A * self.d/2 * self.mu)/(s2**2+s3**2)
 
                 Mx = fac*((s1*s2**2*s3+s1*s3**3)*d_dvdx[d_idx]
                     +(-s1**2*s2*s3+s2*s3)*d_dvdy[d_idx]
@@ -380,7 +380,7 @@ class Friction(Equation):
                     +(-s1*s2**3-s1*s2*s3**2)*d_dvdy[d_idx]
                     +(-s1*s2**2*s3-s1*s3**3)*d_dvdz[d_idx])
             else:
-                fac = (2*self.A * self.d/2 * mu)/(s1**2+s3**2)
+                fac = (2*self.A * self.d/2 * self.mu)/(s1**2+s3**2)
 
                 Mx = fac*((-s1*s2**2*s3+s1*s3)*d_dvdx[d_idx]
                     +(s1**2*s2*s3+s2*s3**3)*d_dvdy[d_idx]
