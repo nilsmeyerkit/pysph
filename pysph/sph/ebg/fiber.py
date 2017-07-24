@@ -1,5 +1,5 @@
 """
-Element Bending Group
+Equations for Fibers
 ##############################
 
 """
@@ -8,10 +8,10 @@ from pysph.sph.equation import Equation
 from math import sqrt, acos, atan, sin, pi, floor
 
 class HoldPoints(Equation):
-    r"""**Holds Flagged Points **
+    r"""**Holds flagged points **
 
-    Points tagged with 'hold' are excluded from accelaration. This little trick
-    allows testing of Element Bending Groups with fixed BCs.
+    Points tagged with 'holdtag' == tag are excluded from accelaration. This
+    little trick allows testing of fibers with fixed BCs.
     """
 
     def __init__(self, dest, sources, tag, x=True, y=True, z=True):
@@ -19,7 +19,7 @@ class HoldPoints(Equation):
         Parameters
         ----------
         tags : int
-            tag of fixed particle
+            tag of fixed particle defined as property 'holdtag'
         x : boolean
             True, if x-position should not be changed
         y : boolean
@@ -34,20 +34,24 @@ class HoldPoints(Equation):
         super(HoldPoints, self).__init__(dest, sources)
 
     def loop(self, d_idx, d_holdtag, d_au, d_av, d_aw, d_auhat, d_avhat,
-             d_awhat):
+             d_awhat, d_u, d_v, d_w):
         if d_holdtag[d_idx] == self.tag :
             if self.x :
                 d_au[d_idx] = 0
                 d_auhat[d_idx] = 0
+                d_u[d_idx] = 0
             if self.y :
                 d_av[d_idx] = 0
                 d_avhat[d_idx] = 0
+                d_v[d_idx] = 0
             if self.z :
                 d_aw[d_idx] = 0
                 d_awhat[d_idx] = 0
+                d_w[d_idx] = 0
 
 class EBGVelocityReset(Equation):
-    '''Resets EBG velocities.'''
+    r"""** Resets EBG velocities **"""
+
     def loop(self, d_idx, d_eu, d_ev, d_ew):
         d_eu[d_idx] = 0
         d_ev[d_idx] = 0
@@ -144,10 +148,38 @@ class Tension(Equation):
             d_av[d_idx] -= (t*XIJ[1]/RIJ)/d_m[d_idx]
             d_aw[d_idx] -= (t*XIJ[2]/RIJ)/d_m[d_idx]
 
+class ArtificialDamping(Equation):
+    r"""**Damp EBG particle motion**
+
+    EBG Particles are damped based on EBG velocity. Use this in combination with
+    EBGStep and EBGVelocityReset.
+    """
+
+    def __init__(self, dest, sources, d):
+        r"""
+        Parameters
+        ----------
+        d : float
+            damping coefficient
+        """
+        self.d = d
+        super(ArtificialDamping, self).__init__(dest, sources)
+
+    def initialize(self, d_idx, d_au, d_av, d_aw):
+        d_au[d_idx] = 0.0
+        d_av[d_idx] = 0.0
+        d_aw[d_idx] = 0.0
+
+    def loop(self, d_idx, d_m, d_eu, d_ev, d_ew, d_au, d_av, d_aw):
+        d_au[d_idx] -= 2*self.d*d_eu[d_idx]/d_m[d_idx]
+        d_av[d_idx] -= 2*self.d*d_ev[d_idx]/d_m[d_idx]
+        d_aw[d_idx] -= 2*self.d*d_ew[d_idx]/d_m[d_idx]
+
 class Damping(Equation):
     r"""**Damp particle motion**
 
-    EBG Particles are damped.
+    Particles are damped. Difference to ArtificialDamping: This damps real
+    particle velocities and therefore affects not only the fiber iteration.
     """
 
     def __init__(self, dest, sources, d):
@@ -165,11 +197,10 @@ class Damping(Equation):
         d_av[d_idx] = 0.0
         d_aw[d_idx] = 0.0
 
-    def loop(self, d_idx, d_m, d_eu, d_ev, d_ew, d_au, d_av, d_aw):
-        d_au[d_idx] -= 2*self.d*d_eu[d_idx]/d_m[d_idx]
-        d_av[d_idx] -= 2*self.d*d_ev[d_idx]/d_m[d_idx]
-        d_aw[d_idx] -= 2*self.d*d_ew[d_idx]/d_m[d_idx]
-
+    def loop(self, d_idx, d_m, d_u, d_v, d_w, d_au, d_av, d_aw):
+        d_au[d_idx] -= 2*self.d*d_u[d_idx]/d_m[d_idx]
+        d_av[d_idx] -= 2*self.d*d_v[d_idx]/d_m[d_idx]
+        d_aw[d_idx] -= 2*self.d*d_w[d_idx]/d_m[d_idx]
 
 class Bending(Equation):
     r"""**Linear elastic fiber bending**
@@ -207,10 +238,10 @@ class Bending(Equation):
             d_rznext[d_idx] = XIJ[2]
             d_rnext[d_idx] = RIJ
 
-    def post_loop(self, d_idx, d_tag, d_m, d_phi0,
+    def post_loop(self, d_idx, d_m, d_phi0,
                 d_rxnext, d_rynext, d_rznext, d_rnext,
                 d_rxprev, d_ryprev, d_rzprev, d_rprev,
-                d_au, d_av, d_aw, d_omegax, d_omegay, d_omegaz):
+                d_au, d_av, d_aw):
         if d_rnext[d_idx] > 1E-14 and d_rprev[d_idx] > 1E-14:
             # vector to previous particle
             xab = d_rxprev[d_idx]
@@ -261,10 +292,12 @@ class Bending(Equation):
 
 
 class Friction(Equation):
-    r"""**Fiber bending based on friction**#
+    r"""**Fiber bending due to friction on fictive surfaces**
 
-    .... The source
-    particles must be chosen to be the same as the destination particles
+    Since the fiber represented by a beadchain of particles has no thickness, a
+    term has do compensate fritction due to shear on the particles surface.
+    The source particles must be chosen to be the same as the destination
+    particles.
     """
 
     def __init__(self, dest, sources, J, A, nu, d, ar):
@@ -275,8 +308,8 @@ class Friction(Equation):
             moment of inertia
         A : float
             shell surface area (2D: 2*dx and 3D: dx*pi*d/2)
-        mu : float
-            absolute viscosity
+        nu : float
+            kinematic viscosity
         d : float
             fiber diameter
         ar : float
@@ -289,16 +322,13 @@ class Friction(Equation):
         self.ar = ar
         super(Friction, self).__init__(dest, sources)
 
-    def initialize(self, d_idx, d_au, d_av, d_aw, d_testx, d_testy, d_testz):
+    def initialize(self, d_idx, d_au, d_av, d_aw):
        d_au[d_idx] = 0.0
        d_av[d_idx] = 0.0
        d_aw[d_idx] = 0.0
-       d_testx[d_idx] = 0.0
-       d_testy[d_idx] = 0.0
-       d_testz[d_idx] = 0.0
 
     def loop(self, d_idx, s_idx, d_rxnext, d_rynext, d_rznext, d_rnext,
-                d_rxprev, d_ryprev, d_rzprev, d_rprev, d_x, d_y, d_z, XIJ, RIJ):
+                d_rxprev, d_ryprev, d_rzprev, d_rprev, XIJ, RIJ):
         '''The loop saves vectors to previous and next particle only.'''
         if d_idx == s_idx+1:
             d_rxprev[d_idx] = XIJ[0]
@@ -311,11 +341,9 @@ class Friction(Equation):
             d_rznext[d_idx] = XIJ[2]
             d_rnext[d_idx] = RIJ
 
-    def post_loop(self, d_idx, d_m, d_rho, d_x, d_y, d_z,
-                d_rxnext, d_rynext, d_rznext, d_rnext,
-                d_rxprev, d_ryprev, d_rzprev, d_rprev,
-                d_au, d_av, d_aw, d_omegax, d_omegay, d_omegaz,
-                d_testx, d_testy, d_testz, d_dudx, d_dudy, d_dudz, d_dvdx,
+    def post_loop(self, d_idx, d_m, d_rho, d_rxnext, d_rynext, d_rznext,
+                d_rnext, d_rxprev, d_ryprev, d_rzprev, d_rprev,
+                d_au, d_av, d_aw, d_dudx, d_dudy, d_dudz, d_dvdx,
                 d_dvdy, d_dvdz, d_dwdx, d_dwdy, d_dwdz):
         if d_rnext[d_idx] > 1E-14 and d_rprev[d_idx] > 1E-14:
 
@@ -380,11 +408,3 @@ class Friction(Equation):
             d_au[d_idx-1] -= (My*d_rzprev[d_idx]-Mz*d_ryprev[d_idx])/(2*self.J)
             d_av[d_idx-1] -= (Mz*d_rxprev[d_idx]-Mx*d_rzprev[d_idx])/(2*self.J)
             d_aw[d_idx-1] -= (Mx*d_ryprev[d_idx]-My*d_rxprev[d_idx])/(2*self.J)
-            # just for debugging
-            d_testx[d_idx+1] -= (My*d_rznext[d_idx]-Mz*d_rynext[d_idx])/(2*self.J)
-            d_testy[d_idx+1] -= (Mz*d_rxnext[d_idx]-Mx*d_rznext[d_idx])/(2*self.J)
-            d_testz[d_idx+1] -= (Mx*d_rynext[d_idx]-My*d_rxnext[d_idx])/(2*self.J)
-
-            d_testx[d_idx-1] -= (My*d_rzprev[d_idx]-Mz*d_ryprev[d_idx])/(2*self.J)
-            d_testy[d_idx-1] -= (Mz*d_rxprev[d_idx]-Mx*d_rzprev[d_idx])/(2*self.J)
-            d_testz[d_idx-1] -= (Mx*d_ryprev[d_idx]-My*d_rxprev[d_idx])/(2*self.J)
