@@ -1,13 +1,20 @@
 """Shear flow involving a single fiber rotating. (10 mins)
 """
+# general imports
 import os
 import smtplib
 import json
 
-# general imports
+# matplotlib (set up for server use)
+import matplotlib
+matplotlib.use('Agg')
+from matplotlib import pyplot as plt
+
+# numpy and scipy
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.integrate import odeint
+
+# mail for notifications
 from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -102,7 +109,12 @@ class Channel(Application):
         )
         group.add_argument(
             "--holdcenter", action="store_true", dest='holdcenter',
-            default=False, help="Holding center particle in place.")
+            default=False, help="Holding center particle in place."
+        )
+        group.add_argument(
+            "--vtk", action="store_true", dest='vtk',
+            default=False, help="Enable vtk-output during solving."
+        )
         group.add_argument(
             "--postonly", action="store", type=bool, dest="postonly",
             default=False, help="Set time to zero and postprocess only."
@@ -473,7 +485,8 @@ class Channel(Application):
         integrator = EPECIntegrator(fluid=TransportVelocityStep(),
                                     fiber=TransportVelocityStep())
         solver = Solver(kernel=kernel, dim=self.options.dim, integrator=integrator, dt=self.dt,
-                         tf=self.t, pfreq=int(self.t/(500*self.dt)), vtk=True)
+                         tf=self.t, pfreq=int(self.t/(500*self.dt)),
+                        vtk=self.options.vtk)
         # solver = Solver(kernel=kernel, dim=self.options.dim, integrator=integrator, dt=self.dt,
         #                  tf=self.t, pfreq=1, vtk=True)
         return solver
@@ -529,7 +542,7 @@ class Channel(Application):
         #plt.axis('equal')
         plt.xlabel('x [mm]')
         plt.ylabel('y [mm]')
-        fig = os.path.join(self.output_dir, 'streamplot.png')
+        fig = os.path.join(self.output_dir, 'streamplot.eps')
         plt.savefig(fig, dpi=300)
         print("Streamplot written to %s."% fig)
         return(fig)
@@ -554,7 +567,7 @@ class Channel(Application):
         plt.xlabel('Velocity [m/s]')
         plt.ylabel('Position [m]')
         plt.legend(['Simulation', 'Ideal'])
-        fig = os.path.join(self.output_dir, 'inlet_velocity.png')
+        fig = os.path.join(self.output_dir, 'inlet_velocity.eps')
         plt.savefig(fig, dpi=300)
         print("Inlet velocity plot written to %s."% fig)
         return(fig)
@@ -591,7 +604,7 @@ class Channel(Application):
         plt.plot(x_begin, y_begin, '-ok')
         #plt.plot(x_end, y_end, '-.k')
         plt.axis('equal')
-        orbfig = os.path.join(self.output_dir, 'orbitplot.png')
+        orbfig = os.path.join(self.output_dir, 'orbitplot.eps')
         plt.savefig(orbfig, dpi=300)
         print("Orbitplot written to %s."% orbfig)
 
@@ -613,7 +626,7 @@ class Channel(Application):
         plt.ylabel('Angle [rad]')
         plt.legend(['Simulation', 'Jeffery'])
         plt.title("ar=%g"%self.options.ar)
-        angfig = os.path.join(self.output_dir, 'angleplot.png')
+        angfig = os.path.join(self.output_dir, 'angleplot.eps')
         plt.savefig(angfig, dpi=300)
         print("Angleplot written to %s."% angfig)
         csv_file = os.path.join(self.output_dir, 'angle.csv')
@@ -632,7 +645,7 @@ class Channel(Application):
         plt.title("Kinetic Energy")
         #x1,x2,y1,y2 = plt.axis()
         #plt.axis((x1,x2,0,y2))
-        engfig = os.path.join(self.output_dir, 'energyplot.png')
+        engfig = os.path.join(self.output_dir, 'energyplot.eps')
         plt.savefig(engfig, dpi=300)
         print("Energyplot written to %s."% engfig)
 
