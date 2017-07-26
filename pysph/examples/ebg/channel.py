@@ -4,7 +4,10 @@
 import os
 import smtplib
 import json
+
+# profiling
 import cProfile
+import pstats
 
 # matplotlib (set up for server use)
 import matplotlib
@@ -710,4 +713,7 @@ def run_application():
 
 if __name__ == '__main__':
     #run_application()
-    cProfile.runctx('run_application()', None, locals(), sort=1)
+    cProfile.runctx('run_application()', None, locals(), 'stats')
+    p = pstats.Stats('stats')
+    p.sort_stats('tottime').print_stats(10)
+    p.sort_stats('cumtime').print_stats(10)
