@@ -602,7 +602,7 @@ class Channel(Application):
 
         plt.figure()
         plt.plot(x_begin, y_begin, '-ok')
-        #plt.plot(x_end, y_end, '-.k')
+        plt.plot(x_end, y_end, '-*k')
         plt.axis('equal')
         orbfig = os.path.join(self.output_dir, 'orbitplot.eps')
         plt.savefig(orbfig, dpi=300)
