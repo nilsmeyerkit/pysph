@@ -5,6 +5,10 @@ import os
 import smtplib
 import json
 
+# profiling
+import cProfile
+import pstats
+
 # matplotlib (set up for server use)
 import matplotlib
 matplotlib.use('Agg')
@@ -485,7 +489,7 @@ class Channel(Application):
         integrator = EPECIntegrator(fluid=TransportVelocityStep(),
                                     fiber=TransportVelocityStep())
         solver = Solver(kernel=kernel, dim=self.options.dim, integrator=integrator, dt=self.dt,
-                         tf=self.t, pfreq=int(self.t/(500*self.dt)),
+                         tf=self.t, pfreq=int(self.t/(100*self.dt)),
                         vtk=self.options.vtk)
         # solver = Solver(kernel=kernel, dim=self.options.dim, integrator=integrator, dt=self.dt,
         #                  tf=self.t, pfreq=1, vtk=True)
@@ -702,8 +706,14 @@ class Channel(Application):
         if self.options.mail:
             self._send_notification(info_fname, [streamlines, orbitplot, angleplot])
 
-
-if __name__ == '__main__':
+def run_application():
     app = Channel()
     app.run()
     app.post_process(app.info_filename)
+
+if __name__ == '__main__':
+    #run_application()
+    cProfile.runctx('run_application()', None, locals(), 'stats')
+    p = pstats.Stats('stats')
+    p.sort_stats('tottime').print_stats(10)
+    p.sort_stats('cumtime').print_stats(10)
