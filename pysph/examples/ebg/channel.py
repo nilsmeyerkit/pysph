@@ -307,9 +307,9 @@ class Channel(Application):
         assert(fiber.get_number_of_particles()==self.options.ar)
 
         # add requisite variables needed for this formulation
-        for name in ('V', 'wf','uf','vf','wg','wij','vg','ug',
+        for name in ('V', 'wf','uf','vf','wg','wij','vg','ug', 'phifrac',
                      'awhat', 'avhat','auhat', 'vhat', 'what', 'uhat', 'vmag2',
-                     'arho', 'phi0', 'omegax', 'omegay', 'omegaz',
+                     'arho', 'phi0', 'omegax', 'omegay', 'omegaz', 'fractag',
                      'holdtag', 'eu', 'ev', 'ew', 'testx', 'testy', 'testz',
                      'dudx', 'dudy', 'dudz', 'dvdx', 'dvdy', 'dvdz','dwdx',
                      'dwdy', 'dwdz'):
@@ -342,6 +342,7 @@ class Channel(Application):
         fiber.lprev[:] = self.dx
         fiber.lnext[:] = self.dx
         fiber.phi0[:] = np.pi
+        fiber.phifrac[:] = 0.2
 
         # tag particles to be hold
         fiber.holdtag[:] = 0
@@ -415,14 +416,13 @@ class Channel(Application):
                     MomentumEquationPressureGradient(dest='fluid', sources=all,
                                         pb=self.pb, tdamp=0.0,
                                         gx=self.options.g),
-                    MomentumEquationPressureGradient(dest='fiber',
-                                        sources=['fluid', 'channel'],
+                    MomentumEquationPressureGradient(dest='fiber', sources=all,
                                         pb=0.0, tdamp=0.0,
                                         gx=self.options.g),
                     MomentumEquationViscosity(dest='fluid',
                                         sources=['fluid', 'fiber'], nu=self.nu),
                     MomentumEquationViscosity(dest='fiber',
-                                        sources=['fluid'], nu=self.nu),
+                                        sources=['fluid', 'fiber'], nu=self.nu),
                     SolidWallNoSlipBC(dest='fluid',
                                         sources=['channel',], nu=self.nu),
                     SolidWallNoSlipBC(dest='fiber',
@@ -430,7 +430,7 @@ class Channel(Application):
                     MomentumEquationArtificialStress(dest='fluid',
                                         sources=['fluid', 'fiber']),
                     MomentumEquationArtificialStress(dest='fiber',
-                                         sources=['fluid']),
+                                        sources=['fluid', 'fiber']),
                 ],
             ),
             Group(
@@ -606,8 +606,8 @@ class Channel(Application):
             #print('read file %s'%fname)
 
         plt.figure()
-        plt.plot(x_begin, y_begin, '-ok')
-        plt.plot(x_end, y_end, '-*k')
+        plt.plot(x_begin, y_begin, '-ok', markersize=5)
+        plt.plot(x_end, y_end, '-*k', markersize=5)
         plt.axis('equal')
         orbfig = os.path.join(self.output_dir, 'orbitplot.eps')
         plt.savefig(orbfig, dpi=300)

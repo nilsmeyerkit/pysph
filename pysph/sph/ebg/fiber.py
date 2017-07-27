@@ -132,17 +132,17 @@ class Tension(Equation):
         d_av[d_idx] = 0.0
         d_aw[d_idx] = 0.0
 
-    def loop(self, d_idx, s_idx, d_m, d_lprev, d_lnext,
+    def loop(self, d_idx, s_idx, d_m, d_lprev, d_lnext, d_fractag,
              d_au, d_av, d_aw, XIJ, RIJ):
         # interaction with previous particle
-        if d_idx == s_idx+1:
+        if d_idx == s_idx+1 and d_fractag[d_idx]+d_fractag[d_idx-1] < 2:
             t = self.ea*(RIJ/d_lprev[d_idx]-1)
             d_au[d_idx] -= (t*XIJ[0]/RIJ)/d_m[d_idx]
             d_av[d_idx] -= (t*XIJ[1]/RIJ)/d_m[d_idx]
             d_aw[d_idx] -= (t*XIJ[2]/RIJ)/d_m[d_idx]
 
         # interaction with next particle
-        if d_idx == s_idx-1:
+        if d_idx == s_idx-1 and d_fractag[d_idx]+d_fractag[d_idx+1] < 2:
             t = self.ea*(RIJ/d_lnext[d_idx]-1)
             d_au[d_idx] -= (t*XIJ[0]/RIJ)/d_m[d_idx]
             d_av[d_idx] -= (t*XIJ[1]/RIJ)/d_m[d_idx]
@@ -238,11 +238,13 @@ class Bending(Equation):
             d_rznext[d_idx] = XIJ[2]
             d_rnext[d_idx] = RIJ
 
-    def post_loop(self, d_idx, d_m, d_phi0,
+    def post_loop(self, d_idx, d_m, d_phi0, d_fractag, d_phifrac,
                 d_rxnext, d_rynext, d_rznext, d_rnext,
                 d_rxprev, d_ryprev, d_rzprev, d_rprev,
                 d_au, d_av, d_aw):
-        if d_rnext[d_idx] > 1E-14 and d_rprev[d_idx] > 1E-14:
+        if (d_rnext[d_idx] > 1E-14
+            and d_rprev[d_idx] > 1E-14
+            and d_fractag[d_idx] == 0):
             # vector to previous particle
             xab = d_rxprev[d_idx]
             yab = d_ryprev[d_idx]
@@ -271,6 +273,10 @@ class Bending(Equation):
             Mx = 2*self.ei*(phi-d_phi0[d_idx])/(rab+rbc)*nx
             My = 2*self.ei*(phi-d_phi0[d_idx])/(rab+rbc)*ny
             Mz = 2*self.ei*(phi-d_phi0[d_idx])/(rab+rbc)*nz
+
+            if abs(phi-d_phi0[d_idx]) > d_phifrac[d_idx]:
+                d_fractag[d_idx] = 1
+                d_fractag[d_idx+1] = 1
 
             # forces on neighbouring particles
             Fabx = (My*zab-Mz*yab)/(rab**2)
@@ -342,10 +348,12 @@ class Friction(Equation):
             d_rnext[d_idx] = RIJ
 
     def post_loop(self, d_idx, d_m, d_rho, d_rxnext, d_rynext, d_rznext,
-                d_rnext, d_rxprev, d_ryprev, d_rzprev, d_rprev,
+                d_rnext, d_rxprev, d_ryprev, d_rzprev, d_rprev, d_fractag,
                 d_au, d_av, d_aw, d_dudx, d_dudy, d_dudz, d_dvdx,
                 d_dvdy, d_dvdz, d_dwdx, d_dwdy, d_dwdz):
-        if d_rnext[d_idx] > 1E-14 and d_rprev[d_idx] > 1E-14:
+        if (d_rnext[d_idx] > 1E-14
+            and d_rprev[d_idx] > 1E-14
+            and d_fractag[d_idx] == 0):
 
             #mu = self.nu*d_rho[d_idx]
 

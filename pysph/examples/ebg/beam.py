@@ -115,21 +115,22 @@ class Beam(Application):
 
         # add requisite variables needed for this formulation
         for name in ('V', 'wij', 'vmag2', 'lprev', 'lnext', 'arho',
-                     'uf', 'vf', 'wf', 'ug', 'vg', 'wg', 'phi0',
-                     'auhat', 'avhat','awhat', 'uhat', 'vhat', 'what',
+                     'uf', 'vf', 'wf', 'ug', 'vg', 'wg', 'phi0', 'phifrac',
+                     'auhat', 'avhat','awhat', 'uhat', 'vhat', 'what', 'fractag',
                      'rxnext', 'rynext', 'rznext', 'rnext', 'rxprev', 'ryprev',
                      'rzprev', 'rprev', 'eu', 'ev', 'ew', 'holdtag', 'testx',
                      'testy', 'testz', 'omegax', 'omegay', 'omegaz'):
             fiber.add_property(name)
 
         # set the output property arrays
-        fiber.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm',
+        fiber.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm', 'fractag',
                               'h', 'p', 'pid', 'tag', 'gid', 'lprev'])
 
         # set initial distances
         fiber.lprev[:] = self.dx
         fiber.lnext[:] = self.dx
         fiber.phi0[:] = np.pi
+        fiber.phifrac[:] = 0.2
 
         # tag particles to be hold
         fiber.holdtag[:] = 0
