@@ -180,7 +180,7 @@ class Channel(Application):
             self.t = 0
         else:
             if self.options.G > 0.1:
-                self.t = 2.0*np.pi*(are+1.0/are)/self.options.G
+                self.t = 1.0*np.pi*(are+1.0/are)/self.options.G
             else:
                 self.t = 1000
         print("Simulated time is %g s"%self.t)
@@ -415,13 +415,14 @@ class Channel(Application):
                     MomentumEquationPressureGradient(dest='fluid', sources=all,
                                         pb=self.pb, tdamp=0.0,
                                         gx=self.options.g),
-                    MomentumEquationPressureGradient(dest='fiber', sources=all,
+                    MomentumEquationPressureGradient(dest='fiber',
+                                        sources=['fluid', 'channel'],
                                         pb=0.0, tdamp=0.0,
                                         gx=self.options.g),
                     MomentumEquationViscosity(dest='fluid',
                                         sources=['fluid', 'fiber'], nu=self.nu),
                     MomentumEquationViscosity(dest='fiber',
-                                        sources=['fluid', 'fiber'], nu=self.nu),
+                                        sources=['fluid'], nu=self.nu),
                     SolidWallNoSlipBC(dest='fluid',
                                         sources=['channel',], nu=self.nu),
                     SolidWallNoSlipBC(dest='fiber',
@@ -429,7 +430,7 @@ class Channel(Application):
                     MomentumEquationArtificialStress(dest='fluid',
                                         sources=['fluid', 'fiber']),
                     MomentumEquationArtificialStress(dest='fiber',
-                                         sources=['fiber', 'fiber']),
+                                         sources=['fluid']),
                 ],
             ),
             Group(
@@ -489,7 +490,7 @@ class Channel(Application):
         integrator = EPECIntegrator(fluid=TransportVelocityStep(),
                                     fiber=TransportVelocityStep())
         solver = Solver(kernel=kernel, dim=self.options.dim, integrator=integrator, dt=self.dt,
-                         tf=self.t, pfreq=int(self.t/(100*self.dt)),
+                         tf=self.t, pfreq=int(self.t/(500*self.dt)),
                         vtk=self.options.vtk)
         # solver = Solver(kernel=kernel, dim=self.options.dim, integrator=integrator, dt=self.dt,
         #                  tf=self.t, pfreq=1, vtk=True)
