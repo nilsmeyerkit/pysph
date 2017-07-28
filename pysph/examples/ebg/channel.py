@@ -180,7 +180,7 @@ class Channel(Application):
             self.t = 0
         else:
             if self.options.G > 0.1:
-                self.t = 1.0*np.pi*(are+1.0/are)/self.options.G
+                self.t = 2.0*np.pi*(are+1.0/are)/self.options.G
             else:
                 self.t = 1000
         print("Simulated time is %g s"%self.t)
