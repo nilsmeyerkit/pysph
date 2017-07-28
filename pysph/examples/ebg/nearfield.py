@@ -381,6 +381,7 @@ class Channel(Application):
         interp.update_particle_arrays(list(data['arrays'].values()))
         u = interp.interpolate('u')
         v = interp.interpolate('v')
+        p = interp.interpolate('p')
         vmag = np.sqrt(u**2 + v**2 )
 
 
@@ -398,10 +399,47 @@ class Channel(Application):
         plt.xlabel('x [mm]')
         plt.ylabel('y [mm]')
 
-        fig = os.path.join(self.output_dir, 'streamplot.png')
-        plt.savefig(fig, dpi=300)
-        print("Streamplot written to %s."% fig)
-        return(fig)
+        stream_fig = os.path.join(self.output_dir, 'streamplot.png')
+        plt.savefig(stream_fig, dpi=300)
+        print("Streamplot written to %s."% stream_fig)
+
+        plt.figure()
+        cmap = plt.cm.viridis
+        levels = np.linspace(-200, 200, 30)
+        vel = plt.contourf(x*factor,y*factor, p-p[0], levels=levels,
+                 cmap=cmap, vmax=200, vmin=-200)
+        cbar = plt.colorbar(vel, label='Pressure')
+        plt.axis('equal')
+        plt.xlabel('x [mm]')
+        plt.ylabel('y [mm]')
+
+        p_fig = os.path.join(self.output_dir, 'pressure.png')
+        plt.savefig(p_fig, dpi=300)
+        print("Pressure written to %s."% p_fig)
+
+        x = np.linspace(0,self.Lx,200)
+        y = np.array([self.Ly/2])
+        x,y = np.meshgrid(x,y)
+        last_output = self.output_files[-1]
+        data = load(last_output)
+        interp = Interpolator(list(data['arrays'].values()), x=x, y=y)
+        interp.update_particle_arrays(list(data['arrays'].values()))
+        p = interp.interpolate('p')
+
+        fem = np.loadtxt('/Users/nils/Dropbox/Thesis/Documentation/SPH/Nearfield/poiseuille_pressure_centerline.csv', delimiter=',')
+        x_fem = fem[:,0]*factor
+        p_fem = fem[:,2]
+        plt.figure()
+        plt.plot(x[0,:]*factor, p-p[0], '-k', x_fem, p_fem, '.k')
+        plt.legend(['SPH Simulation','FEM Result'])
+        plt.xlabel('x [mm]')
+        plt.ylabel('p [Pa]')
+
+        pcenter_fig = os.path.join(self.output_dir, 'pressure_centerline.png')
+        plt.savefig(pcenter_fig, dpi=300)
+        print("Pressure written to %s."% pcenter_fig)
+
+        return(stream_fig, p_fig, pcenter_fig)
 
     def _plot_inlet_velocity(self, step_idx=-1):
         output = self.output_files[step_idx]
@@ -475,7 +513,7 @@ class Channel(Application):
 
 
     def post_process(self, info_fname):
-        streamlines = self._plot_streamlines()
+        streamlines, pressure, pcenterline = self._plot_streamlines()
         inlet = self._plot_inlet_velocity()
         if self.options.mail:
             self._send_notification(info_fname, [streamlines])
