@@ -4,11 +4,17 @@ import os
 import smtplib
 import json
 
-# general imports
+# matplotlib (set up for server use)
+import matplotlib
+matplotlib.use('Agg')
+from matplotlib import pyplot as plt
+
+# numpy and scipy
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.integrate import odeint
 from scipy.ndimage.filters import gaussian_filter
+
+# Notification mails
 from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -158,7 +164,7 @@ class Channel(Application):
             self.pb = 0.0
 
         # time
-        self.t = 0#1.5E-5*self.options.scale_factor
+        self.t = 1.5E-5*self.options.scale_factor
         print("Simulated time is %g s"%self.t)
 
         # Setup time step
