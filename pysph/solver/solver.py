@@ -556,6 +556,7 @@ class Solver(object):
                 scalars=['rho', 'p', 'holdtag'],
                 velocity=['u', 'v', 'w'],
                 acceleration=['au','av','aw'],
+                reaction_force=['Fx','Fy','Fz'],
                 test=['testx','testy','testz'],
                 vorticity=['omegax', 'omegay', 'omegaz'])
 

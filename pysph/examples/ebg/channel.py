@@ -312,7 +312,7 @@ class Channel(Application):
                      'arho', 'phi0', 'omegax', 'omegay', 'omegaz', 'fractag',
                      'holdtag', 'eu', 'ev', 'ew', 'testx', 'testy', 'testz',
                      'dudx', 'dudy', 'dudz', 'dvdx', 'dvdy', 'dvdz','dwdx',
-                     'dwdy', 'dwdz'):
+                     'dwdy', 'dwdz', 'Fx', 'Fy', 'Fz'):
             fluid.add_property(name)
             channel.add_property(name)
             fiber.add_property(name)
