@@ -106,7 +106,7 @@ class Channel(Application):
         )
         group.add_argument(
             "--massscale", action="store", type=float, dest="scale_factor",
-            default=1E5, help="Factor of mass scaling"
+            default=1, help="Factor of mass scaling"
         )
 
 
@@ -158,7 +158,7 @@ class Channel(Application):
             self.pb = 0.0
 
         # time
-        self.t = 100.0
+        self.t = 1.5E-5*self.options.scale_factor
         print("Simulated time is %g s"%self.t)
 
         # Setup time step
@@ -252,7 +252,7 @@ class Channel(Application):
             channel.get_number_of_particles()))
 
         # add requisite variables needed for this formulation
-        for name in ('V', 'wf','uf','vf','wg','wij','vg','ug',
+        for name in ('V', 'wf','uf','vf','wg','wij','vg','ug', 'Fx', 'Fy', 'Fz',
                      'awhat', 'avhat','auhat', 'vhat', 'what', 'uhat', 'vmag2',
                      'arho', 'phi0', 'omegax', 'omegay', 'omegaz',
                      'holdtag', 'eu', 'ev', 'ew', 'testx', 'testy', 'testz',
@@ -262,9 +262,9 @@ class Channel(Application):
             channel.add_property(name)
 
         # set the output property arrays
-        fluid.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm','h', 'p',
+        fluid.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm','h', 'p', 'Fx', 'Fy', 'Fz',
                         'pid', 'holdtag', 'gid','omegax', 'omegay', 'omegaz'])
-        channel.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm','h', 'p',
+        channel.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm','h', 'p', 'Fx', 'Fy', 'Fz',
                         'pid', 'holdtag', 'gid','omegax', 'omegay', 'omegaz'])
 
         # volume is set as dx^2
@@ -284,6 +284,7 @@ class Channel(Application):
 
         # inverse volume (necessary for transport velocity equations)
         fluid.V[:] = 1./volume
+        fluid.V[-1] = 1./(volume*self.factor**self.options.dim)
         channel.V[:] = 1./volume
 
         # smoothing lengths
@@ -292,14 +293,14 @@ class Channel(Application):
         channel.h[:] = self.h0
 
         # initial velocities
-        fluid.u[:] = (self.options.G*(fluid.y[:]-self.Ly/2)
-                    - 1/2*self.options.g/self.nu*(
-                        (fluid.y[:]-self.Ly/2)**2-(self.Ly/2)**2)
-                    + self.options.V)
-        channel.u[:] = (self.options.G*(channel.y[:]-self.Ly/2)
-                    - 1/2*self.options.g/self.nu*(
-                        (channel.y[:]-self.Ly/2)**2-(self.Ly/2)**2)
-                    + self.options.V)
+        # fluid.u[:] = (self.options.G*(fluid.y[:]-self.Ly/2)
+        #             - 1/2*self.options.g/self.nu*(
+        #                 (fluid.y[:]-self.Ly/2)**2-(self.Ly/2)**2)
+        #             + self.options.V)
+        # channel.u[:] = (self.options.G*(channel.y[:]-self.Ly/2)
+        #             - 1/2*self.options.g/self.nu*(
+        #                 (channel.y[:]-self.Ly/2)**2-(self.Ly/2)**2)
+        #             + self.options.V)
 
         # return the particle list
         return [fluid, channel]
@@ -349,7 +350,7 @@ class Channel(Application):
 
     def create_solver(self):
         # Setting up the default integrator for fluid particles
-        kernel = CubicSpline(dim=self.options.dim)
+        kernel = QuinticSpline(dim=self.options.dim)
         integrator = EPECIntegrator(fluid=TransportVelocityStep())
         solver = Solver(kernel=kernel, dim=self.options.dim, integrator=integrator, dt=self.dt,
                          tf=self.t, pfreq=int(self.t/(100*self.dt)), vtk=True)
@@ -375,14 +376,25 @@ class Channel(Application):
         x = np.linspace(0,self.Lx,800)
         y = np.linspace(0,self.Ly,200)
         x,y = np.meshgrid(x,y)
-        last_output = self.output_files[-1]
-        data = load(last_output)
-        interp = Interpolator(list(data['arrays'].values()), x=x, y=y)
-        interp.update_particle_arrays(list(data['arrays'].values()))
-        u = interp.interpolate('u')
-        v = interp.interpolate('v')
-        p = interp.interpolate('p')
-        vmag = np.sqrt(u**2 + v**2 )
+        u = np.zeros((200,800))
+        v = np.zeros((200,800))
+        p = np.zeros((200,800))
+        N = 10
+        for output in self.output_files[-(1+N):-1]:
+            data = load(output)
+            interp = Interpolator(list(data['arrays'].values()), x=x, y=y)
+            interp.update_particle_arrays(list(data['arrays'].values()))
+            u += interp.interpolate('u')/N
+            v += interp.interpolate('v')/N
+            p += interp.interpolate('p')/N
+            vmag = np.sqrt(u**2 + v**2 )
+
+        if self.options.V > self.options.g:
+            p_bound = 600
+            fem = np.loadtxt('/Users/nils/Dropbox/Thesis/Documentation/SPH/Nearfield/homogenious_pressure_centerline.csv', delimiter=',')
+        else:
+            p_bound = 200
+            fem = np.loadtxt('/Users/nils/Dropbox/Thesis/Documentation/SPH/Nearfield/poiseuille_pressure_centerline.csv', delimiter=',')
 
 
         plt.figure()
@@ -405,9 +417,9 @@ class Channel(Application):
 
         plt.figure()
         cmap = plt.cm.viridis
-        levels = np.linspace(-200, 200, 30)
-        vel = plt.contourf(x*factor,y*factor, p-p[0], levels=levels,
-                 cmap=cmap, vmax=200, vmin=-200)
+        levels = np.linspace(-p_bound, p_bound, 30)
+        vel = plt.contourf(x*factor,y*factor, p, levels=levels,
+                 cmap=cmap, vmax=p_bound, vmin=-p_bound)
         cbar = plt.colorbar(vel, label='Pressure')
         plt.axis('equal')
         plt.xlabel('x [mm]')
@@ -420,17 +432,18 @@ class Channel(Application):
         x = np.linspace(0,self.Lx,200)
         y = np.array([self.Ly/2])
         x,y = np.meshgrid(x,y)
-        last_output = self.output_files[-1]
-        data = load(last_output)
-        interp = Interpolator(list(data['arrays'].values()), x=x, y=y)
-        interp.update_particle_arrays(list(data['arrays'].values()))
-        p = interp.interpolate('p')
+        N = 10
+        p = np.zeros((200,))
+        for output in self.output_files[-(1+N):-1]:
+            data = load(output)
+            interp = Interpolator(list(data['arrays'].values()), x=x, y=y)
+            interp.update_particle_arrays(list(data['arrays'].values()))
+            p += interp.interpolate('p')/N
 
-        fem = np.loadtxt('/Users/nils/Dropbox/Thesis/Documentation/SPH/Nearfield/poiseuille_pressure_centerline.csv', delimiter=',')
         x_fem = fem[:,0]*factor
         p_fem = fem[:,2]
         plt.figure()
-        plt.plot(x[0,:]*factor, p-p[0], '-k', x_fem, p_fem, '.k')
+        plt.plot(x[0,:]*factor, p, '-k', x_fem, p_fem, '.k')
         plt.legend(['SPH Simulation','FEM Result'])
         plt.xlabel('x [mm]')
         plt.ylabel('p [Pa]')
@@ -440,6 +453,36 @@ class Channel(Application):
         print("Pressure written to %s."% pcenter_fig)
 
         return(stream_fig, p_fig, pcenter_fig)
+
+    def _plot_reaction_force(self):
+        output_files = remove_irrelevant_files(self.output_files)
+        t = []
+        Fx = []
+        Fy = []
+        Fz = []
+        for fname in output_files:
+            data = load(fname)
+            fluid = data['arrays']['fluid']
+            Fx.append(fluid.Fx[-1])
+            Fy.append(fluid.Fy[-1])
+            Fz.append(fluid.Fz[-1])
+            t.append(data['solver_data']['t'])
+
+        fem = np.loadtxt('/Users/nils/Dropbox/Thesis/Documentation/SPH/Nearfield/poiseuille_reaction_force.csv', delimiter=',')
+        t_fem = fem[:,0]/self.options.scale_factor*1000
+        F_fem = abs(fem[:,1])
+        t = np.array(t)/self.options.scale_factor*1000
+
+        plt.figure()
+        plt.plot(t, Fx, '-k', t_fem, F_fem, ':k')
+        plt.xlabel('t [ms]')
+        plt.ylabel('Force [N]')
+        plt.title("Reaction Force")
+        plt.legend(['SPH Simulation', 'FEM Result', 'F_z'])
+        forcefig = os.path.join(self.output_dir, 'forceplot.eps')
+        plt.savefig(forcefig, dpi=300)
+        print("Reaction Force plot written to %s."% forcefig)
+        return forcefig
 
     def _plot_inlet_velocity(self, step_idx=-1):
         output = self.output_files[step_idx]
@@ -514,6 +557,7 @@ class Channel(Application):
 
     def post_process(self, info_fname):
         streamlines, pressure, pcenterline = self._plot_streamlines()
+        force_plot = self._plot_reaction_force()
         inlet = self._plot_inlet_velocity()
         if self.options.mail:
             self._send_notification(info_fname, [streamlines])
