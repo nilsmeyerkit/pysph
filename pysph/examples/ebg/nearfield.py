@@ -28,14 +28,14 @@ from pysph.solver.output import output_formats
 from pysph.solver.solver import Solver
 
 from pysph.sph.integrator import PECIntegrator, EulerIntegrator, EPECIntegrator
-from pysph.sph.integrator_step import TransportVelocityStep, EulerStep, EBGStep, InletOutletStep
+from pysph.sph.integrator_step import TransportVelocityStep, EulerStep, EBGStep
 from pysph.sph.acceleration_eval import AccelerationEval
 from pysph.sph.sph_compiler import SPHCompiler
 from pysph.sph.equation import Group
 from pysph.sph.simple_inlet_outlet import SimpleInlet, SimpleOutlet
 from pysph.sph.wc.transport_velocity import (SummationDensity,
     StateEquation, MomentumEquationPressureGradient,
-    MomentumEquationArtificialViscosity,
+    MomentumEquationArtificialViscosity, ContinuityEquation,
     MomentumEquationViscosity, MomentumEquationArtificialStress,
     SolidWallPressureBC, SolidWallNoSlipBC, SetWallVelocity)
 from pysph.sph.ebg.fiber import (Tension, Bending, Vorticity, Friction, Damping,
@@ -158,7 +158,7 @@ class Channel(Application):
             self.pb = 0.0
 
         # time
-        self.t = 1.5E-5*self.options.scale_factor
+        self.t = 0#1.5E-5*self.options.scale_factor
         print("Simulated time is %g s"%self.t)
 
         # Setup time step
@@ -254,7 +254,7 @@ class Channel(Application):
         # add requisite variables needed for this formulation
         for name in ('V', 'wf','uf','vf','wg','wij','vg','ug', 'Fx', 'Fy', 'Fz',
                      'awhat', 'avhat','auhat', 'vhat', 'what', 'uhat', 'vmag2',
-                     'arho', 'phi0', 'omegax', 'omegay', 'omegaz',
+                     'arho', 'phi0', 'omegax', 'omegay', 'omegaz', 'arho',
                      'holdtag', 'eu', 'ev', 'ew', 'testx', 'testy', 'testz',
                      'dudx', 'dudy', 'dudz', 'dvdx', 'dvdy', 'dvdz','dwdx',
                      'dwdy', 'dwdz'):
@@ -262,10 +262,12 @@ class Channel(Application):
             channel.add_property(name)
 
         # set the output property arrays
-        fluid.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm','h', 'p', 'Fx', 'Fy', 'Fz',
-                        'pid', 'holdtag', 'gid','omegax', 'omegay', 'omegaz'])
-        channel.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm','h', 'p', 'Fx', 'Fy', 'Fz',
-                        'pid', 'holdtag', 'gid','omegax', 'omegay', 'omegaz'])
+        fluid.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm','h', 'p', 'Fx',
+                        'Fy', 'Fz','pid', 'holdtag', 'gid','omegax', 'omegay',
+                        'omegaz'])
+        channel.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm','h', 'p',
+                        'Fx', 'Fy', 'Fz', 'pid', 'holdtag', 'gid','omegax',
+                        'omegay', 'omegaz'])
 
         # volume is set as dx^2
         volume = self.dx**self.options.dim
@@ -310,7 +312,8 @@ class Channel(Application):
         equations = [
             Group(
                 equations=[
-                    SummationDensity(dest='fluid', sources=all),
+                    #SummationDensity(dest='fluid', sources=all),
+                    ContinuityEquation(dest='fluid',sources=all),
                 ]
             ),
             Group(
@@ -322,9 +325,8 @@ class Channel(Application):
             ),
             Group(
                 equations=[
-                    SolidWallPressureBC(dest='channel',
-                                        sources=['fluid'],
-                                        b=1.0, rho0=self.options.rho0, p0=self.p0),
+                    SolidWallPressureBC(dest='channel', sources=['fluid'],b=1.0,
+                                        rho0=self.options.rho0, p0=self.p0),
                 ],
             ),
             Group(
@@ -352,9 +354,11 @@ class Channel(Application):
         # Setting up the default integrator for fluid particles
         kernel = QuinticSpline(dim=self.options.dim)
         integrator = EPECIntegrator(fluid=TransportVelocityStep())
-        solver = Solver(kernel=kernel, dim=self.options.dim, integrator=integrator, dt=self.dt,
-                         tf=self.t, pfreq=int(self.t/(100*self.dt)), vtk=True)
-        # solver = Solver(kernel=kernel, dim=self.options.dim, integrator=integrator, dt=self.dt,
+        solver = Solver(kernel=kernel, dim=self.options.dim,
+                        integrator=integrator, dt=self.dt,
+                        tf=self.t, pfreq=int(self.t/(100*self.dt)), vtk=True)
+        # solver = Solver(kernel=kernel, dim=self.options.dim,
+        #                  integrator=integrator, dt=self.dt,
         #                  tf=self.t, pfreq=1, vtk=True)
         return solver
 
@@ -389,14 +393,6 @@ class Channel(Application):
             p += interp.interpolate('p')/N
             vmag = np.sqrt(u**2 + v**2 )
 
-        if self.options.V > self.options.g:
-            p_bound = 600
-            fem = np.loadtxt('/Users/nils/Dropbox/Thesis/Documentation/SPH/Nearfield/homogenious_pressure_centerline.csv', delimiter=',')
-        else:
-            p_bound = 200
-            fem = np.loadtxt('/Users/nils/Dropbox/Thesis/Documentation/SPH/Nearfield/poiseuille_pressure_centerline.csv', delimiter=',')
-
-
         plt.figure()
         #f, (ax1, ax2) = plt.subplots(2, 1)
         cmap = plt.cm.viridis
@@ -417,9 +413,9 @@ class Channel(Application):
 
         plt.figure()
         cmap = plt.cm.viridis
-        levels = np.linspace(-p_bound, p_bound, 30)
+        levels = np.linspace(-300, 300, 30)
         vel = plt.contourf(x*factor,y*factor, p, levels=levels,
-                 cmap=cmap, vmax=p_bound, vmin=-p_bound)
+                 cmap=cmap, vmax=300, vmin=-300)
         cbar = plt.colorbar(vel, label='Pressure')
         plt.axis('equal')
         plt.xlabel('x [mm]')
@@ -428,7 +424,10 @@ class Channel(Application):
         p_fig = os.path.join(self.output_dir, 'pressure.png')
         plt.savefig(p_fig, dpi=300)
         print("Pressure written to %s."% p_fig)
+        return(stream_fig, p_fig)
 
+    def _plot_pressure_centerline(self):
+        factor = 1000
         x = np.linspace(0,self.Lx,200)
         y = np.array([self.Ly/2])
         x,y = np.meshgrid(x,y)
@@ -440,10 +439,29 @@ class Channel(Application):
             interp.update_particle_arrays(list(data['arrays'].values()))
             p += interp.interpolate('p')/N
 
-        x_fem = fem[:,0]*factor
-        p_fem = fem[:,2]
+        x_fem = np.array([9.60E-05,2.88E-04,4.80E-04,6.72E-04,8.64E-04,0.001056,
+                    0.001248,0.00144,0.001632,0.001824,0.002016,0.002208,0.0024,
+                    0.002592,0.002784,0.002976,0.003168,0.00336,0.003552,
+                    0.003744,0.003936,0.004128,0.00432,0.004512,0.004704,
+                    0.004896,0.005088,0.00528,0.005472,0.005664,0.005856,
+                    0.006048,0.00624,0.006432,0.006624,0.006816,0.007008,
+                    0.0072,0.007392,0.007584,0.007776,0.007968,0.00816,
+                    0.008352,0.008544,0.008736,0.008928,0.00912,0.009312,
+                    0.009504])
+        p_fem = np.array([1.58691032,3.218178544,4.371263607,5.586283773,
+                    6.816187114,8.082024459,9.393638874,10.7492284,12.13972677,
+                    13.57194924,15.05198485,16.76694504,18.4998047,20.25815552,
+                    22.45599313,24.90776849,27.84319026,31.28762006,35.51451971,
+                    41.18080914,49.93711208,61.37254299,81.9969569,127.4880833,
+                    np.NaN, np.NaN,-105.8456749,-61.80262634,-42.04795871,
+                    -30.53875332,-24.24458436,-20.20278011,-17.00506646,
+                    -14.80382863,-13.43634416,-12.10999473,-11.08772738,
+                    -10.21693285,-9.431064134,-8.65649864,-7.839548047,
+                    -7.004226958,-6.118488775,-5.212674274,-4.280871816,
+                    -3.29811397,-2.290456461,-1.24593802,-0.194508544,
+                    1.353145886])
         plt.figure()
-        plt.plot(x[0,:]*factor, p, '-k', x_fem, p_fem, '.k')
+        plt.plot(x[0,:]*factor, p-p[0], '-k', x_fem*factor, p_fem, '--k')
         plt.legend(['SPH Simulation','FEM Result'])
         plt.xlabel('x [mm]')
         plt.ylabel('p [Pa]')
@@ -451,8 +469,7 @@ class Channel(Application):
         pcenter_fig = os.path.join(self.output_dir, 'pressure_centerline.png')
         plt.savefig(pcenter_fig, dpi=300)
         print("Pressure written to %s."% pcenter_fig)
-
-        return(stream_fig, p_fig, pcenter_fig)
+        return pcenter_fig
 
     def _plot_reaction_force(self):
         output_files = remove_irrelevant_files(self.output_files)
@@ -468,17 +485,33 @@ class Channel(Application):
             Fz.append(fluid.Fz[-1])
             t.append(data['solver_data']['t'])
 
-        fem = np.loadtxt('/Users/nils/Dropbox/Thesis/Documentation/SPH/Nearfield/poiseuille_reaction_force.csv', delimiter=',')
-        t_fem = fem[:,0]/self.options.scale_factor*1000
-        F_fem = abs(fem[:,1])
+
+        t_fem = np.array([0,50,100,150,200,250,300,350,400,450,500,550,600,650,
+                    700,750,800,850,900,950,1000,1050,1100,1150,1200,1250,1300,
+                    1350,1400,1450,1500])
+        Fp_fem = np.array([6.95E-04,0.030299595,0.04868658,0.060802176,
+                    0.071992602,0.078325888,0.084659173,0.090492935,0.093704197,
+                    0.096915459,0.099866885,0.101454168,0.103041451,0.104498144,
+                    0.105269236,0.106040328,0.106747500,0.107119093,0.107490685,
+                    0.107831369,0.108009777,0.108188185,0.108351729,0.108437236,
+                    0.108522743,0.108601121,0.108642069,0.108683017,0.10872055,
+                    0.108740151,0.108759753])
+        F_fem = np.array([7.48E-04,0.060707871,0.097855135,0.122251195,
+                    0.144776438,0.157479887,0.170183337,0.181882322,0.188307871,
+                    0.194733419,0.20063835,0.203810039,0.206981728,0.209892324,
+                    0.211432182,0.21297204,0.214384218,0.215126076,0.215867934,
+                    0.216548076,0.216904208,0.21726034,0.217586799,0.217757474,
+                    0.21792815,0.218084595,0.218166326,0.218248057,0.218322972,
+                    0.218362095,0.218401219])
+        t_fem = t_fem/1E5
         t = np.array(t)/self.options.scale_factor*1000
 
         plt.figure()
-        plt.plot(t, Fx, '-k', t_fem, F_fem, ':k')
+        plt.plot(t, Fx, '-k', t_fem, F_fem, '--k', t_fem, Fp_fem, ':k')
         plt.xlabel('t [ms]')
-        plt.ylabel('Force [N]')
+        plt.ylabel('Force [N/m]')
         plt.title("Reaction Force")
-        plt.legend(['SPH Simulation', 'FEM Result', 'F_z'])
+        plt.legend(['SPH Simulation', 'FEM total force', 'FEM pressure force'])
         forcefig = os.path.join(self.output_dir, 'forceplot.eps')
         plt.savefig(forcefig, dpi=300)
         print("Reaction Force plot written to %s."% forcefig)
@@ -495,8 +528,8 @@ class Channel(Application):
         interp.update_particle_arrays(list(data['arrays'].values()))
         u = interp.interpolate('u')
         u_exact = (self.options.G * (y - self.Ly/2)
-                    - 1/2*self.options.g/self.nu*((y-self.Ly/2)**2-(self.Ly/2)**2)
-                    +self.options.V)
+                - 1/2*self.options.g/self.nu*((y-self.Ly/2)**2-(self.Ly/2)**2)
+                +self.options.V)
 
         plt.figure()
         plt.plot(u, y , '-k')
@@ -556,7 +589,8 @@ class Channel(Application):
 
 
     def post_process(self, info_fname):
-        streamlines, pressure, pcenterline = self._plot_streamlines()
+        streamlines, pressure = self._plot_streamlines()
+        pcenterline = self._plot_pressure_centerline()
         force_plot = self._plot_reaction_force()
         inlet = self._plot_inlet_velocity()
         if self.options.mail:

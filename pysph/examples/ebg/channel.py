@@ -44,7 +44,7 @@ from pysph.sph.sph_compiler import SPHCompiler
 from pysph.sph.equation import Group
 from pysph.sph.wc.transport_velocity import (SummationDensity,
     StateEquation, MomentumEquationPressureGradient,
-    MomentumEquationArtificialViscosity,
+    MomentumEquationArtificialViscosity, ContinuityEquation,
     MomentumEquationViscosity, MomentumEquationArtificialStress,
     SolidWallPressureBC, SolidWallNoSlipBC, SetWallVelocity)
 from pysph.sph.ebg.fiber import (Tension, Bending, Vorticity, Friction, Damping,
@@ -312,7 +312,7 @@ class Channel(Application):
                      'arho', 'phi0', 'omegax', 'omegay', 'omegaz', 'fractag',
                      'holdtag', 'eu', 'ev', 'ew', 'testx', 'testy', 'testz',
                      'dudx', 'dudy', 'dudz', 'dvdx', 'dvdy', 'dvdz','dwdx',
-                     'dwdy', 'dwdz', 'Fx', 'Fy', 'Fz'):
+                     'dwdy', 'dwdz', 'Fx', 'Fy', 'Fz', 'arho'):
             fluid.add_property(name)
             channel.add_property(name)
             fiber.add_property(name)
@@ -384,8 +384,10 @@ class Channel(Application):
         equations = [
             Group(
                 equations=[
-                    SummationDensity(dest='fluid', sources=all),
-                    SummationDensity(dest='fiber', sources=all),
+                    #SummationDensity(dest='fluid', sources=all),
+                    #SummationDensity(dest='fiber', sources=all),
+                    ContinuityEquation(dest='fluid', sources=all),
+                    ContinuityEquation(dest='fiber', sources=all),
                 ]
             ),
             Group(
