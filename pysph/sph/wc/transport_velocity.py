@@ -182,7 +182,7 @@ class StateEquation(Equation):
             constant (default 1.0).
         """
 
-        self.b=b
+        self.b = b
         self.p0 = p0
         self.rho0 = rho0
         super(StateEquation, self).__init__(dest, sources)

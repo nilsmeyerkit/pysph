@@ -332,8 +332,8 @@ class TransportVelocityStep(IntegratorStep):
     def initialize(self):
         pass
 
-    def stage1(self, d_idx, d_u, d_v, d_w, d_au, d_av, d_aw, d_uhat, d_arho, d_rho,
-                d_auhat, d_vhat, d_avhat, d_what, d_awhat, d_x, d_y, d_z, dt):
+    def stage1(self, d_idx, d_u, d_v, d_w, d_au, d_av, d_aw, d_uhat, d_auhat,
+                d_vhat, d_avhat, d_what, d_awhat, d_x, d_y, d_z, dt):
         dtb2 = 0.5*dt
 
         # velocity update eqn (14)
@@ -350,7 +350,6 @@ class TransportVelocityStep(IntegratorStep):
         d_x[d_idx] += dt*d_uhat[d_idx]
         d_y[d_idx] += dt*d_vhat[d_idx]
         d_z[d_idx] += dt*d_what[d_idx]
-        d_rho[d_idx] += dt*d_arho[d_idx]
 
     def stage2(self, d_idx, d_u, d_v, d_w, d_au, d_av, d_aw, d_vmag2, dt):
         dtb2 = 0.5*dt
