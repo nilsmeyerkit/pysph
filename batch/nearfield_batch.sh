@@ -34,14 +34,14 @@ source fake_venv.sh
 fluidres = 1
 mkdir /scratch/nmeyer7/res${fluidres}
 cd /scratch/nmeyer7/res${fluidres}
-sqsub -q threaded -n 2 -o /home/nmeyer7/res${fluidres}.log -r 3h --mpp 2G pysph run ebg.channel --ar 1 --vtk --width 20 --holdcenter --g 10 --G 0 --massscale 1E8 --fluidres $fluidres --openmp
+sqsub -q threaded -n 2 -o /home/nmeyer7/res${fluidres}.log -r 3h --mpp 2G pysph run ebg.channel --ar 1 --width 20 --holdcenter --g 10 --G 0 --massscale 1E8 --fluidres $fluidres --openmp
 
 fluidres=0.5
 mkdir /scratch/nmeyer7/res${fluidres}
 cd /scratch/nmeyer7/res${fluidres}
-sqsub -q threaded -n 4 -o /home/nmeyer7/res${fluidres}.log -r 3h --mpp 2G pysph run ebg.channel --ar 1 --vtk --width 20 --holdcenter --g 10 --G 0 --massscale 1E8 --fluidres $fluidres --openmp
+sqsub -q threaded -n 4 -o /home/nmeyer7/res${fluidres}.log -r 3h --mpp 2G pysph run ebg.channel --ar 1 --width 20 --holdcenter --g 10 --G 0 --massscale 1E8 --fluidres $fluidres --openmp
 
 fluidres=0.25
 mkdir /scratch/nmeyer7/res${fluidres}
 cd /scratch/nmeyer7/res${fluidres}
-sqsub -q threaded -n 16 -o /home/nmeyer7/res${fluidres}.log -r 3h --mpp 2G pysph run ebg.channel --ar 1 --vtk --width 20 --holdcenter --g 10 --G 0 --massscale 1E8 --fluidres $fluidres --openmp
+sqsub -q threaded -n 16 -o /home/nmeyer7/res${fluidres}.log -r 3h --mpp 2G pysph run ebg.channel --ar 1 --width 20 --holdcenter --g 10 --G 0 --massscale 1E8 --fluidres $fluidres --openmp
