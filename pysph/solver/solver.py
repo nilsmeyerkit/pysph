@@ -553,12 +553,10 @@ class Solver(object):
             compress=self.compress_output)
         if self.vtk:
             dump_vtk(fname, self.particles,
-                scalars=['rho', 'p', 'holdtag'],
+                scalars=['rho', 'p', 'holdtag', 'V'],
                 velocity=['u', 'v', 'w'],
                 acceleration=['au','av','aw'],
-                reaction_force=['Fx','Fy','Fz'],
-                test=['testx','testy','testz'],
-                vorticity=['omegax', 'omegay', 'omegaz'])
+                reaction_force=['Fx','Fy','Fz'])
 
     def load_output(self, count):
         """Load particle data from dumped output file.
