@@ -36,17 +36,17 @@ class HoldPoints(Equation):
     def loop(self, d_idx, d_holdtag, d_au, d_av, d_aw, d_auhat, d_avhat,
              d_awhat, d_u, d_v, d_w, d_Fx, d_Fy, d_Fz, d_m):
         if d_holdtag[d_idx] == self.tag :
-            if self.x :
+            if self.x:
                 d_Fx[d_idx] =  d_m[d_idx] * d_au[d_idx]
                 d_au[d_idx] = 0
                 d_auhat[d_idx] = 0
                 d_u[d_idx] = 0
-            if self.y :
+            if self.y:
                 d_Fy[d_idx] =  d_m[d_idx] * d_av[d_idx]
                 d_av[d_idx] = 0
                 d_avhat[d_idx] = 0
                 d_v[d_idx] = 0
-            if self.z :
+            if self.z:
                 d_Fz[d_idx] =  d_m[d_idx] * d_aw[d_idx]
                 d_aw[d_idx] = 0
                 d_awhat[d_idx] = 0
