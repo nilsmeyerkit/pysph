@@ -252,7 +252,7 @@ class MomentumEquationPressureGradient(Equation):
         d_avhat[d_idx] = 0.0
         d_awhat[d_idx] = 0.0
 
-    def loop(self, d_idx, s_idx, d_m, d_rho, s_rho,
+    def loop(self, d_idx, s_idx, d_m, s_m, d_rho, s_rho,
              d_au, d_av, d_aw, d_p, s_p,
              d_auhat, d_avhat, d_awhat, d_V, s_V, DWIJ):
 
@@ -277,8 +277,11 @@ class MomentumEquationPressureGradient(Equation):
         d_av[d_idx] += tmp * DWIJ[1]
         d_aw[d_idx] += tmp * DWIJ[2]
 
+        # inverse mass of source particle
+        mj1 = 1.0/s_m[s_idx]
+
         # contribution due to the background pressure Eq. (13)
-        tmp = -self.pb * mi1 * (Vi2 + Vj2)
+        tmp = -self.pb * mi1 * (Vi2 + d_m[d_idx]/s_m[s_idx] * Vj2)
 
         d_auhat[d_idx] += tmp * DWIJ[0]
         d_avhat[d_idx] += tmp * DWIJ[1]
