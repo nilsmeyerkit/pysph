@@ -118,8 +118,8 @@ class Beam(Application):
                      'uf', 'vf', 'wf', 'ug', 'vg', 'wg', 'phi0', 'phifrac',
                      'auhat', 'avhat','awhat', 'uhat', 'vhat', 'what', 'fractag',
                      'rxnext', 'rynext', 'rznext', 'rnext', 'rxprev', 'ryprev',
-                     'rzprev', 'rprev', 'eu', 'ev', 'ew', 'holdtag', 'testx',
-                     'testy', 'testz', 'omegax', 'omegay', 'omegaz'):
+                     'rzprev', 'rprev', 'eu', 'ev', 'ew', 'holdtag', 'Fx',
+                     'Fy', 'Fz', 'omegax', 'omegay', 'omegaz'):
             fiber.add_property(name)
 
         # set the output property arrays
