@@ -134,6 +134,8 @@ class Channel(Application):
 
 
     def consume_user_options(self):
+        """Initialization of geometry, properties and time stepping."""
+
         # Initial spacing of particles is set to the same value as fiber
         # diameter.
         self.dx = self.options.d
@@ -196,8 +198,6 @@ class Channel(Application):
             self.pb = 0.0
         else:
             self.pb = self.p0
-            if not self.options.fluid_res == 1:
-                print("Sure to use fluidres != 1 and background pressure?")
 
         # The time is set to zero, if only postprocessing is required. For a
         # shear flow, it is set to the time for a full period of rotation
@@ -233,16 +233,20 @@ class Channel(Application):
         self.fiber_dt = min(dt_tension, dt_bending)
         print("Time step ratio is %g"%(self.dt/self.fiber_dt))
 
-    # There is no scheme used in this application and equaions are set up
-    # manually.
     def create_scheme(self):
+        """There is no scheme used in this application and equaions are set up
+        manually."""
         return None
 
-    # The channel has periodix boundary conditions in x-directions.
     def create_domain(self):
+        """The channel has periodic boundary conditions in x-direction."""
         return DomainManager(xmin=0, xmax=self.Lx, periodic_in_x=True)
 
     def create_particles(self):
+        """Three particle arrays are created: A fluid, representing the polymer
+        matrix, a fiber with additional properties and a channel of dummy
+        particles."""
+
         # The fluid might be scaled compared to the fiber. fdx is a shorthand
         # for the fluid spacing and dx2 is a shorthand for the half of it.
         fdx = self.options.fluid_res*self.dx
@@ -292,7 +296,7 @@ class Channel(Application):
         fibz = fiby.ravel()
 
         # Determine the size of dummy region
-        ghost_extent = 5*(self.h0/self.dx)*fdx
+        ghost_extent = 3*fdx/self.options.fluid_res
 
         # Create the channel particles at the top
         _y = np.arange(self.Ly+dx2, self.Ly+dx2+ghost_extent, fdx)
@@ -402,8 +406,8 @@ class Channel(Application):
         fiber.V[:] = 1./fiber_volume
 
         # The smoothing lengths are set accorindg to each particles size.
-        fluid.h[:] = self.options.fluid_res*self.h0
-        channel.h[:] = self.options.fluid_res*self.h0
+        fluid.h[:] = self.options.fluid_res * self.h0
+        channel.h[:] = self.options.fluid_res * self.h0
         fiber.h[:] = self.h0
 
         # Setting the initial velocities for a shear flow.
@@ -427,6 +431,8 @@ class Channel(Application):
         return [fluid, channel, fiber]
 
     def create_equations(self):
+        """Setting up all equations manually."""
+
         all = ['fluid', 'channel', 'fiber']
         equations = [
             # The first group computes densities in the fluid phase and corrects
@@ -505,18 +511,20 @@ class Channel(Application):
         return equations
 
     def _configure(self):
+        """The second integrator is a simple Euler-Integrator (accurate
+        enough due to very small time steps; very fast) using EBGSteps.
+        EBGSteps are basically the same as EulerSteps, exept for the fact
+        that they work with an intermediate ebg velocity [eu, ev, ew].
+        This velocity does not interfere with the actual velocity, which
+        is neseccery to not disturb the real velocity through artificial
+        damping in this step. The ebg velocity is initialized for each
+        inner loop again and reset in the outer loop."""
+
         super(Channel, self)._configure()
         # if there are more than 1 particles involved, elastic equations are
         # iterated in an inner loop.
         if self.options.ar > 1:
-            # The second integrator is a simple Euler-Integrator (accurate
-            # enough due to very small time steps; very fast) using EBGSteps.
-            # EBGSteps are basically the same as EulerSteps, exept for the fact
-            # that they work with an intermediate ebg velocity [eu, ev, ew].
-            # This velocity does not interfere with the actual velocity, which
-            # is neseccery to not disturb the real velocity through artificial
-            # damping in this step. The ebg velocity is initialized for each
-            # inner loop again and reset in the outer loop.
+            # second integrator
             self.fiber_integrator = EulerIntegrator(fiber=EBGStep())
             # The type of spline has no influence here. It must be large enough
             # to contain the next particle though.
@@ -575,7 +583,7 @@ class Channel(Application):
             self.fiber_integrator.set_nnps(nnps)
 
     def create_solver(self):
-        # Setting up the default integrator for fiber particles
+        """Setting up the default integrator for fiber particles"""
         kernel = QuinticSpline(dim=self.options.dim)
         integrator = EPECIntegrator(fluid=TransportVelocityStep(),
                                     fiber=TransportVelocityStep())
@@ -587,8 +595,8 @@ class Channel(Application):
         return solver
 
     def post_stage(self, current_time, dt, stage):
-        # This post stage function gets called after each outer loop and starts
-        # an inner loop for the fiber iteration.
+        """This post stage function gets called after each outer loop and starts
+        an inner loop for the fiber iteration."""
         if self.options.ar > 1:
             # 1) predictor
             # 2) post stage 1:
@@ -601,7 +609,7 @@ class Channel(Application):
             # 4) post stage 2
 
     def get_meshgrid(self, xx, yy, zz):
-        # This function is just a shorthand for the generation of meshgrids.
+        """This function is just a shorthand for the generation of meshgrids."""
         if self.options.dim == 2:
             x, y = np.meshgrid(xx, yy)
             x = x.ravel()
@@ -615,8 +623,8 @@ class Channel(Application):
         return [x,y,z]
 
     def _plot_streamlines(self):
-        # This function plots streamlines and the pressure field. It
-        # interpolates the properties from particles using the kernel.
+        """This function plots streamlines and the pressure field. It
+         interpolates the properties from particles using the kernel."""
 
         # lenght factor m --> mm
         factor = 1000
@@ -642,22 +650,27 @@ class Channel(Application):
         p = interp.interpolate('p')
         vmag = np.sqrt(u**2 + v**2 )
 
+        if self.options.ar == 1:
+            upper = 2.5E-5
+        else:
+            upper = np.max(vmag)
+
         # open new figure
         plt.figure()
         # configuring color map
         cmap = plt.cm.viridis
-        levels = np.linspace(0, np.max(vmag), 30)
+        levels = np.linspace(0, upper, 30)
 
         # velocity contour
         vel = plt.contourf(x*factor,y*factor, vmag, levels=levels,
-                 cmap=cmap, vmax=np.max(vmag), vmin=0)
+                 cmap=cmap, vmax=upper, vmin=0)
         # streamlines
-        stream = plt.streamplot(x*factor,y*factor,u,v, color='k')
+        stream = plt.streamplot(x*factor,y*factor,u,v, color='k', density=0.5)
         # fiber
         plt.scatter(fx*factor,fy*factor, color='w')
 
         # set labels
-        cbar = plt.colorbar(vel, label='Velocity Magnitude')
+        cbar = plt.colorbar(vel, label='Velocity Magnitude', format='%.2e')
         plt.axis('equal')
         plt.xlabel('x [mm]')
         plt.ylabel('y [mm]')
@@ -667,15 +680,22 @@ class Channel(Application):
         plt.savefig(fig, dpi=300)
         print("Streamplot written to %s."% fig)
 
+        if self.options.ar == 1:
+            upper = 100
+            lower = -100
+        else:
+            upper = np.max(p)
+            lower = np.min(p)
+
         # open new plot
         plt.figure()
         #configuring new color map
         cmap = plt.cm.viridis
-        levels = np.linspace(-300, 300, 30)
+        levels = np.linspace(lower, upper, 30)
 
         # pressure contour
         pres = plt.contourf(x*factor,y*factor, p, levels=levels,
-                 cmap=cmap, vmax=300, vmin=-300)
+                 cmap=cmap,  vmin=lower, vmax=upper)
 
         # set labels
         cbar = plt.colorbar(pres, label='Pressure')
@@ -691,36 +711,87 @@ class Channel(Application):
         return[fig, p_fig]
 
     def _plot_inlet_velocity(self, step_idx=-1):
+        """This function plots the velocity profile at the periodic boundary. If
+        the fiber has only a single particle, this is interpreted as flow around
+        a fiber cylinder and the coresponding FEM solution is plotted as well.
+        """
+        # length factor m --> mm
+        factor = 1000
+
+        # Extract requested output - default is last output.
         output = self.output_files[step_idx]
         data = load(output)
 
+        # Generate meshgrid for interpolation.
         x = np.array([0])
         y = np.linspace(0,self.Ly,100)
         x,y = np.meshgrid(x,y)
+
+        # interpolation of velocity field.
         interp = Interpolator(list(data['arrays'].values()), x=x, y=y)
         interp.update_particle_arrays(list(data['arrays'].values()))
         u = interp.interpolate('u')
-        u_exact = (self.options.G * (y - self.Ly/2)
-                    - 1/2*self.options.g/self.nu*((y-self.Ly/2)**2-(self.Ly/2)**2))
 
+        # solution for undisturbed velocity field.
+        u_exact = (self.options.G * (y - self.Ly/2)
+                    - 1/2*self.options.g/self.nu*(
+                            (y-self.Ly/2)**2-(self.Ly/2)**2))
+
+        # FEM solution for disturbed velocity field (ar=1, g=10, G=0, width=20)
+        y_fem = np.array([1.20E-04,3.60E-04,6.00E-04,8.40E-04,0.00108,0.00132,
+                        0.00156,0.0018,0.00204,0.00228,0.00252,0.00276,0.003,
+                        0.00324,0.00348,0.00372,0.00396,0.0042,0.00444,0.00468])
+
+        u_fem = np.array([1.85E-06,5.23E-06,8.17E-06,1.08E-05,1.31E-05,1.50E-05,
+                        1.66E-05,1.77E-05,1.85E-05,1.89E-05,1.89E-05,1.85E-05,
+                        1.77E-05,1.66E-05,1.50E-05,1.31E-05,1.08E-05,8.18E-06,
+                        5.22E-06,1.85E-06])
+
+        # open new plot
         plt.figure()
-        plt.plot(u, y , '-k')
-        plt.plot(u_exact, y, ':k')
+
+        # SPH solution
+        plt.plot(u*factor, y*factor , '-k')
+
+        # FEM solution (if applicable)
+        if self.options.ar == 1:
+            plt.plot(u_fem*factor, y_fem*factor , '--k')
+
+        # undisturbed solution
+        plt.plot(u_exact*factor, y*factor, ':k')
+
+        # labels
         plt.title('Velocity at inlet')
-        plt.xlabel('Velocity [m/s]')
-        plt.ylabel('Position [m]')
-        plt.legend(['Simulation', 'Ideal'])
+        plt.xlabel('Velocity [mm/s]')
+        plt.ylabel('Position [mm]')
+        if self.options.ar == 1:
+            plt.legend(['Simulation', 'FEM', 'No obstacle'])
+        else:
+            plt.legend(['Simulation', 'No obstacle'])
+
+        # save figure
         fig = os.path.join(self.output_dir, 'inlet_velocity.eps')
         plt.savefig(fig, dpi=300)
         print("Inlet velocity plot written to %s."% fig)
-        return(fig)
+
+        return (fig)
 
     def _plot_pressure_centerline(self):
+        """This function plots the pressure profile along a centerline for a
+        single particle."""
+
+        # length factor m --> mm
         factor = 1000
+
+        # Generate meshgrid for interpolation.
         x = np.linspace(0,self.Lx,200)
         y = np.array([self.Ly/2])
         x,y = np.meshgrid(x,y)
+
+        # Set a number of last solutions to average from.
         N = 10
+
+        # averaging the pressure interpolation for N last solutions.
         p = np.zeros((200,))
         for output in self.output_files[-(1+N):-1]:
             data = load(output)
@@ -728,89 +799,128 @@ class Channel(Application):
             interp.update_particle_arrays(list(data['arrays'].values()))
             p += interp.interpolate('p')/N
 
-        x_fem = np.array([9.60E-05,2.88E-04,4.80E-04,6.72E-04,8.64E-04,0.001056,
-                    0.001248,0.00144,0.001632,0.001824,0.002016,0.002208,0.0024,
-                    0.002592,0.002784,0.002976,0.003168,0.00336,0.003552,
-                    0.003744,0.003936,0.004128,0.00432,0.004512,0.0047,0.0048,
-                    0.004909,0.005088,0.00528,0.005472,0.005664,0.005856,
-                    0.006048,0.00624,0.006432,0.006624,0.006816,0.007008,
-                    0.0072,0.007392,0.007584,0.007776,0.007968,0.00816,
-                    0.008352,0.008544,0.008736,0.008928,0.00912,0.009312,
-                    0.009504])
-        p_fem = np.array([1.58691032,3.218178544,4.371263607,5.586283773,
-                    6.816187114,8.082024459,9.393638874,10.7492284,12.13972677,
-                    13.57194924,15.05198485,16.76694504,18.4998047,20.25815552,
-                    22.45599313,24.90776849,27.84319026,31.28762006,35.51451971,
-                    41.18080914,49.93711208,61.37254299,81.9969569,127.4880833,
-                    407.5707850,np.nan,-275.5677902,-105.8456749,-61.80262634,
-                    -42.04795871,-30.53875332,-24.24458436,-20.20278011,
-                    -17.00506646,-14.80382863,-13.43634416,-12.10999473,
-                    -11.08772738,-10.21693285,-9.431064134,-8.65649864,
-                    -7.839548047,-7.004226958,-6.118488775,-5.212674274,
-                    -4.280871816,-3.29811397,-2.290456461,-1.24593802,
-                    -0.194508544,1.353145886])
+        # FEM solution for disturbed velocity field (ar=1, g=10, G=0, width=20)
+        x_fem = np.array([0.00010,0.00029,0.00048,0.00067,0.00086,0.00106,
+                        0.00125,0.00144,0.00163,0.00182,0.00202,0.00221,0.00240,
+                        0.00259,0.00278,0.00298,0.00317,0.00336,0.00355,0.00374,
+                        0.00394,0.00413,0.00432,0.00451,0.00470,0.00480,0.00490,
+                        0.00509,0.00528,0.00547,0.00566,0.00586,0.00605,0.00624,
+                        0.00643,0.00662,0.00682,0.00701,0.00720,0.00739,0.00758,
+                        0.00778,0.00797,0.00816,0.00835,0.00854,0.00874,0.00893,
+                        0.00912,0.00931,0.00950])
+        p_fem = np.array([0,1,2,3,3,4,5,5,6,7,7,8,9,9,10,11,12,14,15,17,21,26,
+                        36,59,168,np.nan,-169,-58,-35,-25,-20,-17,-15,-13,-11,
+                        -10,-9,-9,-8,-7,-6,-6,-5,-4,-4,-3,-2,-2,-1,-1,0])
+
+        # open new plot
         plt.figure()
+
+        # plot SPH solution and FEM solution
         plt.plot(x[0,:]*factor, p, '-k', x_fem*factor, p_fem, '--k')
+
+        # labels
         plt.legend(['SPH Simulation','FEM Result'])
+        plt.title('Pressure along center line')
         plt.xlabel('x [mm]')
         plt.ylabel('p [Pa]')
 
+        # save figure
         pcenter_fig = os.path.join(self.output_dir, 'pressure_centerline.eps')
         plt.savefig(pcenter_fig, dpi=300)
         print("Pressure written to %s."% pcenter_fig)
+
         return pcenter_fig
 
     def _plot_history(self):
+        """This function create all plots employing a iteration over all time
+        steps. """
+
+        # length factor m --> mm
         factor = 1000
+
+        # empty list for time
+        t = []
+
+        # empty lists for orbit
         x_begin = []
         y_begin = []
         x_end = []
         y_end = []
+
+        # empty list for orientation angle (only applicable for very
+        # stiff/almost rigid fiber)
         angle = []
-        t = []
+
+        # empty list for conservation properies
         E_kin = []
         E_p = []
         m = []
         volume = []
         rho = []
+
+        # empty list for reaction forces
         Fx = []
         Fy = []
         Fz = []
+
+        # iteration over all output files
         output_files = remove_irrelevant_files(self.output_files)
         for fname in output_files:
             data = load(fname)
+
+            # extracting time
+            t.append(data['solver_data']['t'])
+
+            # extrating all arrays.
             fiber = data['arrays']['fiber']
             fluid = data['arrays']['fluid']
             channel = data['arrays']['channel']
+
+            # extrating end-points
             x_begin.append(fiber.x[0])
             y_begin.append(fiber.y[0])
             x_end.append(fiber.x[-1])
             y_end.append(fiber.y[-1])
+
+            # computation of orientation angle
             dxx = fiber.x[0]-fiber.x[-1]
             dyy = fiber.y[0]-fiber.y[-1]
             angle.append(np.arctan(dxx/(dyy+0.01*self.h0)))
-            t.append(data['solver_data']['t'])
+
+            # computation of squared velocity and masses from density and volume
             v_fiber = fiber.u**2 + fiber.v**2 + fiber.w**2
             v_fluid = fluid.u**2 + fluid.v**2 + fluid.w**2
             m_fiber = fiber.rho/fiber.V
             m_fluid = fluid.rho/fluid.V
             m_channel = channel.rho/channel.V
+
+            # appending volume, density, mass, pressure and kinetic energy
             volume.append(np.sum(1/fiber.V)+np.sum(1/fluid.V)+np.sum(1/channel.V))
             rho.append(np.sum(fiber.rho)+np.sum(fluid.rho)+np.sum(channel.rho))
             m.append(np.sum(m_fiber)+np.sum(m_fluid)+np.sum(m_channel))
-            E_p.append(np.sum(fiber.p/fiber.V)+np.sum(fluid.p/fluid.V)+np.sum(channel.p/channel.V))
+            E_p.append(np.sum(fiber.p/fiber.V)
+                        +np.sum(fluid.p/fluid.V)
+                        +np.sum(channel.p/channel.V))
             E_kin.append(0.5*np.dot(m_fiber,v_fiber)
                         +0.5*np.dot(m_fluid,v_fluid))
 
+            # extract reaction forces at hold particles
             idx = np.argwhere(fiber.holdtag==100)
             Fx.append(fiber.Fx[idx][0])
             Fy.append(fiber.Fy[idx][0])
             Fz.append(fiber.Fz[idx][0])
 
+        # open new plot
         plt.figure()
+
+        # plot end points
         plt.plot(x_begin, y_begin, '-ok', markersize=5)
         plt.plot(x_end, y_end, '-*k', markersize=5)
+
+        # set equally scaled axis to not distort the orbit
         plt.axis('equal')
+
+        # save plot of orbit
         orbfig = os.path.join(self.output_dir, 'orbitplot.eps')
         plt.savefig(orbfig, dpi=300)
         print("Orbitplot written to %s."% orbfig)
@@ -826,68 +936,101 @@ class Channel(Application):
         # constraint between -pi/2 and pi/2
         angle_jeffery = (angle_jeffery+np.pi/2.0)%np.pi-np.pi/2.0
 
+        # open new plot
         plt.figure()
+
+        # plot computed angle and Jeffery's solution
         plt.plot(t, angle, '*k')
         plt.plot(t, angle_jeffery, '-k')
+
+        # labels
         plt.xlabel('t [s]')
         plt.ylabel('Angle [rad]')
         plt.legend(['Simulation', 'Jeffery'])
         plt.title("ar=%g"%self.options.ar)
+
+        # save figure
         angfig = os.path.join(self.output_dir, 'angleplot.eps')
         plt.savefig(angfig, dpi=300)
         print("Angleplot written to %s."% angfig)
+
+        # save angles as *.csv file
         csv_file = os.path.join(self.output_dir, 'angle.csv')
         angle_jeffery = np.reshape(angle_jeffery,(angle_jeffery.size,))
         np.savetxt(csv_file, (t, angle, angle_jeffery), delimiter=',')
 
+        # open new figure
         plt.figure()
+
+        # plot pressure and kinetic energy
         plt.plot(t, E_p, '-k', t, E_kin, ':k')
+
+        # labels
         plt.xlabel('t [s]')
         plt.ylabel('Energy')
         plt.title("Energy")
         plt.legend(['Pressure', 'Kinetic Energy'])
+
+        # save figure
         engfig = os.path.join(self.output_dir, 'energyplot.eps')
         plt.savefig(engfig, dpi=300)
         print("Energyplot written to %s."% engfig)
 
+        # open new plot
         plt.figure()
+
+        # plot relative mass, volume and density
         plt.plot(t, np.array(m)/m[0], '-k',
                  t, np.array(volume)/volume[0], '--k',
                  t, np.array(rho)/rho[0], ':k')
+
+        # labels
         plt.xlabel('t [s]')
         plt.ylabel('Relative value')
         plt.legend(['Mass', 'Volume', 'Density'])
+
+        # save figure
         mfig = os.path.join(self.output_dir, 'massplot.eps')
         plt.savefig(mfig, dpi=300)
         print("Mass plot written to %s."% mfig)
 
+        # hard-coded solutions for total reaction forces and viscous reaction
+        # forces from FEM. (ar=1, g=10, G=0, width=20)
         t_fem = np.array([0,50,100,150,200,250,300,350,400,450,500,550,600,650,
                     700,750,800,850,900,950,1000,1050,1100,1150,1200,1250,1300,
                     1350,1400,1450,1500])
-        Fp_fem = np.array([6.95E-04,0.030299595,0.04868658,0.060802176,
-                    0.071992602,0.078325888,0.084659173,0.090492935,0.093704197,
-                    0.096915459,0.099866885,0.101454168,0.103041451,0.104498144,
-                    0.105269236,0.106040328,0.106747500,0.107119093,0.107490685,
-                    0.107831369,0.108009777,0.108188185,0.108351729,0.108437236,
-                    0.108522743,0.108601121,0.108642069,0.108683017,0.10872055,
-                    0.108740151,0.108759753])
-        F_fem = np.array([7.48E-04,0.060707871,0.097855135,0.122251195,
-                    0.144776438,0.157479887,0.170183337,0.181882322,0.188307871,
-                    0.194733419,0.20063835,0.203810039,0.206981728,0.209892324,
-                    0.211432182,0.21297204,0.214384218,0.215126076,0.215867934,
-                    0.216548076,0.216904208,0.21726034,0.217586799,0.217757474,
-                    0.21792815,0.218084595,0.218166326,0.218248057,0.218322972,
-                    0.218362095,0.218401219])
+        Fv_fem = np.array([0.00003,0.01577,0.02616,0.03370,0.03918,0.04309,
+                    0.04586,0.04783,0.04931,0.05036,0.05113,0.05163,0.05198,
+                    0.05221,0.05236,0.05247,0.05254,0.05260,0.05263,0.05265,
+                    0.05265,0.05265,0.05265,0.05265,0.05265,0.05265,0.05265,
+                    0.05265,0.05265,0.05265,0.05265])
+        F_fem = np.array([0.00037,0.03139,0.05188,0.06674,0.07754,0.08524,
+                    0.09071,0.09460,0.09752,0.09959,0.10109,0.10208,0.10277,
+                    0.10324,0.10353,0.10375,0.10388,0.10399,0.10406,0.10409,
+                    0.10409,0.10409,0.10409,0.10409,0.10410,0.10410,0.10410,
+                    0.10410,0.10410,0.10410,0.10410])
+
+        # applying appropriate scale factors
         t_fem = t_fem/1E5
         t = np.array(t)/self.options.scale_factor*1000
 
+        # Reaction force is plotted only for flow around single cylindrical
+        # fiber
         if self.options.ar == 1:
+            # open new plot
             plt.figure()
-            plt.plot(t, Fx, '-k', t_fem, F_fem, '--k', t_fem, F_fem-Fp_fem, ':k')
+
+            # plot computed reaction force, total FEM force and viscous FEM
+            # force
+            plt.plot(t, Fx, '-k', t_fem, F_fem, '--k', t_fem, Fv_fem, ':k')
+
+            # labels
             plt.xlabel('t [ms]')
             plt.ylabel('Force [N/m]')
             plt.title("Reaction Force")
             plt.legend(['SPH Simulation', 'FEM total force', 'FEM viscous force'])
+
+            # save figure
             forcefig = os.path.join(self.output_dir, 'forceplot.eps')
             plt.savefig(forcefig, dpi=300)
             print("Reaction Force plot written to %s."% forcefig)
@@ -896,6 +1039,8 @@ class Channel(Application):
             return [orbfig, angfig, engfig]
 
     def _send_notification(self, info_fname, attachments=None):
+        """Send a notification Mail after succesfull run."""
+
         gmail_user = "nils.batch.notification"
         gmail_pwd = "batch.notification"
 
