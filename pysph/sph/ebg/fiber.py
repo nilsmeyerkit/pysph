@@ -135,17 +135,17 @@ class Tension(Equation):
         d_av[d_idx] = 0.0
         d_aw[d_idx] = 0.0
 
-    def loop(self, d_idx, s_idx, d_m, d_lprev, d_lnext, d_fractag,
+    def loop(self, d_idx, s_idx, d_m, d_lprev, d_lnext, s_fractag, d_fractag,
              d_au, d_av, d_aw, XIJ, RIJ):
         # interaction with previous particle
-        if d_idx == s_idx+1 and d_fractag[d_idx]+d_fractag[d_idx-1] < 2:
+        if d_idx == s_idx+1 and s_fractag[s_idx] == 0:
             t = self.ea*(RIJ/d_lprev[d_idx]-1)
             d_au[d_idx] -= (t*XIJ[0]/RIJ)/d_m[d_idx]
             d_av[d_idx] -= (t*XIJ[1]/RIJ)/d_m[d_idx]
             d_aw[d_idx] -= (t*XIJ[2]/RIJ)/d_m[d_idx]
 
         # interaction with next particle
-        if d_idx == s_idx-1 and d_fractag[d_idx]+d_fractag[d_idx+1] < 2:
+        if d_idx == s_idx-1 and d_fractag[d_idx] == 0:
             t = self.ea*(RIJ/d_lnext[d_idx]-1)
             d_au[d_idx] -= (t*XIJ[0]/RIJ)/d_m[d_idx]
             d_av[d_idx] -= (t*XIJ[1]/RIJ)/d_m[d_idx]
@@ -228,13 +228,19 @@ class Bending(Equation):
         d_aw[d_idx] = 0.0
 
     def loop(self, d_idx, s_idx, d_rxnext, d_rynext, d_rznext, d_rnext,
-                d_rxprev, d_ryprev, d_rzprev, d_rprev, XIJ, RIJ):
+                d_rxprev, d_ryprev, d_rzprev, d_rprev, s_fractag, XIJ, RIJ):
         '''The loop saves vectors to previous and next particle only.'''
         if d_idx == s_idx+1:
-            d_rxprev[d_idx] = XIJ[0]
-            d_ryprev[d_idx] = XIJ[1]
-            d_rzprev[d_idx] = XIJ[2]
-            d_rprev[d_idx] = RIJ
+            if s_fractag[s_idx] == 0:
+                d_rxprev[d_idx] = XIJ[0]
+                d_ryprev[d_idx] = XIJ[1]
+                d_rzprev[d_idx] = XIJ[2]
+                d_rprev[d_idx] = RIJ
+            else:
+                d_rxprev[d_idx] = 0.0
+                d_ryprev[d_idx] = 0.0
+                d_rzprev[d_idx] = 0.0
+                d_rprev[d_idx] = 0.0
         if d_idx == s_idx-1:
             d_rxnext[d_idx] = XIJ[0]
             d_rynext[d_idx] = XIJ[1]
@@ -245,9 +251,7 @@ class Bending(Equation):
                 d_rxnext, d_rynext, d_rznext, d_rnext,
                 d_rxprev, d_ryprev, d_rzprev, d_rprev,
                 d_au, d_av, d_aw):
-        if (d_rnext[d_idx] > 1E-14
-            and d_rprev[d_idx] > 1E-14
-            and d_fractag[d_idx] == 0):
+        if d_rnext[d_idx] > 1E-14 and d_rprev[d_idx] > 1E-14:
             # vector to previous particle
             xab = d_rxprev[d_idx]
             yab = d_ryprev[d_idx]
@@ -279,7 +283,7 @@ class Bending(Equation):
 
             if abs(phi-d_phi0[d_idx]) > d_phifrac[d_idx]:
                 d_fractag[d_idx] = 1
-                d_fractag[d_idx+1] = 1
+                #d_fractag[d_idx+1] = 1
 
             # forces on neighbouring particles
             Fabx = (My*zab-Mz*yab)/(rab**2)
@@ -419,3 +423,211 @@ class Friction(Equation):
             d_au[d_idx-1] -= (My*d_rzprev[d_idx]-Mz*d_ryprev[d_idx])/(2*self.J)
             d_av[d_idx-1] -= (Mz*d_rxprev[d_idx]-Mx*d_rzprev[d_idx])/(2*self.J)
             d_aw[d_idx-1] -= (Mx*d_ryprev[d_idx]-My*d_rxprev[d_idx])/(2*self.J)
+
+class SimpleContact(Equation):
+    """This class computes simple fiber repulsion to stop penetration. It
+    computes the force between two spheres as Hertz pressure."""
+    def __init__(self, dest, sources, E, d, pois=0.3):
+        r"""
+        Parameters
+        ----------
+        E : float
+            Young's modulus
+        d : float
+            fiber diameter
+        pois : flost
+            poisson number
+        """
+        self.E = E
+        self.d = d
+        self.pois = pois
+        super(SimpleContact, self).__init__(dest, sources)
+
+    def initialize(self, d_idx, d_au, d_av, d_aw):
+       d_au[d_idx] = 0.0
+       d_av[d_idx] = 0.0
+       d_aw[d_idx] = 0.0
+
+    def loop(self, d_idx, s_idx, d_m, d_au, d_av, d_aw, XIJ, RIJ):
+        if not s_idx == d_idx and RIJ < self.d:
+            E_star = 1/(2*((1-self.pois**2)/self.E))
+            # effective radius for two spheres of same size
+            R = self.d/4
+            F = 4/3 * E_star * sqrt(R) * abs(self.d-RIJ)**1.5
+            d_au[d_idx] += XIJ[0]/RIJ * F/d_m[d_idx]
+            d_av[d_idx] += XIJ[1]/RIJ * F/d_m[d_idx]
+            d_aw[d_idx] += XIJ[2]/RIJ * F/d_m[d_idx]
+
+class Contact(Equation):
+    """This class computes fiber repulsion to stop penetration. It
+    computes the force between two spheres based on Hertz pressure between two
+    cylinders. This Equation requires a computation of ditances by the Bending
+    equation."""
+    def __init__(self, dest, sources, E, d, pois=0.3, k=0):
+        r"""
+        Parameters
+        ----------
+        E : float
+            Young's modulus
+        d : float
+            fiber diameter
+        pois : float
+            poisson number
+        k : float
+            friction coefficient between fibers
+        """
+        self.E = E
+        self.d = d
+        self.pois = pois
+        self.k = k
+        super(Contact, self).__init__(dest, sources)
+
+    def initialize(self, d_idx, d_au, d_av, d_aw, d_Fx, d_Fy, d_Fz):
+       d_au[d_idx] = 0.0
+       d_av[d_idx] = 0.0
+       d_aw[d_idx] = 0.0
+       d_Fx[d_idx] = 0.0
+       d_Fy[d_idx] = 0.0
+       d_Fz[d_idx] = 0.0
+
+    def loop(self, d_idx, s_idx, d_m, d_au, d_av, d_aw, d_rxnext, d_rynext,
+        d_rznext, d_rnext, d_rxprev, d_ryprev, d_rzprev, d_rprev, s_rxnext,
+        s_rynext, s_rznext, s_rnext, s_rxprev, s_ryprev, s_rzprev, s_rprev,
+        d_Fx, d_Fy, d_Fz, XIJ, VIJ, RIJ):
+
+        # not contact, if
+        # - particle is too far away to cause contact (sqrt(6)*R is max. dist.)
+        # - source particle is destination particle
+        # - particle is neighbour
+        if (RIJ > 1E-14
+            and RIJ < sqrt(6)/2*self.d
+            and abs(RIJ-d_rprev[d_idx]) > 1E-14
+            and abs(RIJ-d_rnext[d_idx]) > 1E-14):
+
+            # elastic factor from Hertz' pressure in contact
+            E_star = 1/(2*((1-self.pois**2)/self.E))
+
+            # case for two fiber ends
+            if ((d_rnext[d_idx] < 1E-14 or d_rprev[d_idx] < 1E-14) and
+                (s_rnext[s_idx] < 1E-14 or s_rprev[s_idx] < 1E-14)):
+
+                F = 2*max(self.d-RIJ,0)*self.d*E_star
+                V = sqrt(VIJ[0]**2 + VIJ[1]**2 + VIJ[2]**2)
+
+                d_Fx[d_idx] += XIJ[0]/RIJ * F/d_m[d_idx] - self.k*VIJ[0]/V
+                d_Fy[d_idx] += XIJ[1]/RIJ * F/d_m[d_idx] - self.k*VIJ[1]/V
+                d_Fz[d_idx] += XIJ[2]/RIJ * F/d_m[d_idx] - self.k*VIJ[2]/V
+
+                d_au[d_idx] += XIJ[0]/RIJ * F/d_m[d_idx]
+                d_av[d_idx] += XIJ[1]/RIJ * F/d_m[d_idx]
+                d_aw[d_idx] += XIJ[2]/RIJ * F/d_m[d_idx]
+
+            # case for fiber end in destination fiber
+            elif d_rnext[d_idx] < 1E-14 or d_rprev[d_idx] < 1E-14:
+                # direction of source fiber
+                sx = s_rxnext[s_idx]-s_rxprev[s_idx]
+                sy = s_rynext[s_idx]-s_ryprev[s_idx]
+                sz = s_rznext[s_idx]-s_rzprev[s_idx]
+                sr = sqrt(sx**2+sy**2+sz**2)
+
+                # relative velocity for friction term
+                v_rel = sx*VIJ[0]+sy*VIJ[1]+sz*VIJ[2]
+                v_rel_x = v_rel * sx/sr
+                v_rel_y = v_rel * sy/sr
+                v_rel_z = v_rel * sz/sr
+                v_rel = sqrt(v_rel_x**2 + v_rel_y**2 + v_rel_z**2)
+                v_rel = v_rel if v_rel > 1E-14 else 1
+
+                # distance computation
+                dot_prod = (sx*XIJ[0] + sy*XIJ[1] + sz*XIJ[2])/(sr*RIJ)
+                tx = XIJ[0]-dot_prod*sx/sr
+                ty = XIJ[1]-dot_prod*sy/sr
+                tz = XIJ[2]-dot_prod*sz/sr
+                tr = sqrt(tx**2 + ty**2 + tz**2)
+
+                F = 2*max(self.d-tr,0)*self.d*E_star
+
+                d_Fx[d_idx] += F/d_m[d_idx]*tx/tr - self.k*F*v_rel_x/v_rel
+                d_Fy[d_idx] += F/d_m[d_idx]*ty/tr - self.k*F*v_rel_y/v_rel
+                d_Fz[d_idx] += F/d_m[d_idx]*tz/tr - self.k*F*v_rel_z/v_rel
+
+                d_au[d_idx] += F/d_m[d_idx]*tx/tr - self.k*F*v_rel_x/v_rel
+                d_av[d_idx] += F/d_m[d_idx]*ty/tr - self.k*F*v_rel_y/v_rel
+                d_aw[d_idx] += F/d_m[d_idx]*tz/tr - self.k*F*v_rel_z/v_rel
+
+            elif s_rnext[s_idx] < 1E-14 or s_rprev[s_idx] < 1E-14:
+                # direction of destination fiber
+                dx = d_rxnext[d_idx]-d_rxprev[d_idx]
+                dy = d_rynext[d_idx]-d_ryprev[d_idx]
+                dz = d_rznext[d_idx]-d_rzprev[d_idx]
+                dr = sqrt(dx**2+dy**2+dz**2)
+
+                # relative velocity for friction term
+                v_rel = dx*VIJ[0]+dy*VIJ[1]+dz*VIJ[2]
+                v_rel_x = v_rel * dx/dr
+                v_rel_y = v_rel * dy/dr
+                v_rel_z = v_rel * dz/dr
+                v_rel = sqrt(v_rel_x**2 + v_rel_y**2 + v_rel_z**2)
+                v_rel =  v_rel if v_rel > 1E-14 else 1
+
+                # distance computation
+                dot_prod = (dx*XIJ[0] + dy*XIJ[1] + dz*XIJ[2])/(dr*RIJ)
+                tx = XIJ[0]-dot_prod*dx/dr
+                ty = XIJ[1]-dot_prod*dy/dr
+                tz = XIJ[2]-dot_prod*dz/dr
+                tr = sqrt(tx**2 + ty**2 + tz**2)
+
+                F = 2*max(self.d-tr,0)*self.d*E_star
+
+                d_Fx[d_idx] += F/d_m[d_idx]*tx/tr - self.k*F*v_rel_x/v_rel
+                d_Fy[d_idx] += F/d_m[d_idx]*ty/tr - self.k*F*v_rel_y/v_rel
+                d_Fz[d_idx] += F/d_m[d_idx]*tz/tr - self.k*F*v_rel_z/v_rel
+
+                d_au[d_idx] += F/d_m[d_idx]*tx/tr - self.k*F*v_rel_x/v_rel
+                d_av[d_idx] += F/d_m[d_idx]*ty/tr - self.k*F*v_rel_y/v_rel
+                d_aw[d_idx] += F/d_m[d_idx]*tz/tr - self.k*F*v_rel_z/v_rel
+            else:
+                # direction of destination fiber
+                dx = d_rxnext[d_idx]-d_rxprev[d_idx]
+                dy = d_rynext[d_idx]-d_ryprev[d_idx]
+                dz = d_rznext[d_idx]-d_rzprev[d_idx]
+                dr = sqrt(dx**2+dy**2+dz**2)
+
+                # direction of source fiber
+                sx = s_rxnext[s_idx]-s_rxprev[s_idx]
+                sy = s_rynext[s_idx]-s_ryprev[s_idx]
+                sz = s_rznext[s_idx]-s_rzprev[s_idx]
+                sr = sqrt(sx**2+sy**2+sz**2)
+
+                # normal direction at contact
+                nx = dy * sz - dz * sy
+                ny = dz * sx - dx * sz
+                nz = dx * sy - dy * sx
+                nr = sqrt(nx**2+ny**2+nz**2)
+
+                # cr = 0 would be a particle in line with the fiber
+                if nr > 1E-14:
+                    nx = -nx/nr
+                    ny = -ny/nr
+                    nz = -nz/nr
+
+                    # relative velocity in each fiber direction
+                    v_rel_d = dx*VIJ[0]+dy*VIJ[1]+dz*VIJ[2]
+                    v_rel_s = sx*VIJ[0]+sy*VIJ[1]+sz*VIJ[2]
+                    v_rel_x = v_rel_d * dx/dr + v_rel_s * sx/sr
+                    v_rel_y = v_rel_d * dy/dr + v_rel_s * sy/sr
+                    v_rel_z = v_rel_d * dz/dr + v_rel_s * sz/sr
+                    v_rel = sqrt(v_rel_x**2+v_rel_y**2+v_rel_z**2)
+                    v_rel = v_rel if v_rel > 1E-14 else 1
+
+                    y = nx*XIJ[0]+ny*XIJ[1]+nz*XIJ[2]
+
+                    F = 2*max(self.d-y,0)*self.d*E_star
+
+                    d_Fx[d_idx] += F/d_m[d_idx]*nx - self.k*F*v_rel_x/v_rel
+                    d_Fy[d_idx] += F/d_m[d_idx]*ny - self.k*F*v_rel_y/v_rel
+                    d_Fz[d_idx] += F/d_m[d_idx]*nz - self.k*F*v_rel_z/v_rel
+
+                    d_au[d_idx] += F/d_m[d_idx]*nx - self.k*F*v_rel_x/v_rel
+                    d_av[d_idx] += F/d_m[d_idx]*ny - self.k*F*v_rel_y/v_rel
+                    d_aw[d_idx] += F/d_m[d_idx]*nz - self.k*F*v_rel_z/v_rel
