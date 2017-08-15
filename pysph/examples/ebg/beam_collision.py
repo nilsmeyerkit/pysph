@@ -92,7 +92,7 @@ class Beam(Application):
         print(dt_tension)
         print(dt_bending)
 
-        self.tf = 10
+        self.tf = 20
 
         self.dt = min(dt_force,dt_tension, dt_bending)
         # self.fiber_dt = min(dt_tension, dt_bending)
@@ -113,6 +113,9 @@ class Beam(Application):
         _x = np.array([0.75*self.l])
         _y = np.array([-2*self.dx])
         _z = np.linspace(-0.25*self.l, 0.75*self.l, self.N+1)
+        # _x = np.linspace(-self.dx, self.l-self.dx, self.N+1)
+        # _y = np.array([-2*self.dx])
+        # _z = np.array([0.0])
         x, y, z = np.meshgrid(_x, _y, _z)
         fiber2_x = x.ravel()
         fiber2_y = y.ravel()
@@ -153,6 +156,9 @@ class Beam(Application):
         fiber1.holdtag[0] = 2
         fiber1.holdtag[1] = 1
         fiber1.holdtag[2] = 2
+
+        # test fracture
+        #fiber2.fractag[int(self.N/2)] = 1
 
         # volume is set as dx * A
         volume = self.A * self.dx

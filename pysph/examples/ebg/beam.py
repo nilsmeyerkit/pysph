@@ -80,6 +80,7 @@ class Beam(Application):
             self.omega0 = self.omega0_bending
         m = self.rho0*self.A*self.dx
         self.D = self.options.d*m*self.omega0
+        self.AD = 5*m*self.omega0
         self.gx = self.options.gx
         self.gy = self.options.gy
         print('Damping: %g, Omega0: %g'%(self.D,self.omega0))
@@ -94,9 +95,10 @@ class Beam(Application):
 
         self.tf = 4*np.pi/self.omega0
 
-        self.dt = min(dt_force,dt_tension, dt_bending)
-        # self.fiber_dt = min(dt_tension, dt_bending)
-        # print("Time step ratio is %g"%(self.dt/self.fiber_dt))
+        #self.dt = min(dt_force,dt_tension, dt_bending)
+        self.fiber_dt = min(dt_tension, dt_bending)
+        self.dt = self.fiber_dt
+        print("Time step ratio is %g"%(self.dt/self.fiber_dt))
 
     def create_scheme(self):
         return None
@@ -119,7 +121,7 @@ class Beam(Application):
                      'auhat', 'avhat','awhat', 'uhat', 'vhat', 'what', 'fractag',
                      'rxnext', 'rynext', 'rznext', 'rnext', 'rxprev', 'ryprev',
                      'rzprev', 'rprev', 'eu', 'ev', 'ew', 'holdtag', 'Fx',
-                     'Fy', 'Fz', 'omegax', 'omegay', 'omegaz'):
+                     'Fy', 'Fz', 'ex', 'ey', 'ez'):
             fiber.add_property(name)
 
         # set the output property arrays
@@ -160,14 +162,19 @@ class Beam(Application):
         equations = [
             Group(
                 equations=[
+                    EBGVelocityReset(dest='fiber',sources=None),
+                ],
+            ),
+            Group(
+                equations=[
                     MomentumEquationPressureGradient(dest='fiber',
                        sources=['fiber'], pb=0.0, gx=self.gx, gy=self.gy),
-                    Tension(dest='fiber',
-                        sources=['fiber'],
-                        ea=self.E*self.A),
-                    Bending(dest='fiber',
-                        sources=['fiber'],
-                        ei=self.E*self.I),
+                    # Tension(dest='fiber',
+                    #     sources=['fiber'],
+                    #     ea=self.E*self.A),
+                    # Bending(dest='fiber',
+                    #     sources=['fiber'],
+                    #     ei=self.E*self.I),
                     Damping(dest='fiber',
                         sources=None,
                         d = self.D)
@@ -182,49 +189,49 @@ class Beam(Application):
         ]
         return equations
 
-    # def _configure(self):
-    #     super(Beam, self)._configure()
-    #     self.fiber_integrator = EulerIntegrator(fiber=EulerStep())
-    #     kernel = QuinticSpline(dim=3)
-    #     equations = [
-    #                     Group(
-    #                         equations=[
-    #                             Tension(dest='fiber',
-    #                                     sources=['fiber'],
-    #                                     ea=self.E*self.A),
-    #                             Bending(dest='fiber',
-    #                                     sources=['fiber'],
-    #                                     ei=self.E*self.I),
-    #                             Damping(dest='fiber',
-    #                                     sources=None,
-    #                                     d = self.D)
-    #                         ],
-    #                     ),
-    #                     Group(
-    #                         equations=[
-    #                             HoldPoints(dest='fiber', sources=None, tag=2,
-    #                                 x=False),
-    #                             HoldPoints(dest='fiber', sources=None, tag=1,
-    #                                 y=False),
-    #                         ]
-    #                     ),
-    #                 ]
-    #     particles = [p for p in self.particles if p.name == 'fiber']
-    #     nnps = LinkedListNNPS(dim=3, particles=particles,
-    #                     radius_scale=kernel.radius_scale,
-    #                     fixed_h=False, cache=False, sort_gids=False)
-    #     acceleration_eval = AccelerationEval(
-    #                 particle_arrays=particles,
-    #                 equations=equations,
-    #                 kernel=kernel,
-    #                 mode='serial')
-    #     comp = SPHCompiler(acceleration_eval, self.fiber_integrator)
-    #     config = get_config()
-    #     config.use_openmp = False
-    #     comp.compile()
-    #     config.use_openmp = True
-    #     acceleration_eval.set_nnps(nnps)
-    #     self.fiber_integrator.set_nnps(nnps)
+    def _configure(self):
+        super(Beam, self)._configure()
+        self.fiber_integrator = EulerIntegrator(fiber=EBGStep())
+        kernel = QuinticSpline(dim=3)
+        equations = [
+                        Group(
+                            equations=[
+                                Tension(dest='fiber',
+                                        sources=['fiber'],
+                                        ea=self.E*self.A),
+                                Bending(dest='fiber',
+                                        sources=['fiber'],
+                                        ei=self.E*self.I),
+                                ArtificialDamping(dest='fiber',
+                                        sources=None,
+                                        d = self.AD)
+                            ],
+                        ),
+                        Group(
+                            equations=[
+                                HoldPoints(dest='fiber', sources=None, tag=2,
+                                    x=False),
+                                HoldPoints(dest='fiber', sources=None, tag=1,
+                                    y=False),
+                            ]
+                        ),
+                    ]
+        particles = [p for p in self.particles if p.name == 'fiber']
+        nnps = LinkedListNNPS(dim=3, particles=particles,
+                        radius_scale=kernel.radius_scale,
+                        fixed_h=False, cache=False, sort_gids=False)
+        acceleration_eval = AccelerationEval(
+                    particle_arrays=particles,
+                    equations=equations,
+                    kernel=kernel,
+                    mode='serial')
+        comp = SPHCompiler(acceleration_eval, self.fiber_integrator)
+        config = get_config()
+        config.use_openmp = False
+        comp.compile()
+        config.use_openmp = True
+        acceleration_eval.set_nnps(nnps)
+        self.fiber_integrator.set_nnps(nnps)
 
     def create_solver(self):
         # Setting up the default integrator for fiber particles
@@ -235,16 +242,16 @@ class Beam(Application):
                          vtk=True)
         return solver
 
-    # def post_stage(self, current_time, dt, stage):
-    #     # 1) predictor
-    #     # 2) post stage 1:
-    #     if stage == 1:
-    #         N = int(np.ceil(self.dt/self.fiber_dt))
-    #         for n in range(0,N):
-    #             self.fiber_integrator.step(current_time,dt/N)
-    #             current_time += dt/N
-    #     # 3) Evaluation
-    #     # 4) post stage 2
+    def post_stage(self, current_time, dt, stage):
+        # 1) predictor
+        # 2) post stage 1:
+        if stage == 1:
+            N = int(np.ceil(dt/self.fiber_dt))
+            for n in range(0,N):
+                self.fiber_integrator.step(current_time,dt/N)
+                current_time += dt/N
+        # 3) Evaluation
+        # 4) post stage 2
 
     def _plot_oscillation(self, file):
         t, disp_x, disp_y = np.loadtxt(file, delimiter=',')

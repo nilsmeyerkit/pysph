@@ -46,7 +46,7 @@ from pysph.sph.wc.transport_velocity import (SummationDensity, VolumeSummation,
     SolidWallPressureBC, SolidWallNoSlipBC, SetWallVelocity,
     VolumeFromMassDensity)
 from pysph.sph.ebg.fiber import (Tension, Bending, Vorticity, Friction, Damping,
-    HoldPoints, EBGVelocityReset, ArtificialDamping, VelocityGradient)
+    HoldPoints, EBGVelocityReset, ArtificialDamping, VelocityGradient, Contact)
 
 
 # Jeffrey's equivalent aspect ratio (coarse approximation)
@@ -354,7 +354,8 @@ class Channel(Application):
                      'awhat', 'avhat','auhat', 'vhat', 'what', 'uhat', 'vmag2',
                      'arho', 'phi0', 'fractag', 'rho0','holdtag', 'eu', 'ev',
                      'ew', 'dudx', 'dudy', 'dudz', 'dvdx', 'dvdy', 'dvdz',
-                     'dwdx','dwdy', 'dwdz', 'Fx', 'Fy', 'Fz', 'arho'):
+                     'dwdx','dwdy', 'dwdz', 'Fx', 'Fy', 'Fz', 'arho', 'ex',
+                     'ey', 'ez'):
             fluid.add_property(name)
             channel.add_property(name)
             fiber.add_property(name)
@@ -440,8 +441,9 @@ class Channel(Application):
             # is applied to all particles including dummies. (real=False)
             Group(
                 equations=[
+                    EBGVelocityReset(dest='fiber', sources=None),
                     SummationDensity(dest='fluid', sources=all),
-                    #SummationDensity(dest='fiber', sources=all),
+                    SummationDensity(dest='fiber', sources=all),
                     VolumeFromMassDensity(dest='channel', sources=all),
                 ],
                 real=False,
@@ -457,8 +459,8 @@ class Channel(Application):
                     SetWallVelocity(dest='channel', sources=['fluid', 'fiber']),
                     StateEquation(dest='fluid', sources=None, p0=self.p0,
                                     rho0=self.options.rho0, b=1.0),
-                    #StateEquation(dest='fiber', sources=None, p0=self.p0,
-                    #                rho0=self.options.rho0, b=1.0),
+                    StateEquation(dest='fiber', sources=None, p0=self.p0,
+                                   rho0=self.options.rho0, b=1.0),
                 ],
                 real=False,
             ),
@@ -478,6 +480,9 @@ class Channel(Application):
                     Friction(dest='fiber', sources=['fiber'], J=self.J,
                                 A=self.A, mu=self.options.mu, d=self.options.d,
                                 ar=self.options.ar),
+                    Contact(dest='fiber', sources=['fiber'],
+                            E=self.options.E, d=self.options.d,
+                            scale=self.options.scale_factor),
                     MomentumEquationPressureGradient(dest='fluid', sources=all,
                                         pb=self.pb, tdamp=0.0,
                                         gx=self.options.g),
@@ -504,7 +509,6 @@ class Channel(Application):
             Group(
                 equations=[
                     HoldPoints(dest='fiber', sources=None, tag=100),
-                    EBGVelocityReset(dest='fiber', sources=None),
                 ]
             ),
         ]
@@ -540,6 +544,10 @@ class Channel(Application):
                                 Bending(dest='fiber',
                                         sources=['fiber'],
                                         ei=self.options.E*self.I),
+                                Contact(dest='fiber',
+                                        sources=['fiber'],
+                                        E=self.options.E, d=self.options.d,
+                                        scale=self.options.scale_factor),
                                 ArtificialDamping(dest='fiber',
                                         sources=None,
                                         d = self.options.D),
@@ -1088,10 +1096,10 @@ class Channel(Application):
         [streamlines, pressure] = self._plot_streamlines()
         if self.options.ar == 1:
             pressure_centerline = self._plot_pressure_centerline()
-        [orbitplot, angleplot, energyplot, force] = self._plot_history()
+        history = self._plot_history()
         inlet = self._plot_inlet_velocity()
         if self.options.mail:
-            self._send_notification(info_fname, [streamlines, orbitplot, angleplot])
+            self._send_notification(info_fname, [streamlines, history[0], history[1]])
 
 def run_application():
     app = Channel()

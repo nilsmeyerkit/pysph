@@ -38,7 +38,7 @@ class EulerStep(IntegratorStep):
 class EBGStep(IntegratorStep):
     """Euler integrator using alternative velocity for EBG."""
     def stage1(self, d_idx, d_eu, d_ev, d_ew, d_au, d_av, d_aw, d_x, d_y,
-                  d_z, dt):
+                  d_z, d_ex, d_ey, d_ez, dt):
         d_eu[d_idx] += dt*d_au[d_idx]
         d_ev[d_idx] += dt*d_av[d_idx]
         d_ew[d_idx] += dt*d_aw[d_idx]
@@ -46,6 +46,10 @@ class EBGStep(IntegratorStep):
         d_x[d_idx] += dt*d_eu[d_idx]
         d_y[d_idx] += dt*d_ev[d_idx]
         d_z[d_idx] += dt*d_ew[d_idx]
+
+        d_ex[d_idx] += dt*d_eu[d_idx]
+        d_ey[d_idx] += dt*d_ev[d_idx]
+        d_ez[d_idx] += dt*d_ew[d_idx]
 
 ###############################################################################
 # `RK2Step` class
