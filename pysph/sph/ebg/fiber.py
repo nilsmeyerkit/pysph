@@ -438,6 +438,28 @@ class Friction(Equation):
             d_au[d_idx-1] -= (My*d_rzprev[d_idx]-Mz*d_ryprev[d_idx])/(2*self.J)
             d_av[d_idx-1] -= (Mz*d_rxprev[d_idx]-Mx*d_rzprev[d_idx])/(2*self.J)
             d_aw[d_idx-1] -= (Mx*d_ryprev[d_idx]-My*d_rxprev[d_idx])/(2*self.J)
+        # else:
+        #     # end points
+        #     if d_rnext[d_idx] < 1E-14:
+        #         nx = -d_rxprev[d_idx]/d_rprev[d_idx]
+        #         ny = -d_ryprev[d_idx]/d_rprev[d_idx]
+        #         nz = -d_rzprev[d_idx]/d_rprev[d_idx]
+        #     else:
+        #         nx = -d_rxnext[d_idx]/d_rnext[d_idx]
+        #         ny = -d_rynext[d_idx]/d_rnext[d_idx]
+        #         nz = -d_rznext[d_idx]/d_rnext[d_idx]
+        #
+        #     fac = -self.A*self.mu/d_m[d_idx]*self.ar/(self.ar-1)
+        #
+        #     d_au[d_idx] += fac * (d_dudx[d_idx]*nx
+        #                             +d_dudy[d_idx]*ny
+        #                             +d_dudz[d_idx]*nz)
+        #     d_av[d_idx] += fac * (d_dvdx[d_idx]*nx
+        #                             +d_dvdy[d_idx]*ny
+        #                             +d_dvdz[d_idx]*nz)
+        #     d_aw[d_idx] += fac * (d_dwdx[d_idx]*nx
+        #                             +d_dwdy[d_idx]*ny
+        #                             +d_dwdz[d_idx]*nz)
 
 class SimpleContact(Equation):
     """This class computes simple fiber repulsion to stop penetration. It
