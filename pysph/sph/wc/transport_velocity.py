@@ -52,9 +52,9 @@ class SummationDensity(Equation):
         d_V[d_idx] = 0.0
         d_rho[d_idx] = 0.0
 
-    def loop(self, d_idx, d_V, d_rho, d_m, WIJ):
-        d_V[d_idx] += WIJ
-        d_rho[d_idx] += d_m[d_idx]*WIJ
+    def loop(self, d_idx, s_idx, d_V, d_rho, d_m, s_m, WIJ):
+        d_V[d_idx] += s_m[s_idx]/d_m[d_idx] * WIJ
+        d_rho[d_idx] += s_m[s_idx] * WIJ
 
 class VolumeSummation(Equation):
     """**Number density for volume computation**
@@ -69,8 +69,8 @@ class VolumeSummation(Equation):
     def initialize(self, d_idx, d_V):
         d_V[d_idx] = 0.0
 
-    def loop(self, d_idx, d_V, WIJ):
-        d_V[d_idx] += WIJ
+    def loop(self, d_idx, s_idx, d_m, s_m, d_V, WIJ):
+        d_V[d_idx] += s_m[s_idx]/d_m[d_idx] * WIJ
 
 class VolumeFromMassDensity(Equation):
     """**Set the inverse volume using mass density**"""
@@ -276,9 +276,6 @@ class MomentumEquationPressureGradient(Equation):
         d_au[d_idx] += tmp * DWIJ[0]
         d_av[d_idx] += tmp * DWIJ[1]
         d_aw[d_idx] += tmp * DWIJ[2]
-
-        # inverse mass of source particle
-        mj1 = 1.0/s_m[s_idx]
 
         # contribution due to the background pressure Eq. (13)
         tmp = -self.pb * mi1 * (Vi2 + d_m[d_idx]/s_m[s_idx] * Vj2)
