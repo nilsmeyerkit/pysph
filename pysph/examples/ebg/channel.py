@@ -407,8 +407,8 @@ class Channel(Application):
         fiber.V[:] = 1./fiber_volume
 
         # The smoothing lengths are set accorindg to each particles size.
-        fluid.h[:] = self.options.fluid_res * self.h0
-        channel.h[:] = self.options.fluid_res * self.h0
+        fluid.h[:] = self.h0
+        channel.h[:] = self.h0
         fiber.h[:] = self.h0
 
         # Setting the initial velocities for a shear flow.
