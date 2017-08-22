@@ -457,6 +457,7 @@ class Channel(Application):
                     VelocityGradient(dest='fiber', sources=all),
                     VelocityGradient(dest='fluid', sources=all),
                     SetWallVelocity(dest='channel', sources=['fluid', 'fiber']),
+                    SetWallVelocity(dest='fiber', sources=['fluid']),
                     StateEquation(dest='fluid', sources=None, p0=self.p0,
                                     rho0=self.options.rho0, b=1.0),
                     StateEquation(dest='fiber', sources=None, p0=self.p0,
@@ -490,13 +491,15 @@ class Channel(Application):
                                         pb=0.0, tdamp=0.0,
                                         gx=self.options.g),
                     MomentumEquationViscosity(dest='fluid',
-                                        sources=['fluid', 'fiber'], nu=self.nu),
+                                        sources=['fluid'], nu=self.nu),
                     MomentumEquationViscosity(dest='fiber',
-                                       sources=['fluid', 'fiber'], nu=self.nu),
+                                        sources=['fluid', 'fiber'], nu=self.nu),
                     SolidWallNoSlipBC(dest='fluid',
                                         sources=['channel',], nu=self.nu),
                     SolidWallNoSlipBC(dest='fiber',
                                         sources=['channel'], nu=self.nu),
+                    SolidWallNoSlipBC(dest='fluid',
+                                        sources=['fiber'], nu=self.nu),
                     MomentumEquationArtificialStress(dest='fluid',
                                         sources=['fluid', 'fiber']),
                     MomentumEquationArtificialStress(dest='fiber',
@@ -773,14 +776,79 @@ class Channel(Application):
         plt.xlabel('Velocity [mm/s]')
         plt.ylabel('Position [mm]')
         if self.options.ar == 1:
-            plt.legend(['Simulation', 'FEM', 'No obstacle'])
+            plt.legend(['SPH Simulation', 'FEM', 'No obstacle'])
         else:
-            plt.legend(['Simulation', 'No obstacle'])
+            plt.legend(['SPH Simulation', 'No obstacle'])
 
         # save figure
         fig = os.path.join(self.output_dir, 'inlet_velocity.eps')
         plt.savefig(fig, dpi=300)
         print("Inlet velocity plot written to %s."% fig)
+
+        return (fig)
+
+    def _plot_center_velocity(self, step_idx=-1):
+        """This function plots the velocity profile at the center across the
+        particle. If the fiber has only a single particle, this is interpreted
+        as flow arounda fiber cylinder and the coresponding FEM solution is
+        plotted as well.
+        """
+        # length factor m --> mm
+        factor = 1000
+
+        # Extract requested output - default is last output.
+        output = self.output_files[step_idx]
+        data = load(output)
+
+        # Generate meshgrid for interpolation.
+        x = np.array([self.x_fiber])
+        y = np.linspace(0,self.Ly,100)
+        x,y = np.meshgrid(x,y)
+
+        # interpolation of velocity field.
+        interp = Interpolator(list(data['arrays'].values()), x=x, y=y)
+        interp.update_particle_arrays(list(data['arrays'].values()))
+        u = interp.interpolate('u')
+
+        # FEM solution for disturbed velocity field (ar=1, g=10, G=0, width=20)
+        y_fem = np.array([4.80E-05,1.44E-04,2.40E-04,3.36E-04,4.32E-04,5.28E-04,
+                        6.24E-04,7.20E-04,8.16E-04,9.12E-04,1.01E-03,1.10E-03,
+                        1.20E-03,1.30E-03,1.39E-03,1.49E-03,1.58E-03,1.68E-03,
+                        1.78E-03,1.87E-03,1.97E-03,2.06E-03,2.16E-03,2.26E-03,
+                        2.35E-03,2.45E-03,2.54E-03,2.64E-03,2.74E-03,2.83E-03,
+                        2.93E-03,3.02E-03,3.12E-03,3.22E-03,3.31E-03,3.41E-03,
+                        3.50E-03,3.60E-03,3.70E-03,3.79E-03,3.89E-03,3.98E-03,
+                        4.08E-03,4.18E-03,4.27E-03,4.37E-03,4.46E-03,4.56E-03,
+                        4.66E-03,4.75E-03])
+
+        u_fem = np.array([1.21E-06,3.50E-06,5.59E-06,7.51E-06,9.26E-06,1.09E-05,
+                    1.23E-05,1.36E-05,1.47E-05,1.57E-05,1.66E-05,1.73E-05,
+                    1.78E-05,1.83E-05,1.85E-05,1.86E-05,1.84E-05,1.81E-05,
+                    1.75E-05,1.66E-05,1.53E-05,1.34E-05,1.05E-05,5.16E-06,0,0,
+                    5.13E-06,1.05E-05,1.34E-05,1.53E-05,1.66E-05,1.75E-05,
+                    1.81E-05,1.84E-05,1.86E-05,1.85E-05,1.83E-05,1.78E-05,
+                    1.73E-05,1.66E-05,1.57E-05,1.47E-05,1.36E-05,1.23E-05,
+                    1.09E-05,9.26E-06,7.51E-06,5.59E-06,3.50E-06,1.22E-06])
+
+        # open new plot
+        plt.figure()
+
+        # SPH solution
+        plt.plot(u*factor, y*factor , '-k')
+
+        # FEM solution (if applicable)
+        plt.plot(u_fem*factor, y_fem*factor , '--k')
+
+        # labels
+        plt.title('Velocity at center')
+        plt.xlabel('Velocity [mm/s]')
+        plt.ylabel('Position [mm]')
+        plt.legend(['SPH', 'FEM'])
+
+        # save figure
+        fig = os.path.join(self.output_dir, 'center_velocity.eps')
+        plt.savefig(fig, dpi=300)
+        print("Center velocity plot written to %s."% fig)
 
         return (fig)
 
@@ -1096,6 +1164,7 @@ class Channel(Application):
         [streamlines, pressure] = self._plot_streamlines()
         if self.options.ar == 1:
             pressure_centerline = self._plot_pressure_centerline()
+            center_velocity = self._plot_center_velocity()
         history = self._plot_history()
         inlet = self._plot_inlet_velocity()
         if self.options.mail:

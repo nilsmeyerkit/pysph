@@ -328,7 +328,7 @@ class MomentumEquationViscosity(Equation):
         d_av[d_idx] = 0.0
         d_aw[d_idx] = 0.0
 
-    def loop(self, d_idx, s_idx, d_rho, s_rho, d_m, d_V, s_V,
+    def loop(self, d_idx, s_idx, d_rho, s_rho, d_m, s_m,  d_V, s_V,
              d_au, d_av, d_aw,
              R2IJ, EPS, DWIJ, VIJ, XIJ):
 
@@ -346,7 +346,7 @@ class MomentumEquationViscosity(Equation):
         Vi2 = Vi * Vi; Vj2 = Vj * Vj
 
         # accelerations 3rd term in Eq. (8)
-        tmp = 1./d_m[d_idx] * (Vi2 + Vj2) * etaij * Fij/(R2IJ + EPS)
+        tmp = 1./d_m[d_idx] * (Vi2 + d_m[d_idx]/s_m[s_idx] * Vj2) * etaij * Fij/(R2IJ + EPS)
 
         d_au[d_idx] += tmp * VIJ[0]
         d_av[d_idx] += tmp * VIJ[1]
@@ -436,7 +436,7 @@ class MomentumEquationArtificialStress(Equation):
 
     def loop(self, d_idx, s_idx, d_rho, d_u, d_v, d_w, d_V,
              d_uhat, d_vhat, d_what, d_au, d_av, d_aw, d_m,
-             s_rho, s_u, s_v, s_w, s_V, s_uhat, s_vhat, s_what, DWIJ):
+             s_rho, s_m, s_u, s_v, s_w, s_V, s_uhat, s_vhat, s_what, DWIJ):
         rhoi = d_rho[d_idx]; rhoj = s_rho[s_idx]
 
         # physical and advection velocities
@@ -487,7 +487,7 @@ class MomentumEquationArtificialStress(Equation):
         )
 
         # accelerations 2nd part of Eq. (8)
-        tmp = 1./d_m[d_idx] * (Vi2 + Vj2)
+        tmp = 1./d_m[d_idx] * (Vi2 +  d_m[d_idx]/s_m[s_idx] * Vj2)
 
         d_au[d_idx] += tmp * Ax
         d_av[d_idx] += tmp * Ay
@@ -556,7 +556,7 @@ class SolidWallNoSlipBC(Equation):
         d_av[d_idx] = 0.0
         d_aw[d_idx] = 0.0
 
-    def loop(self, d_idx, s_idx, d_m, d_rho, s_rho, d_V, s_V,
+    def loop(self, d_idx, s_idx, d_m, s_m, d_rho, s_rho, d_V, s_V,
              d_u, d_v, d_w,
              d_au, d_av, d_aw,
              s_ug, s_vg, s_wg,
@@ -577,11 +577,11 @@ class SolidWallNoSlipBC(Equation):
 
         # viscous contribution (third term) from Eq. (8), with VIJ
         # defined appropriately using the ghost values
-        tmp = 1./d_m[d_idx] * (Vi2 + Vj2) * (etaij * Fij/(R2IJ + EPS))
+        tmp = 1./d_m[d_idx] * (Vi2 + d_m[d_idx]/s_m[s_idx] * Vj2) * (etaij * Fij/(R2IJ + EPS))
 
-        d_au[d_idx] += tmp * (d_u[d_idx] - s_ug[s_idx])
-        d_av[d_idx] += tmp * (d_v[d_idx] - s_vg[s_idx])
-        d_aw[d_idx] += tmp * (d_w[d_idx] - s_wg[s_idx])
+        d_au[d_idx] += tmp * (d_u[d_idx] - s_m[s_idx]/d_m[d_idx] * s_ug[s_idx])
+        d_av[d_idx] += tmp * (d_v[d_idx] - s_m[s_idx]/d_m[d_idx] * s_vg[s_idx])
+        d_aw[d_idx] += tmp * (d_w[d_idx] - s_m[s_idx]/d_m[d_idx] * s_wg[s_idx])
 
 class SolidWallPressureBC(Equation):
     r"""**Solid wall pressure boundary condition** [Adami2012]_
