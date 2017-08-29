@@ -24,9 +24,9 @@ from pysph.sph.sph_compiler import SPHCompiler
 
 from pysph.sph.equation import Group
 from pysph.sph.wc.transport_velocity import MomentumEquationPressureGradient
-from pysph.sph.ebg.fiber import (Tension, HoldPoints, Bending, Damping,
-    EBGVelocityReset, ArtificialDamping, SimpleContact, Contact)
-
+from pysph.sph.fiber.utils import (Damping, HoldPoints, ComputeDistance)
+from pysph.sph.fiber.beadchain import (Tension, Bending, EBGVelocityReset,
+    ArtificialDamping)
 
 class Beam(Application):
     def add_user_options(self, group):
@@ -80,6 +80,7 @@ class Beam(Application):
             self.omega0 = self.omega0_bending
         m = self.rho0*self.A*self.dx
         self.D = self.options.d*m*self.omega0
+        self.AD = 5*m*self.omega0
         self.gx = self.options.gx
         self.gy = self.options.gy
         print('Damping: %g, Omega0: %g'%(self.D,self.omega0))
@@ -92,11 +93,12 @@ class Beam(Application):
         print(dt_tension)
         print(dt_bending)
 
-        self.tf = 20
+        self.tf = 4*np.pi/self.omega0
 
         self.dt = min(dt_force,dt_tension, dt_bending)
-        # self.fiber_dt = min(dt_tension, dt_bending)
-        # print("Time step ratio is %g"%(self.dt/self.fiber_dt))
+        #self.fiber_dt = min(dt_tension, dt_bending)
+        #self.dt = self.fiber_dt
+        #print("Time step ratio is %g"%(self.dt/self.fiber_dt))
 
     def create_scheme(self):
         return None
@@ -106,24 +108,12 @@ class Beam(Application):
         _y = np.array([0.0])
         _z = np.array([0.0])
         x, y, z = np.meshgrid(_x, _y, _z)
-        fiber1_x = x.ravel()
-        fiber1_y = y.ravel()
-        fiber1_z = z.ravel()
-
-        _x = np.array([0.75*self.l])
-        _y = np.array([-2*self.dx])
-        _z = np.linspace(-0.25*self.l, 0.75*self.l, self.N+1)
-        # _x = np.linspace(-self.dx, self.l-self.dx, self.N+1)
-        # _y = np.array([-2*self.dx])
-        # _z = np.array([0.0])
-        x, y, z = np.meshgrid(_x, _y, _z)
-        fiber2_x = x.ravel()
-        fiber2_y = y.ravel()
-        fiber2_z = z.ravel()
+        fiber_x = x.ravel()
+        fiber_y = y.ravel()
+        fiber_z = z.ravel()
 
         # create array
-        fiber1 = get_particle_array(name='fiber1', x=fiber1_x, y=fiber1_y, z=fiber1_z)
-        fiber2 = get_particle_array(name='fiber2', x=fiber2_x, y=fiber2_y, z=fiber2_z)
+        fiber = get_particle_array(name='fiber', x=fiber_x, y=fiber_y, z=fiber_z)
 
         # add requisite variables needed for this formulation
         for name in ('V', 'wij', 'vmag2', 'lprev', 'lnext', 'arho',
@@ -131,95 +121,71 @@ class Beam(Application):
                      'auhat', 'avhat','awhat', 'uhat', 'vhat', 'what', 'fractag',
                      'rxnext', 'rynext', 'rznext', 'rnext', 'rxprev', 'ryprev',
                      'rzprev', 'rprev', 'eu', 'ev', 'ew', 'holdtag', 'Fx',
-                     'Fy', 'Fz', 'omegax', 'omegay', 'omegaz'):
-            fiber1.add_property(name)
-            fiber2.add_property(name)
+                     'Fy', 'Fz', 'ex', 'ey', 'ez', 'fidx'):
+            fiber.add_property(name)
 
         # set the output property arrays
-        fiber1.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm', 'fractag',
-                              'h', 'p', 'pid', 'tag', 'gid', 'lprev'])
-        fiber2.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm', 'fractag',
+        fiber.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm', 'fractag',
                               'h', 'p', 'pid', 'tag', 'gid', 'lprev'])
 
         # set initial distances
-        fiber1.lprev[:] = self.dx
-        fiber1.lnext[:] = self.dx
-        fiber1.phi0[:] = np.pi
-        fiber1.phifrac[:] = 0.2
-        fiber2.lprev[:] = self.dx
-        fiber2.lnext[:] = self.dx
-        fiber2.phi0[:] = np.pi
-        fiber2.phifrac[:] = 0.2
+        fiber.lprev[:] = self.dx
+        fiber.lnext[:] = self.dx
+        fiber.phi0[:] = np.pi
+        fiber.phifrac[:] = 0.2
 
         # tag particles to be hold
-        fiber1.holdtag[:] = 0
-        fiber1.holdtag[0] = 2
-        fiber1.holdtag[1] = 1
-        fiber1.holdtag[2] = 2
+        fiber.holdtag[:] = 0
+        fiber.holdtag[0] = 2
+        fiber.holdtag[1] = 1
+        fiber.holdtag[2] = 2
 
-        # test fracture
-        #fiber2.fractag[int(self.N/2)] = 1
+        # assign unique ID (within fiber) to each fiber particle.
+        fiber.fidx[:] = range(0,fiber.get_number_of_particles())
 
         # volume is set as dx * A
         volume = self.A * self.dx
 
         # mass is set to get the reference density of rho0
-        fiber1.m[:] = volume * self.rho0
-        fiber2.m[:] = volume * self.rho0
+        fiber.m[:] = volume * self.rho0
 
         # Set the default rho.
-        fiber1.rho[:] = self.rho0
-        fiber2.rho[:] = self.rho0
+        fiber.rho[:] = self.rho0
 
         # inverse volume (necessary for transport velocity equations)
-        fiber1.V[:] = 1./volume
-        fiber2.V[:] = 1./volume
+        fiber.V[:] = 1./volume
 
         # smoothing lengths
-        fiber1.h[:] = self.h
-        fiber2.h[:] = self.h
+        fiber.h[:] = self.h
 
         # return the particle list
-        return [fiber1, fiber2]
+        return [fiber]
 
     def create_equations(self):
         equations = [
             Group(
                 equations=[
-                    MomentumEquationPressureGradient(dest='fiber1',
-                       sources=['fiber1', 'fiber2'], pb=0.0, gx=self.gx, gy=self.gy),
-                    MomentumEquationPressureGradient(dest='fiber2',
-                       sources=['fiber1', 'fiber2'], pb=0.0, gx=self.gx, gy=self.gy),
-                    Tension(dest='fiber1',
-                        sources=['fiber1'],
+                    EBGVelocityReset(dest='fiber',sources=None),
+                    ComputeDistance(dest='fiber', sources=['fiber'])
+                ],
+            ),
+            Group(
+                equations=[
+                    MomentumEquationPressureGradient(dest='fiber',
+                       sources=['fiber'], pb=0.0, gx=self.gx, gy=self.gy),
+                    Tension(dest='fiber', sources=None,
                         ea=self.E*self.A),
-                    Tension(dest='fiber2',
-                        sources=['fiber2'],
-                        ea=self.E*self.A),
-                    Bending(dest='fiber1',
-                        sources=['fiber1'],
+                    Bending(dest='fiber', sources=None,
                         ei=self.E*self.I),
-                    Bending(dest='fiber2',
-                        sources=['fiber2'],
-                        ei=self.E*self.I),
-                    Contact(dest='fiber1',
-                       sources=['fiber1', 'fiber2'],
-                       E = self.E, d=self.dx, k=1),
-                    Contact(dest='fiber2',
-                        sources=['fiber1', 'fiber2'],
-                        E = self.E, d=self.dx, k=1),
-                    Damping(dest='fiber1',
-                        sources=None,
-                        d = self.D),
-                    Damping(dest='fiber2',
+                    Damping(dest='fiber',
                         sources=None,
                         d = self.D)
                 ],
             ),
             Group(
                 equations=[
-                    HoldPoints(dest='fiber1', sources=None, tag=2, x=False),
-                    HoldPoints(dest='fiber1', sources=None, tag=1, y=False),
+                    HoldPoints(dest='fiber', sources=None, tag=2, x=False),
+                    HoldPoints(dest='fiber', sources=None, tag=1, y=False),
                 ],
             ),
         ]
@@ -227,7 +193,7 @@ class Beam(Application):
 
     # def _configure(self):
     #     super(Beam, self)._configure()
-    #     self.fiber_integrator = EulerIntegrator(fiber=EulerStep())
+    #     self.fiber_integrator = EulerIntegrator(fiber=EBGStep())
     #     kernel = QuinticSpline(dim=3)
     #     equations = [
     #                     Group(
@@ -238,9 +204,9 @@ class Beam(Application):
     #                             Bending(dest='fiber',
     #                                     sources=['fiber'],
     #                                     ei=self.E*self.I),
-    #                             Damping(dest='fiber',
+    #                             ArtificialDamping(dest='fiber',
     #                                     sources=None,
-    #                                     d = self.D)
+    #                                     d = self.AD)
     #                         ],
     #                     ),
     #                     Group(
@@ -272,10 +238,9 @@ class Beam(Application):
     def create_solver(self):
         # Setting up the default integrator for fiber particles
         kernel = QuinticSpline(dim=3)
-        integrator = EPECIntegrator(fiber1=TransportVelocityStep(),
-            fiber2=TransportVelocityStep())
+        integrator = EPECIntegrator(fiber=TransportVelocityStep())
         solver = Solver(kernel=kernel, dim=3, integrator=integrator, dt=self.dt,
-                         tf=self.tf, pfreq=int(np.ceil(self.tf/(1000*self.dt))),
+                         tf=self.tf, pfreq=int(np.ceil(self.tf/(100*self.dt))),
                          vtk=True)
         return solver
 
@@ -283,7 +248,7 @@ class Beam(Application):
     #     # 1) predictor
     #     # 2) post stage 1:
     #     if stage == 1:
-    #         N = int(np.ceil(self.dt/self.fiber_dt))
+    #         N = int(np.ceil(dt/self.fiber_dt))
     #         for n in range(0,N):
     #             self.fiber_integrator.step(current_time,dt/N)
     #             current_time += dt/N
@@ -334,7 +299,7 @@ class Beam(Application):
         t = []
         for output in self.output_files:
             data = load(output)
-            pa = data['arrays']['fiber1']
+            pa = data['arrays']['fiber']
             x.append(pa.x[-1])
             w.append(pa.y[-1])
             t.append(data['solver_data']['t'])
@@ -343,13 +308,13 @@ class Beam(Application):
 
         last_output = self.output_files[-1]
         data = load(last_output)
-        pa = data['arrays']['fiber1']
+        pa = data['arrays']['fiber']
         x = pa.x
         y = pa.y
 
         first_output = self.output_files[0]
         data = load(first_output)
-        pa = data['arrays']['fiber1']
+        pa = data['arrays']['fiber']
         x0 = pa.x
         x_exact = self.gx*self.rho0/self.E*(self.L*x0-x0**2/2)
         k = self.rho0*self.gy*self.A/(self.E*self.I)

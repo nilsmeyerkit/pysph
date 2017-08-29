@@ -45,8 +45,10 @@ from pysph.sph.wc.transport_velocity import (SummationDensity, VolumeSummation,
     MomentumEquationViscosity, MomentumEquationArtificialStress,
     SolidWallPressureBC, SolidWallNoSlipBC, SetWallVelocity,
     VolumeFromMassDensity)
-from pysph.sph.ebg.fiber import (Tension, Bending, Vorticity, Friction, Damping,
-    HoldPoints, EBGVelocityReset, ArtificialDamping, VelocityGradient, Contact)
+from pysph.sph.fiber.utils import (Damping, HoldPoints, VelocityGradient,
+    Contact, ComputeDistance)
+from pysph.sph.fiber.beadchain import (Tension, Bending, EBGVelocityReset,
+    Friction, ArtificialDamping)
 
 
 # Jeffrey's equivalent aspect ratio (coarse approximation)
@@ -164,8 +166,8 @@ class Channel(Application):
         # The position of the fiber's center is set to the center of the
         # channel.
         self.x_fiber = 1/2*self.Lx
-        self.y_fiber = self.Ly/2
-        self.z_fiber = self.Ly/2
+        self.y_fiber = 0.5*self.Ly
+        self.z_fiber = 0.5*self.Ly
 
         # The kinematic viscosity is computed from absolute viscosity and
         # scaled (!) density.
@@ -209,7 +211,7 @@ class Channel(Application):
             self.t = 0
         else:
             if self.options.G > 0.1:
-                self.t = 2.0*np.pi*(are+1.0/are)/self.options.G
+                self.t = 1.0*np.pi*(are+1.0/are)/self.options.G
             else:
                 self.t = 1.5E-5*self.options.scale_factor
         print("Simulated time is %g s"%self.t)
@@ -267,27 +269,27 @@ class Channel(Application):
             zz = self.z_fiber
 
             # vertical
-            # if (fx[i] < xx+self.dx/2 and fx[i] > xx-self.dx/2 and
-            #     fy[i] < yy+self.Lf/2 and fy[i] > yy-self.Lf/2 and
-            #     fz[i] < zz+self.dx/2 and fz[i] > zz-self.dx/2):
-            #     indices.append(i)
+            if (fx[i] < xx+self.dx/2 and fx[i] > xx-self.dx/2 and
+                fy[i] < yy+self.Lf/2 and fy[i] > yy-self.Lf/2 and
+                fz[i] < zz+self.dx/2 and fz[i] > zz-self.dx/2):
+                indices.append(i)
 
             #horizontal
-            if (fx[i] < xx+self.Lf/2 and fx[i] > xx-self.Lf/2 and
-                fy[i] < yy+self.dx/2 and fy[i] > yy-self.dx/2 and
-                fz[i] < zz+self.dx/2 and fz[i] > zz-self.dx/2):
-               indices.append(i)
+            # if (fx[i] < xx+self.Lf/2 and fx[i] > xx-self.Lf/2 and
+            #     fy[i] < yy+self.dx/2 and fy[i] > yy-self.dx/2 and
+            #     fz[i] < zz+self.dx/2 and fz[i] > zz-self.dx/2):
+            #    indices.append(i)
 
         # Generating fiber particle grid. Uncomment proper section for
         # horizontal or vertical alignment respectivley.
 
         # vertical fiber
-        # _fibx = np.array([xx])
-        # _fiby = np.arange(yy-self.Lf/2+self.dx/2, yy+self.Lf/2+self.dx/2, self.dx)
+        _fibx = np.array([xx])
+        _fiby = np.arange(yy-self.Lf/2+self.dx/2, yy+self.Lf/2+self.dx/4, self.dx)
 
         # horizontal fiber
-        _fibx = np.arange(xx-self.Lf/2+self.dx/2, xx+self.Lf/2+self.dx/4, self.dx)
-        _fiby = np.array([yy])
+        # _fibx = np.arange(xx-self.Lf/2+self.dx/2, xx+self.Lf/2+self.dx/4, self.dx)
+        # _fiby = np.array([yy])
 
         _fibz = np.array([zz])
         fibx, fiby = np.meshgrid(_fibx, _fiby)
@@ -360,8 +362,8 @@ class Channel(Application):
             channel.add_property(name)
             fiber.add_property(name)
         for name in ('lprev', 'lnext', 'phi0', 'xcenter',
-                     'ycenter','rxnext', 'rynext', 'rznext', 'rnext', 'rxprev',
-                     'ryprev', 'rzprev', 'rprev'):
+                     'ycenter', 'rxnext', 'rynext', 'rznext', 'rnext', 'rxprev',
+                     'ryprev', 'rzprev', 'rprev', 'fidx'):
             fiber.add_property(name)
 
         # set the output property arrays
@@ -395,6 +397,9 @@ class Channel(Application):
         if self.options.holdcenter:
             idx = int(np.floor(self.options.ar/2))
             fiber.holdtag[idx] = 100
+
+        # assign unique ID (within fiber) to each fiber particle.
+        fiber.fidx[:] = range(0,fiber.get_number_of_particles())
 
         # Set the default density.
         fluid.rho[:] = self.options.rho0
@@ -445,6 +450,7 @@ class Channel(Application):
                     SummationDensity(dest='fluid', sources=all),
                     SummationDensity(dest='fiber', sources=all),
                     VolumeFromMassDensity(dest='channel', sources=all),
+                    ComputeDistance(dest='fiber', sources=['fiber']),
                 ],
                 real=False,
             ),
@@ -478,9 +484,9 @@ class Channel(Application):
             # This group contains the actual computation of accelerations.
             Group(
                 equations=[
-                    Friction(dest='fiber', sources=['fiber'], J=self.J,
-                                A=self.A, mu=self.options.mu, d=self.options.d,
-                                ar=self.options.ar),
+                    Friction(dest='fiber', sources=None, J=self.J,
+                            A=self.A, mu=self.options.mu, d=self.options.d,
+                            ar=self.options.ar),
                     Contact(dest='fiber', sources=['fiber'],
                             E=self.options.E, d=self.options.d,
                             scale=self.options.scale_factor),
@@ -493,13 +499,11 @@ class Channel(Application):
                     MomentumEquationViscosity(dest='fluid',
                                         sources=['fluid'], nu=self.nu),
                     MomentumEquationViscosity(dest='fiber',
-                                        sources=['fluid', 'fiber'], nu=self.nu),
+                                        sources=['fluid'], nu=self.nu),
                     SolidWallNoSlipBC(dest='fluid',
-                                        sources=['channel',], nu=self.nu),
+                                        sources=['channel','fiber'], nu=self.nu),
                     SolidWallNoSlipBC(dest='fiber',
                                         sources=['channel'], nu=self.nu),
-                    SolidWallNoSlipBC(dest='fluid',
-                                        sources=['fiber'], nu=self.nu),
                     MomentumEquationArtificialStress(dest='fluid',
                                         sources=['fluid', 'fiber']),
                     MomentumEquationArtificialStress(dest='fiber',
@@ -537,15 +541,20 @@ class Channel(Application):
             # to contain the next particle though.
             kernel = QuinticSpline(dim=self.options.dim)
             equations = [
+                        Group(
+                            equations=[
+                                ComputeDistance(dest='fiber',sources=['fiber']),
+                            ],
+                        ),
                         # The first group computes all accelerations based on
                         # tension, bending and damping.
                         Group(
                             equations=[
                                 Tension(dest='fiber',
-                                        sources=['fiber'],
+                                        sources=None,
                                         ea=self.options.E*self.A),
                                 Bending(dest='fiber',
-                                        sources=['fiber'],
+                                        sources=None,
                                         ei=self.options.E*self.I),
                                 Contact(dest='fiber',
                                         sources=['fiber'],
@@ -926,6 +935,7 @@ class Channel(Application):
         # empty list for orientation angle (only applicable for very
         # stiff/almost rigid fiber)
         angle = []
+        N = 0
 
         # empty list for conservation properies
         E_kin = []
@@ -961,7 +971,11 @@ class Channel(Application):
             # computation of orientation angle
             dxx = fiber.x[0]-fiber.x[-1]
             dyy = fiber.y[0]-fiber.y[-1]
-            angle.append(np.arctan(dxx/(dyy+0.01*self.h0)))
+            a = np.arctan(dxx/(dyy+0.01*self.h0)) + N*np.pi
+            if len(angle) > 0 and abs(a - angle[-1]) > 1:
+                N += 1
+                a += np.pi
+            angle.append(a)
 
             # computation of squared velocity and masses from density and volume
             v_fiber = fiber.u**2 + fiber.v**2 + fiber.w**2
@@ -982,16 +996,16 @@ class Channel(Application):
 
             # extract reaction forces at hold particles
             idx = np.argwhere(fiber.holdtag==100)
-            Fx.append(fiber.Fx[idx][0])
-            Fy.append(fiber.Fy[idx][0])
-            Fz.append(fiber.Fz[idx][0])
+            Fx.append(fiber.Fx[idx])
+            Fy.append(fiber.Fy[idx])
+            Fz.append(fiber.Fz[idx])
 
         # open new plot
         plt.figure()
 
         # plot end points
-        plt.plot(x_begin, y_begin, '-ok', markersize=5)
-        plt.plot(x_end, y_end, '-*k', markersize=5)
+        plt.plot(x_begin, y_begin, '-ok', markersize=3)
+        plt.plot(x_end, y_end, '-*k', markersize=3)
 
         # set equally scaled axis to not distort the orbit
         plt.axis('equal')
@@ -1010,13 +1024,13 @@ class Channel(Application):
                                 args=(are,self.options.G))
 
         # constraint between -pi/2 and pi/2
-        angle_jeffery = (angle_jeffery+np.pi/2.0)%np.pi-np.pi/2.0
+        #angle_jeffery = (angle_jeffery+np.pi/2.0)%np.pi-np.pi/2.0
 
         # open new plot
         plt.figure()
 
         # plot computed angle and Jeffery's solution
-        plt.plot(t, angle, '*k')
+        plt.plot(t, angle, 'ok', markersize=3)
         plt.plot(t, angle_jeffery, '-k')
 
         # labels
