@@ -34,7 +34,9 @@ from pysph.tools.interpolator import Interpolator
 from pysph.solver.application import Application
 from pysph.solver.utils import load,remove_irrelevant_files
 from pysph.solver.solver import Solver
+from pysph.solver.tools import FiberIntegrator
 
+from pysph.sph.scheme import BeadChainScheme
 from pysph.sph.integrator import EulerIntegrator, EPECIntegrator
 from pysph.sph.integrator_step import TransportVelocityStep, EBGStep
 from pysph.sph.acceleration_eval import AccelerationEval
@@ -59,11 +61,16 @@ def get_equivalent_aspect_ratio(aspect_ratio):
     return -0.0017*aspect_ratio**2+0.742*aspect_ratio
 
 # Jeffery's Equation for planar rotation of a rigid (theta=0)
-def jeffery_ode(phi, t, ar_equiv, G):
-    lbd = (ar_equiv**2-1.0)/(ar_equiv**2+1.0)
+def jeffery_ode(phi, t, ar, G):
+    lbd = (ar**2-1.0)/(ar**2+1.0)
     return 0.5*G*(1.0+lbd*np.cos(2.0*phi))
 
 class Channel(Application):
+    def create_scheme(self):
+        """There is no scheme used in this application and equaions are set up
+        manually."""
+        return BeadChainScheme(['fluid'], ['channel'], ['fiber'], dim=2)
+
     def add_user_options(self, group):
         group.add_argument(
             "--d", action="store", type=float, dest="d",
@@ -134,7 +141,6 @@ class Channel(Application):
             default=1, help="Resolution of fluid particles relative to fiber."
         )
 
-
     def consume_user_options(self):
         """Initialization of geometry, properties and time stepping."""
 
@@ -149,7 +155,7 @@ class Channel(Application):
 
         # The density can be scaled using the mass scaling factor. To account
         # for proper external forces, gravity is scaled just the other way.
-        self.options.rho0 = self.options.rho0*self.options.scale_factor
+        self.rho0 = self.options.rho0*self.options.scale_factor
         self.options.g = self.options.g/self.options.scale_factor
 
         # The fiber length is the aspect ratio times fiber diameter
@@ -171,20 +177,20 @@ class Channel(Application):
 
         # The kinematic viscosity is computed from absolute viscosity and
         # scaled (!) density.
-        self.nu = self.options.mu/self.options.rho0
+        self.nu = self.options.mu/self.rho0
 
         # For 2 dimensions surface, mass and moments have a different coputation
         # than for 3 dimensions.
         if self.options.dim == 2:
             self.A = self.dx
             self.I = self.dx**3/12
-            mass = 3*self.options.rho0*self.dx*self.A
+            mass = 3*self.rho0*self.dx*self.A
             self.J = 1/12*mass*(self.dx**2 + (3*self.dx)**2)
         else:
             R = self.dx/2
             self.A = np.pi*R**2
             self.I = np.pi*R**4/4.0
-            mass = 3*self.options.rho0*self.dx*self.A
+            mass = 3*self.rho0*self.dx*self.A
             self.J = 1/4*mass*R**2 + 1/12*mass*(3*self.dx)**2
 
         # SPH uses weakly compressible fluids. Therefore, the speed of sound c0
@@ -193,7 +199,7 @@ class Channel(Application):
         self.Vmax = (self.options.G*self.Ly/2
                     + self.options.g/(2*self.nu)*self.Ly**2/4)
         self.c0 = 10*self.Vmax
-        self.p0 = self.c0**2*self.options.rho0
+        self.p0 = self.c0**2*self.rho0
 
         # Background pressure in Adami's transport velocity formulation
         if self.options.nopb:
@@ -206,43 +212,24 @@ class Channel(Application):
         # according to Jeffery's equation. For a Poiseuille flow, it is set to
         # the time to reach steady state for width = 20 and g = 10 to match
         # the FEM result in COMSOL for a single cylinder.
-        are = get_equivalent_aspect_ratio(self.options.ar)
         if self.options.postonly:
             self.t = 0
         else:
             if self.options.G > 0.1:
-                self.t = 1.0*np.pi*(are+1.0/are)/self.options.G
+                l = (self.options.ar+1.0/self.options.ar)
+                self.t = 1.0*np.pi*l/self.options.G
             else:
                 self.t = 1.5E-5*self.options.scale_factor
         print("Simulated time is %g s"%self.t)
 
-        # Time steps
-        dt_cfl = 0.4 * self.h0/(self.c0 + self.Vmax)
-        dt_viscous = 0.125 * self.h0**2/self.nu
-        dt_force = 0.25 * np.sqrt(self.h0/(self.options.g+0.001))
-        dt_tension = 0.5*self.dx*np.sqrt(self.options.rho0/self.options.E)
-        dt_bending = 0.5*self.dx**2*np.sqrt(self.options.rho0*self.A/(self.options.E*2*self.I))
-        print("dt_cfl: %g"%dt_cfl)
-        print("dt_viscous: %g"%dt_viscous)
-        print("dt_force: %g"%dt_force)
-        print("dt_tension: %g"%dt_tension)
-        print("dt_bending: %g"%dt_bending)
-
-        # The outer loop time step is set to the minimum of force, cfl and
-        # viscous time step. The inner loop operates with a fiber time step
-        # computed from tension and bending.
-        self.dt = min(dt_cfl, dt_viscous, dt_force)
-        self.fiber_dt = min(dt_tension, dt_bending)
-        print("Time step ratio is %g"%(self.dt/self.fiber_dt))
-
-    def create_scheme(self):
-        """There is no scheme used in this application and equaions are set up
-        manually."""
-        return None
-
-    def create_domain(self):
-        """The channel has periodic boundary conditions in x-direction."""
-        return DomainManager(xmin=0, xmax=self.Lx, periodic_in_x=True)
+    def configure_scheme(self):
+        self.scheme.configure(rho0=self.rho0, c0=self.c0, nu=self.nu,
+            p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=self.A, I=self.I,
+            J=self.J, E=self.options.E, D=self.options.D, dim=self.options.dim,
+            scale_factor=self.options.scale_factor, gx=self.options.g)
+        self.scheme.configure_solver(tf=self.t, vtk = self.options.vtk, N=100)
+        # self.scheme.configure_solver(tf=self.t,
+        #     pfreq=1, vtk = self.options.vtk)
 
     def create_particles(self):
         """Three particle arrays are created: A fluid, representing the polymer
@@ -292,10 +279,7 @@ class Channel(Application):
         # _fiby = np.array([yy])
 
         _fibz = np.array([zz])
-        fibx, fiby = np.meshgrid(_fibx, _fiby)
-        fibx = fibx.ravel()
-        fiby = fiby.ravel()
-        fibz = fiby.ravel()
+        fibx,fiby,fibz = self.get_meshgrid(_fibx, _fiby, _fibz)
 
         # Determine the size of dummy region
         ghost_extent = 3*fdx/self.options.fluid_res
@@ -380,9 +364,9 @@ class Channel(Application):
         fiber_volume = self.dx**self.options.dim
 
         # Mass is set to get the reference density of rho0.
-        fluid.m[:] = volume * self.options.rho0
-        channel.m[:] = volume * self.options.rho0
-        fiber.m[:] = fiber_volume * self.options.rho0
+        fluid.m[:] = volume * self.rho0
+        channel.m[:] = volume * self.rho0
+        fiber.m[:] = fiber_volume * self.rho0
 
         # Set initial distances and angles. This represents a straight
         # unstreched fiber in rest state. It fractures, if a segment of length
@@ -402,9 +386,9 @@ class Channel(Application):
         fiber.fidx[:] = range(0,fiber.get_number_of_particles())
 
         # Set the default density.
-        fluid.rho[:] = self.options.rho0
-        channel.rho[:] = self.options.rho0
-        fiber.rho[:] = self.options.rho0
+        fluid.rho[:] = self.rho0
+        channel.rho[:] = self.rho0
+        fiber.rho[:] = self.rho0
 
         # Initial inverse volume (necessary for transport velocity equations)
         fluid.V[:] = 1./volume
@@ -436,197 +420,13 @@ class Channel(Application):
         # Return the particle list.
         return [fluid, channel, fiber]
 
-    def create_equations(self):
-        """Setting up all equations manually."""
+    def create_domain(self):
+        """The channel has periodic boundary conditions in x-direction."""
+        return DomainManager(xmin=0, xmax=self.Lx, periodic_in_x=True)
 
-        all = ['fluid', 'channel', 'fiber']
-        equations = [
-            # The first group computes densities in the fluid phase and corrects
-            # the wall's inverse volumes according to their current density. It
-            # is applied to all particles including dummies. (real=False)
-            Group(
-                equations=[
-                    EBGVelocityReset(dest='fiber', sources=None),
-                    SummationDensity(dest='fluid', sources=all),
-                    SummationDensity(dest='fiber', sources=all),
-                    VolumeFromMassDensity(dest='channel', sources=all),
-                    ComputeDistance(dest='fiber', sources=['fiber']),
-                ],
-                real=False,
-            ),
-            # This group mainly updates properties such as velocity gradient,
-            # imaginary velocities at wall dummy particles and pressures
-            # based on an equation of state. It is applied to all particles
-            # including the dummies.
-            Group(
-                equations=[
-                    VelocityGradient(dest='fiber', sources=all),
-                    VelocityGradient(dest='fluid', sources=all),
-                    SetWallVelocity(dest='channel', sources=['fluid', 'fiber']),
-                    SetWallVelocity(dest='fiber', sources=['fluid']),
-                    StateEquation(dest='fluid', sources=None, p0=self.p0,
-                                    rho0=self.options.rho0, b=1.0),
-                    StateEquation(dest='fiber', sources=None, p0=self.p0,
-                                   rho0=self.options.rho0, b=1.0),
-                ],
-                real=False,
-            ),
-            # This group updates the pressure of wall particles only. Since
-            # these are dummy particles, the flag real is set to false.
-            Group(
-                equations=[
-                    SolidWallPressureBC(dest='channel',
-                                        sources=['fluid', 'fiber'],
-                                        b=1.0, rho0=self.options.rho0, p0=self.p0),
-                ],
-                real=False,
-            ),
-            # This group contains the actual computation of accelerations.
-            Group(
-                equations=[
-                    Friction(dest='fiber', sources=None, J=self.J,
-                            A=self.A, mu=self.options.mu, d=self.options.d,
-                            ar=self.options.ar),
-                    Contact(dest='fiber', sources=['fiber'],
-                            E=self.options.E, d=self.options.d,
-                            scale=self.options.scale_factor),
-                    MomentumEquationPressureGradient(dest='fluid', sources=all,
-                                        pb=self.pb, tdamp=0.0,
-                                        gx=self.options.g),
-                    MomentumEquationPressureGradient(dest='fiber', sources=all,
-                                        pb=0.0, tdamp=0.0,
-                                        gx=self.options.g),
-                    MomentumEquationViscosity(dest='fluid',
-                                        sources=['fluid'], nu=self.nu),
-                    MomentumEquationViscosity(dest='fiber',
-                                        sources=['fluid'], nu=self.nu),
-                    SolidWallNoSlipBC(dest='fluid',
-                                        sources=['channel','fiber'], nu=self.nu),
-                    SolidWallNoSlipBC(dest='fiber',
-                                        sources=['channel'], nu=self.nu),
-                    MomentumEquationArtificialStress(dest='fluid',
-                                        sources=['fluid', 'fiber']),
-                    MomentumEquationArtificialStress(dest='fiber',
-                                        sources=['fluid', 'fiber']),
-                ],
-            ),
-            # This group resets some varibles: The acceleration and velocity of
-            # hold particles is removed and ebg velocities used for the inner
-            # loop of bending and tension are set to 0.
-            Group(
-                equations=[
-                    HoldPoints(dest='fiber', sources=None, tag=100),
-                ]
-            ),
-        ]
-        return equations
-
-    def _configure(self):
-        """The second integrator is a simple Euler-Integrator (accurate
-        enough due to very small time steps; very fast) using EBGSteps.
-        EBGSteps are basically the same as EulerSteps, exept for the fact
-        that they work with an intermediate ebg velocity [eu, ev, ew].
-        This velocity does not interfere with the actual velocity, which
-        is neseccery to not disturb the real velocity through artificial
-        damping in this step. The ebg velocity is initialized for each
-        inner loop again and reset in the outer loop."""
-
-        super(Channel, self)._configure()
-        # if there are more than 1 particles involved, elastic equations are
-        # iterated in an inner loop.
-        if self.options.ar > 1:
-            # second integrator
-            self.fiber_integrator = EulerIntegrator(fiber=EBGStep())
-            # The type of spline has no influence here. It must be large enough
-            # to contain the next particle though.
-            kernel = QuinticSpline(dim=self.options.dim)
-            equations = [
-                        Group(
-                            equations=[
-                                ComputeDistance(dest='fiber',sources=['fiber']),
-                            ],
-                        ),
-                        # The first group computes all accelerations based on
-                        # tension, bending and damping.
-                        Group(
-                            equations=[
-                                Tension(dest='fiber',
-                                        sources=None,
-                                        ea=self.options.E*self.A),
-                                Bending(dest='fiber',
-                                        sources=None,
-                                        ei=self.options.E*self.I),
-                                Contact(dest='fiber',
-                                        sources=['fiber'],
-                                        E=self.options.E, d=self.options.d,
-                                        scale=self.options.scale_factor),
-                                ArtificialDamping(dest='fiber',
-                                        sources=None,
-                                        d = self.options.D),
-                                ],
-                            ),
-                        # The second group resets accelerations for hold points.
-                        Group(
-                            equations=[
-                                HoldPoints(dest='fiber', sources=None, tag=100),
-                            ]
-                        ),
-                    ]
-            # These equations are applied to fiber particles only - that's the
-            # reason for computational speed up.
-            particles = [p for p in self.particles if p.name == 'fiber']
-            # A seperate DomainManager is needed to ensure that particles don't
-            # leave the domain.
-            domain = DomainManager(xmin=0, xmax=self.Lx, periodic_in_x=True)
-            # A seperate list for the nearest neighbourhood search is benefitial
-            # since it is much smaller than the original one.
-            nnps = LinkedListNNPS(dim=self.options.dim, particles=particles,
-                            radius_scale=kernel.radius_scale, domain=domain,
-                            fixed_h=False, cache=False, sort_gids=False)
-            # The acceleration evaluator needs to be set up in order to compile
-            # it together with the integrator.
-            acceleration_eval = AccelerationEval(
-                        particle_arrays=particles,
-                        equations=equations,
-                        kernel=kernel,
-                        mode='serial')
-            # Compilation of the integrator not using openmp, because the
-            # overhead is too large for those few fiber particles.
-            comp = SPHCompiler(acceleration_eval, self.fiber_integrator)
-            config = get_config()
-            config.use_openmp = False
-            comp.compile()
-            config.use_openmp = True
-            acceleration_eval.set_nnps(nnps)
-
-            # Connecting neighbourhood list to integrator.
-            self.fiber_integrator.set_nnps(nnps)
-
-    def create_solver(self):
-        """Setting up the default integrator for fiber particles"""
-        kernel = QuinticSpline(dim=self.options.dim)
-        integrator = EPECIntegrator(fluid=TransportVelocityStep(),
-                                    fiber=TransportVelocityStep())
-        solver = Solver(kernel=kernel, dim=self.options.dim, integrator=integrator, dt=self.dt,
-                         tf=self.t, pfreq=int(self.t/(100*self.dt)),
-                        vtk=self.options.vtk)
-        # solver = Solver(kernel=kernel, dim=self.options.dim, integrator=integrator, dt=self.dt,
-        #                  tf=self.t, pfreq=1, vtk=True)
-        return solver
-
-    def post_stage(self, current_time, dt, stage):
-        """This post stage function gets called after each outer loop and starts
-        an inner loop for the fiber iteration."""
-        if self.options.ar > 1:
-            # 1) predictor
-            # 2) post stage 1:
-            if stage == 1:
-                N = int(np.ceil(self.dt/self.fiber_dt))
-                for n in range(0,N):
-                    self.fiber_integrator.step(current_time,dt/N)
-                    current_time += dt/N
-            # 3) Evaluation
-            # 4) post stage 2
+    def create_tools(self):
+        il = self.options.ar > 1
+        return [FiberIntegrator(self.particles, self.scheme, self.Lx, il)]
 
     def get_meshgrid(self, xx, yy, zz):
         """This function is just a shorthand for the generation of meshgrids."""
@@ -846,13 +646,16 @@ class Channel(Application):
         plt.plot(u*factor, y*factor , '-k')
 
         # FEM solution (if applicable)
-        plt.plot(u_fem*factor, y_fem*factor , '--k')
+        if self.options.ar == 1:
+            plt.plot(u_fem*factor, y_fem*factor , '--k')
 
         # labels
         plt.title('Velocity at center')
         plt.xlabel('Velocity [mm/s]')
         plt.ylabel('Position [mm]')
-        plt.legend(['SPH', 'FEM'])
+
+        if self.options.ar == 1:
+            plt.legend(['SPH', 'FEM'])
 
         # save figure
         fig = os.path.join(self.output_dir, 'center_velocity.eps')
@@ -972,7 +775,7 @@ class Channel(Application):
             dxx = fiber.x[0]-fiber.x[-1]
             dyy = fiber.y[0]-fiber.y[-1]
             a = np.arctan(dxx/(dyy+0.01*self.h0)) + N*np.pi
-            if len(angle) > 0 and abs(a - angle[-1]) > 1:
+            if len(angle) > 0 and abs(a - angle[-1]) > 1.5:
                 N += 1
                 a += np.pi
             angle.append(a)
@@ -996,16 +799,16 @@ class Channel(Application):
 
             # extract reaction forces at hold particles
             idx = np.argwhere(fiber.holdtag==100)
-            Fx.append(fiber.Fx[idx])
-            Fy.append(fiber.Fy[idx])
-            Fz.append(fiber.Fz[idx])
+            Fx.append(fiber.Fx[idx][0])
+            Fy.append(fiber.Fy[idx][0])
+            Fz.append(fiber.Fz[idx][0])
 
         # open new plot
         plt.figure()
 
         # plot end points
         plt.plot(x_begin, y_begin, '-ok', markersize=3)
-        plt.plot(x_end, y_end, '-*k', markersize=3)
+        plt.plot(x_end, y_end, '-xk', markersize=3)
 
         # set equally scaled axis to not distort the orbit
         plt.axis('equal')
@@ -1021,6 +824,8 @@ class Channel(Application):
         phi0 = angle[0]
         are = get_equivalent_aspect_ratio(self.options.ar)
         angle_jeffery = odeint(jeffery_ode,phi0,t, atol=1E-15,
+                                args=(self.options.ar,self.options.G))
+        angle_jeffery_equiv = odeint(jeffery_ode,phi0,t, atol=1E-15,
                                 args=(are,self.options.G))
 
         # constraint between -pi/2 and pi/2
@@ -1031,12 +836,13 @@ class Channel(Application):
 
         # plot computed angle and Jeffery's solution
         plt.plot(t, angle, 'ok', markersize=3)
+        plt.plot(t, angle_jeffery_equiv, '--k')
         plt.plot(t, angle_jeffery, '-k')
 
         # labels
         plt.xlabel('t [s]')
         plt.ylabel('Angle [rad]')
-        plt.legend(['Simulation', 'Jeffery'])
+        plt.legend(['SPH Simulation', 'Jeffery (equiv.)', 'Jeffery'])
         plt.title("ar=%g"%self.options.ar)
 
         # save figure
@@ -1151,7 +957,7 @@ class Channel(Application):
                             Shear Rate: %g\n
                             Damping factor: %g\n
                             CPU Time: %g\n
-                        """%(self.options.d, self.options.ar, self.options.rho0,
+                        """%(self.options.d, self.options.ar, self.rho0,
                             self.options.mu, self.options.E,
                             self.options.G, self.options.D,
                             cpu_time)
@@ -1178,7 +984,7 @@ class Channel(Application):
         [streamlines, pressure] = self._plot_streamlines()
         if self.options.ar == 1:
             pressure_centerline = self._plot_pressure_centerline()
-            center_velocity = self._plot_center_velocity()
+        center_velocity = self._plot_center_velocity()
         history = self._plot_history()
         inlet = self._plot_inlet_velocity()
         if self.options.mail:

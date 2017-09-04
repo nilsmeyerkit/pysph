@@ -87,3 +87,106 @@ class SimpleRemesher(Tool):
             for prop in self.props:
                 data[prop] = self.interp.interpolate(prop)
             self.array.set(**data)
+
+class FiberIntegrator(Tool):
+    def __init__(self, all_particles, scheme, L, innerloop=True):
+        """The second integrator is a simple Euler-Integrator (accurate
+        enough due to very small time steps; very fast) using EBGSteps.
+        EBGSteps are basically the same as EulerSteps, exept for the fact
+        that they work with an intermediate ebg velocity [eu, ev, ew].
+        This velocity does not interfere with the actual velocity, which
+        is neseccery to not disturb the real velocity through artificial
+        damping in this step. The ebg velocity is initialized for each
+        inner loop again and reset in the outer loop."""
+        from pysph.base.kernels import QuinticSpline
+        from pysph.sph.integrator_step import EBGStep
+        from pysph.base.config import get_config
+        from pysph.sph.integrator import EulerIntegrator
+        from pysph.sph.scheme import BeadChainScheme
+        from pysph.sph.equation import Group
+        from pysph.sph.fiber.utils import (HoldPoints, Contact, ComputeDistance)
+        from pysph.sph.fiber.beadchain import (Tension, Bending,
+            ArtificialDamping)
+        from pysph.base.nnps import DomainManager, LinkedListNNPS
+        from pysph.sph.acceleration_eval import AccelerationEval
+        from pysph.sph.sph_compiler import SPHCompiler
+
+        if not isinstance(scheme, BeadChainScheme):
+            raise TypeError("Scheme must be BeadChainScheme")
+
+        self.innerloop = innerloop
+        self.dt = scheme.dt
+        self.fiber_dt = scheme.fiber_dt
+
+        # if there are more than 1 particles involved, elastic equations are
+        # iterated in an inner loop.
+        if self.innerloop:
+            # second integrator
+            self.fiber_integrator = EulerIntegrator(fiber=EBGStep())
+            # The type of spline has no influence here. It must be large enough
+            # to contain the next particle though.
+            kernel = QuinticSpline(dim=scheme.dim)
+            equations = []
+            g1 = []
+            for fiber in scheme.fibers:
+                g1.append(ComputeDistance(dest=fiber,sources=[fiber]))
+            equations.append(Group(equations=g1))
+
+            g2 = []
+            for fiber in scheme.fibers:
+                g2.append(Tension(dest=fiber, sources=None, ea=scheme.E*scheme.A))
+                g2.append(Bending(dest=fiber, sources=None, ei=scheme.E*scheme.I))
+                g2.append(Contact(dest=fiber, sources=scheme.fibers, E=scheme.E,
+                            d=scheme.dx,scale=scheme.scale_factor))
+                g2.append(ArtificialDamping(dest=fiber, sources=None, d=scheme.D))
+            equations.append(Group(equations=g2))
+
+            g3 = []
+            for fiber in scheme.fibers:
+                g3.append(HoldPoints(dest=fiber, sources=None, tag=100))
+            equations.append(Group(equations=g3))
+
+            # These equations are applied to fiber particles only - that's the
+            # reason for computational speed up.
+            particles = [p for p in all_particles if p.name == 'fiber']
+            # A seperate DomainManager is needed to ensure that particles don't
+            # leave the domain.
+            domain = DomainManager(xmin=0, xmax=L, periodic_in_x=True)
+            # A seperate list for the nearest neighbourhood search is benefitial
+            # since it is much smaller than the original one.
+            nnps = LinkedListNNPS(dim=scheme.dim, particles=particles,
+                            radius_scale=kernel.radius_scale, domain=domain,
+                            fixed_h=False, cache=False, sort_gids=False)
+            # The acceleration evaluator needs to be set up in order to compile
+            # it together with the integrator.
+            self.acceleration_eval = AccelerationEval(
+                        particle_arrays=particles,
+                        equations=equations,
+                        kernel=kernel,
+                        mode='serial')
+            # Compilation of the integrator not using openmp, because the
+            # overhead is too large for those few fiber particles.
+            comp = SPHCompiler(self.acceleration_eval, self.fiber_integrator)
+            config = get_config()
+            config.use_openmp = False
+            comp.compile()
+            config.use_openmp = True
+            self.acceleration_eval.set_nnps(nnps)
+
+            # Connecting neighbourhood list to integrator.
+            self.fiber_integrator.set_nnps(nnps)
+
+    def post_stage(self, current_time, dt, stage):
+        """This post stage function gets called after each outer loop and starts
+        an inner loop for the fiber iteration."""
+        from math import ceil
+        if self.innerloop:
+            # 1) predictor
+            # 2) post stage 1:
+            if stage == 1:
+                N = int(ceil(self.dt/self.fiber_dt))
+                for n in range(0,N):
+                    self.fiber_integrator.step(current_time,dt/N)
+                    current_time += dt/N
+            # 3) Evaluation
+            # 4) post stage 2
