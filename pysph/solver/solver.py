@@ -65,6 +65,9 @@ class Solver(object):
         pfreq : int
             Output files dumping frequency.
 
+        N : int
+            Total number of dumps
+
         output_at_times : list/array
             Optional list of output times to force dump the output file
 
@@ -113,6 +116,9 @@ class Solver(object):
 
         # default output printing frequency
         self.pfreq = 100
+
+        # default value for total number of dumps --> overrides pfreq
+        self.N = 0
 
         # Compress generated files.
         self.compress_output = False
@@ -688,6 +694,8 @@ class Solver(object):
 
         # dump output if the iteration number is a multiple of the printing
         # frequency.
+        if self.N > 0:
+            self.pfreq=int(self.tf/(self.N*self.dt))
         dump = self.count % self.pfreq == 0
 
         # Consider the other cases if user has requested output at a specified
