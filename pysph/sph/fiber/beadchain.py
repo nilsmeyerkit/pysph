@@ -178,7 +178,7 @@ class Friction(Equation):
     particles.
     """
 
-    def __init__(self, dest, sources, J, A, mu, d, ar):
+    def __init__(self, dest, sources, J, A, mu, d, ar=0.0):
         r"""
         Parameters
         ----------
