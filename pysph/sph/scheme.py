@@ -854,7 +854,7 @@ class BeadChainScheme(Scheme):
             g4.append(Friction(dest=fiber, sources=None, J=self.J, A=self.A,
                 mu=self.nu*self.rho0, d=self.dx))
             g4.append(Contact(dest=fiber, sources=self.fibers, E=self.E,
-                d=self.dx,scale=self.scale_factor))
+                d=self.dx))#,scale=self.scale_factor))
 
         equations.append(Group(equations=g4))
 
@@ -897,7 +897,7 @@ class BeadChainScheme(Scheme):
             pa.set_output_arrays(output_props)
 
         for fiber in self.fibers:
-            pa = particle_arrays[solid]
+            pa = particle_arrays[fiber]
             for name in props+fprops:
                 fiber.add_property(name)
             self._ensure_properties(pa, props, clean)

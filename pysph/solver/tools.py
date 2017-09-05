@@ -122,7 +122,11 @@ class FiberIntegrator(Tool):
         # iterated in an inner loop.
         if self.innerloop:
             # second integrator
-            self.fiber_integrator = EulerIntegrator(fiber=EBGStep())
+            #self.fiber_integrator = EulerIntegrator(fiber=EBGStep())
+            steppers = {}
+            for f in scheme.fibers:
+                steppers[f] = EBGStep()
+            self.fiber_integrator = EulerIntegrator(**steppers)
             # The type of spline has no influence here. It must be large enough
             # to contain the next particle though.
             kernel = QuinticSpline(dim=scheme.dim)
@@ -137,7 +141,7 @@ class FiberIntegrator(Tool):
                 g2.append(Tension(dest=fiber, sources=None, ea=scheme.E*scheme.A))
                 g2.append(Bending(dest=fiber, sources=None, ei=scheme.E*scheme.I))
                 g2.append(Contact(dest=fiber, sources=scheme.fibers, E=scheme.E,
-                            d=scheme.dx,scale=scheme.scale_factor))
+                            d=scheme.dx))#,scale=scheme.scale_factor))
                 g2.append(ArtificialDamping(dest=fiber, sources=None, d=scheme.D))
             equations.append(Group(equations=g2))
 
@@ -148,7 +152,7 @@ class FiberIntegrator(Tool):
 
             # These equations are applied to fiber particles only - that's the
             # reason for computational speed up.
-            particles = [p for p in all_particles if p.name == 'fiber']
+            particles = [p for p in all_particles if p.name in scheme.fibers]
             # A seperate DomainManager is needed to ensure that particles don't
             # leave the domain.
             domain = DomainManager(xmin=0, xmax=L, periodic_in_x=True)
