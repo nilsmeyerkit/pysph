@@ -1,4 +1,13 @@
-"""Shear flow involving a single fiber rotating. (10 mins)
+"""
+################################################################################
+Flow with fibers in a channel. There are different setups:
+    Default:            2D shearflow with a single fiber - use --ar to set
+                        aspect ratio
+    Nearfield (ar=1):   2D fluid field around fiber (fiber is interpreted to be
+                        perpendicular to 2D field.)
+    dim=3 and g>0:      3D Poiseuille flow with moving fiber and obstacle fiber
+                        (use smaller artificial damping, e.g. 100!)
+################################################################################
 """
 # general imports
 import os
@@ -105,7 +114,7 @@ class Channel(Application):
             default=10000, help="Damping coefficient for arificial damping"
         )
         group.add_argument(
-            "--dim", action="store", type=float, dest="dim",
+            "--dim", action="store", type=int, dest="dim",
             default=2, help="Dimension of problem"
         )
         group.add_argument(
@@ -171,7 +180,7 @@ class Channel(Application):
 
         # The position of the fiber's center is set to the center of the
         # channel.
-        self.x_fiber = 1/2*self.Lx
+        self.x_fiber = 0.5*self.Lx
         self.y_fiber = 0.5*self.Ly
         self.z_fiber = 0.5*self.Ly
 
@@ -227,9 +236,11 @@ class Channel(Application):
             p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=self.A, I=self.I,
             J=self.J, E=self.options.E, D=self.options.D, dim=self.options.dim,
             scale_factor=self.options.scale_factor, gx=self.options.g)
-        self.scheme.configure_solver(tf=self.t, vtk = self.options.vtk, N=100)
-        # self.scheme.configure_solver(tf=self.t,
-        #     pfreq=1, vtk = self.options.vtk)
+        if self.options.dim == 3 and self.options.g > 0:
+            self.scheme.configure(dim=self.options.dim, fibers=['fiber', 'obstacle'])
+        # Return the particle list.
+        self.scheme.configure_solver(tf=self.t, vtk = self.options.vtk, N=200)
+        #self.scheme.configure_solver(tf=self.t, pfreq=1, vtk = self.options.vtk)
 
     def create_particles(self):
         """Three particle arrays are created: A fluid, representing the polymer
@@ -267,6 +278,16 @@ class Channel(Application):
             #     fz[i] < zz+self.dx/2 and fz[i] > zz-self.dx/2):
             #    indices.append(i)
 
+            # obstacle
+            if self.options.dim == 3 and self.options.g > 0:
+                ox = self.x_fiber + 0.1*self.Lx
+                oy = self.y_fiber - 0.1*self.Ly
+                oz = self.z_fiber
+                if (fx[i] < ox+self.dx/2 and fx[i] > ox-self.dx/2 and
+                    fy[i] < oy+self.dx/2 and fy[i] > oy-self.dx/2 and
+                    fz[i] < oz+self.Lf/2 and fz[i] > oz-self.Lf/2):
+                    indices.append(i)
+
         # Generating fiber particle grid. Uncomment proper section for
         # horizontal or vertical alignment respectivley.
 
@@ -280,6 +301,13 @@ class Channel(Application):
 
         _fibz = np.array([zz])
         fibx,fiby,fibz = self.get_meshgrid(_fibx, _fiby, _fibz)
+
+        # obstacle fiber
+        if self.options.dim == 3 and self.options.g > 0:
+            _obsx = np.array([ox])
+            _obsy = np.array([oy])
+            _obsz = np.arange(oz-self.Lf/2+self.dx/2, oz+self.Lf/2+self.dx/4, self.dx)
+            obsx,obsy,obsz = self.get_meshgrid(_obsx, _obsy, _obsz)
 
         # Determine the size of dummy region
         ghost_extent = 3*fdx/self.options.fluid_res
@@ -324,6 +352,8 @@ class Channel(Application):
             fluid = get_particle_array(name='fluid', x=fx, y=fy, z=fz)
             fluid.remove_particles(indices)
             fiber = get_particle_array(name='fiber', x=fibx, y=fiby, z=fibz)
+            if self.options.dim == 3 and self.options.g > 0:
+                obstacle = get_particle_array(name='obstacle', x=obsx, y=obsy, z=obsz)
 
         # Print number of particles.
         print("Shear flow : nfluid = %d, nchannel = %d, nfiber = %d"%(
@@ -334,6 +364,8 @@ class Channel(Application):
         # The number of fiber particles should match the aspect ratio. This
         # assertation fails, if something was wrong in the fiber generation.
         assert(fiber.get_number_of_particles()==self.options.ar)
+        if self.options.dim == 3 and self.options.g > 0:
+            assert(obstacle.get_number_of_particles() == self.options.ar)
 
         # Add requisite variables needed for this formulation
         for name in ('V', 'wf','uf','vf','wg','wij','vg','ug', 'phifrac',
@@ -345,10 +377,14 @@ class Channel(Application):
             fluid.add_property(name)
             channel.add_property(name)
             fiber.add_property(name)
+            if self.options.dim == 3 and self.options.g > 0:
+                obstacle.add_property(name)
         for name in ('lprev', 'lnext', 'phi0', 'xcenter',
                      'ycenter', 'rxnext', 'rynext', 'rznext', 'rnext', 'rxprev',
                      'ryprev', 'rzprev', 'rprev', 'fidx'):
             fiber.add_property(name)
+            if self.options.dim == 3 and self.options.g > 0:
+                obstacle.add_property(name)
 
         # set the output property arrays
         fluid.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm','h', 'p',
@@ -358,6 +394,10 @@ class Channel(Application):
         fiber.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm', 'h', 'p',
                         'pid', 'holdtag', 'gid','ug', 'vg', 'wg', 'V', 'Fx',
                         'Fy', 'Fz'])
+        if self.options.dim == 3 and self.options.g > 0:
+            obstacle.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm', 'h', 'p',
+                            'pid', 'holdtag', 'gid','ug', 'vg', 'wg', 'V', 'Fx',
+                            'Fy', 'Fz'])
 
         # Computation of each particles initial volume.
         volume = fdx**self.options.dim
@@ -367,6 +407,8 @@ class Channel(Application):
         fluid.m[:] = volume * self.rho0
         channel.m[:] = volume * self.rho0
         fiber.m[:] = fiber_volume * self.rho0
+        if self.options.dim == 3 and self.options.g > 0:
+            obstacle.m[:] = fiber_volume * self.rho0
 
         # Set initial distances and angles. This represents a straight
         # unstreched fiber in rest state. It fractures, if a segment of length
@@ -374,39 +416,51 @@ class Channel(Application):
         fiber.lprev[:] = self.dx
         fiber.lnext[:] = self.dx
         fiber.phi0[:] = np.pi
-        fiber.phifrac[:] = 0.2
+        fiber.phifrac[:] = 2.0
+        if self.options.dim == 3 and self.options.g > 0:
+            obstacle.lprev[:] = self.dx
+            obstacle.lnext[:] = self.dx
+            obstacle.phi0[:] = np.pi
+            obstacle.phifrac[:] = 2.0
 
         # Tag particles to be hold, if requested.
         fiber.holdtag[:] = 0
         if self.options.holdcenter:
             idx = int(np.floor(self.options.ar/2))
             fiber.holdtag[idx] = 100
+        if self.options.dim == 3 and self.options.g > 0:
+            obstacle.holdtag[0] = 100
+            obstacle.holdtag[-1] = 100
 
         # assign unique ID (within fiber) to each fiber particle.
         fiber.fidx[:] = range(0,fiber.get_number_of_particles())
+        if self.options.dim == 3 and self.options.g > 0:
+            obstacle.fidx[:] = range(0,obstacle.get_number_of_particles())
 
         # Set the default density.
         fluid.rho[:] = self.rho0
         channel.rho[:] = self.rho0
         fiber.rho[:] = self.rho0
+        if self.options.dim == 3 and self.options.g > 0:
+            obstacle.rho[:] = self.rho0
 
         # Initial inverse volume (necessary for transport velocity equations)
         fluid.V[:] = 1./volume
         channel.V[:] = 1./volume
         fiber.V[:] = 1./fiber_volume
+        if self.options.dim == 3 and self.options.g > 0:
+            obstacle.V[:] = 1./fiber_volume
 
         # The smoothing lengths are set accorindg to each particles size.
         fluid.h[:] = self.h0
         channel.h[:] = self.h0
         fiber.h[:] = self.h0
+        if self.options.dim == 3 and self.options.g > 0:
+            obstacle.h[:] = self.h0
 
         # Setting the initial velocities for a shear flow.
         fluid.u[:] = self.options.G*(fluid.y[:]-self.Ly/2)
-                    #- 1/2*self.options.g/self.nu*(
-                    #    (fluid.y[:]-self.Ly/2)**2-(self.Ly/2)**2))
         fiber.u[:] = self.options.G*(fiber.y[:]-self.Ly/2)
-                    #- 1/2*self.options.g/self.nu*(
-                    #    (fiber.y[:]-self.Ly/2)**2-(self.Ly/2)**2))
 
         # Upper and lower walls move uniformly depending on shear rate.
         N = channel.get_number_of_particles()-1
@@ -418,7 +472,10 @@ class Channel(Application):
             channel.u[i] = self.options.G*y
 
         # Return the particle list.
-        return [fluid, channel, fiber]
+        if self.options.dim == 3 and self.options.g > 0:
+            return [fluid, channel, fiber, obstacle]
+        else:
+            return [fluid, channel, fiber]
 
     def create_domain(self):
         """The channel has periodic boundary conditions in x-direction."""
@@ -775,7 +832,10 @@ class Channel(Application):
             dxx = fiber.x[0]-fiber.x[-1]
             dyy = fiber.y[0]-fiber.y[-1]
             a = np.arctan(dxx/(dyy+0.01*self.h0)) + N*np.pi
-            if len(angle) > 0 and abs(a - angle[-1]) > 1.5:
+            if len(angle) > 0 and a - angle[-1] > 3:
+                N -= 1
+                a -= np.pi
+            elif len(angle) > 0 and a-angle[-1] < -3:
                 N += 1
                 a += np.pi
             angle.append(a)
@@ -799,9 +859,10 @@ class Channel(Application):
 
             # extract reaction forces at hold particles
             idx = np.argwhere(fiber.holdtag==100)
-            Fx.append(fiber.Fx[idx][0])
-            Fy.append(fiber.Fy[idx][0])
-            Fz.append(fiber.Fz[idx][0])
+            if len(idx) > 0:
+                Fx.append(fiber.Fx[idx][0])
+                Fy.append(fiber.Fy[idx][0])
+                Fz.append(fiber.Fz[idx][0])
 
         # open new plot
         plt.figure()
@@ -984,7 +1045,7 @@ class Channel(Application):
         [streamlines, pressure] = self._plot_streamlines()
         if self.options.ar == 1:
             pressure_centerline = self._plot_pressure_centerline()
-        center_velocity = self._plot_center_velocity()
+            center_velocity = self._plot_center_velocity()
         history = self._plot_history()
         inlet = self._plot_inlet_velocity()
         if self.options.mail:
