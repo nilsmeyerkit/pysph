@@ -4,6 +4,9 @@ import os
 from math import sqrt
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib import rc
+rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
+rc('text', usetex=True)
 
 # PySPH imports
 from pysph.base.utils import get_particle_array
@@ -132,7 +135,7 @@ class Beam(Application):
         fiber.lprev[:] = self.dx
         fiber.lnext[:] = self.dx
         fiber.phi0[:] = np.pi
-        fiber.phifrac[:] = 0.2
+        fiber.phifrac[:] = np.pi/2
 
         # tag particles to be hold
         fiber.holdtag[:] = 0
@@ -264,7 +267,7 @@ class Beam(Application):
             self.D,self.omega0_tension, self.omega0_bending, self.dt))
         plt.xlabel('t'); plt.ylabel('Displacement')
         plt.legend(['x-direction', 'y-direction'])
-        fig = os.path.join(self.output_dir, "oscillation.png")
+        fig = os.path.join(self.output_dir, "oscillation.eps")
         plt.savefig(fig, dpi=300)
         print("Figure written to %s." % fig)
 
@@ -276,7 +279,7 @@ class Beam(Application):
         plt.title("Displacement in x")
         plt.legend(['simulation', 'exact'])
         plt.xlabel('x'); plt.ylabel('u')
-        fig = os.path.join(self.output_dir, "displacement_x.png")
+        fig = os.path.join(self.output_dir, "displacement_x.eps")
         plt.savefig(fig, dpi=300)
         print("Figure written to %s." % fig)
 
@@ -288,7 +291,7 @@ class Beam(Application):
         plt.title("Displacement in y")
         plt.legend(['simulation', 'exact'])
         plt.xlabel('x'); plt.ylabel('y')
-        fig = os.path.join(self.output_dir, "displacement_y.png")
+        fig = os.path.join(self.output_dir, "displacement_y.eps")
         plt.savefig(fig, dpi=300)
         print("Figure written to %s." % fig)
 

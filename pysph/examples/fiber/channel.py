@@ -22,6 +22,9 @@ import pstats
 import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
+from matplotlib import rc
+rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
+rc('text', usetex=True)
 
 # numpy and scipy
 import numpy as np
@@ -76,7 +79,7 @@ def jeffery_ode(phi, t, ar, G):
 
 class Channel(Application):
     def create_scheme(self):
-        """There is no scheme used in this application and equaions are set up
+        """There is no scheme used in this application and equations are set up
         manually."""
         return BeadChainScheme(['fluid'], ['channel'], ['fiber'], dim=2)
 
