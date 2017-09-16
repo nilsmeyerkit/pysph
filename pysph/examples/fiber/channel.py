@@ -152,6 +152,10 @@ class Channel(Application):
             "--fluidres", action="store", type=float, dest="fluid_res",
             default=1, help="Resolution of fluid particles relative to fiber."
         )
+        group.add_argument(
+            "--rot", action="store", type=float, dest="rot",
+            default=1.0, help="Number of half rotations."
+        )
 
     def consume_user_options(self):
         """Initialization of geometry, properties and time stepping."""
@@ -229,7 +233,7 @@ class Channel(Application):
         else:
             if self.options.G > 0.1:
                 l = (self.options.ar+1.0/self.options.ar)
-                self.t = 1.0*np.pi*l/self.options.G
+                self.t = self.options.rot*np.pi*l/self.options.G
             else:
                 self.t = 1.5E-5*self.options.scale_factor
         print("Simulated time is %g s"%self.t)
@@ -242,7 +246,8 @@ class Channel(Application):
         if self.options.dim == 3 and self.options.g > 0:
             self.scheme.configure(dim=self.options.dim, fibers=['fiber', 'obstacle'])
         # Return the particle list.
-        self.scheme.configure_solver(tf=self.t, vtk = self.options.vtk, N=200)
+        self.scheme.configure_solver(tf=self.t, vtk = self.options.vtk,
+            N=self.options.rot*200)
         #self.scheme.configure_solver(tf=self.t, pfreq=1, vtk = self.options.vtk)
 
     def create_particles(self):
@@ -799,6 +804,7 @@ class Channel(Application):
         # stiff/almost rigid fiber)
         angle = []
         N = 0
+        M = 0
 
         # empty list for conservation properies
         E_kin = []
@@ -811,6 +817,10 @@ class Channel(Application):
         Fx = []
         Fy = []
         Fz = []
+
+        # empty list for roation periods
+        T = []
+        t0 = 0
 
         # iteration over all output files
         output_files = remove_irrelevant_files(self.output_files)
@@ -841,6 +851,12 @@ class Channel(Application):
             elif len(angle) > 0 and a-angle[-1] < -3:
                 N += 1
                 a += np.pi
+    
+            # count rotations
+            if a-M*np.pi > np.pi:
+                T.append(t[-1]-t0)
+                t0 = t[-1]
+                M += 1
             angle.append(a)
 
             # computation of squared velocity and masses from density and volume
@@ -867,6 +883,21 @@ class Channel(Application):
                 Fy.append(fiber.Fy[idx][0])
                 Fz.append(fiber.Fz[idx][0])
 
+        # evaluate roation statistics
+        print(T)
+        T_mean = np.mean(T)
+        T_std  = np.std(T)
+        are = get_equivalent_aspect_ratio(self.options.ar)
+        l = (are+1.0/are)
+        T_equiv = np.pi*l/self.options.G
+        l = (self.options.ar+1.0/self.options.ar)
+        T_jef = np.pi*l/self.options.G
+        print("Rotational statistics for %d half rotations:"%self.options.rot)
+        print("*Mean: %f"%T_mean)
+        print("*Standard Deviation: %f"%T_std)
+        print("*Jeffery: %f"%T_jef)
+        print("*Jeffery(equivalent): %f"%T_equiv)
+
         # open new plot
         plt.figure()
 
@@ -876,6 +907,7 @@ class Channel(Application):
 
         # set equally scaled axis to not distort the orbit
         plt.axis('equal')
+        plt.title('Orbitplot')
 
         # save plot of orbit
         orbfig = os.path.join(self.output_dir, 'orbitplot.eps')
