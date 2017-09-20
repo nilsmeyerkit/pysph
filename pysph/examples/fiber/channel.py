@@ -851,7 +851,7 @@ class Channel(Application):
             elif len(angle) > 0 and a-angle[-1] < -3:
                 N += 1
                 a += np.pi
-    
+
             # count rotations
             if a-M*np.pi > np.pi:
                 T.append(t[-1]-t0)
@@ -884,19 +884,20 @@ class Channel(Application):
                 Fz.append(fiber.Fz[idx][0])
 
         # evaluate roation statistics
-        print(T)
-        T_mean = np.mean(T)
-        T_std  = np.std(T)
-        are = get_equivalent_aspect_ratio(self.options.ar)
-        l = (are+1.0/are)
-        T_equiv = np.pi*l/self.options.G
-        l = (self.options.ar+1.0/self.options.ar)
-        T_jef = np.pi*l/self.options.G
-        print("Rotational statistics for %d half rotations:"%self.options.rot)
-        print("*Mean: %f"%T_mean)
-        print("*Standard Deviation: %f"%T_std)
-        print("*Jeffery: %f"%T_jef)
-        print("*Jeffery(equivalent): %f"%T_equiv)
+        if self.options.G > 0:
+            print(T)
+            T_mean = np.mean(T)
+            T_std  = np.std(T)
+            are = get_equivalent_aspect_ratio(self.options.ar)
+            l = (are+1.0/are)
+            T_equiv = np.pi*l/self.options.G
+            l = (self.options.ar+1.0/self.options.ar)
+            T_jef = np.pi*l/self.options.G
+            print("Rotational statistics for %d half rotations:"%self.options.rot)
+            print("*Mean: %f"%T_mean)
+            print("*Standard Deviation: %f"%T_std)
+            print("*Jeffery: %f"%T_jef)
+            print("*Jeffery(equivalent): %f"%T_equiv)
 
         # open new plot
         plt.figure()
