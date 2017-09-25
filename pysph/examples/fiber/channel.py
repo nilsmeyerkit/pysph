@@ -18,51 +18,36 @@ import json
 import cProfile
 import pstats
 
-# matplotlib (set up for server use)
-import matplotlib
-matplotlib.use('Agg')
-from matplotlib import pyplot as plt
-from matplotlib import rc
-rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
-rc('text', usetex=True)
-
-# numpy and scipy
-import numpy as np
-from scipy.integrate import odeint
-
 # mail for notifications
 from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
+# matplotlib (set up for server use)
+import matplotlib
+from matplotlib import pyplot as plt
+from matplotlib import rc
+
+# numpy and scipy
+import numpy as np
+from scipy.integrate import odeint
+
 # PySPH imports
-from pysph.base.config import get_config
-from pysph.base.nnps import DomainManager, LinkedListNNPS
-from pysph.base.utils import get_particle_array
-from pysph.base.kernels import CubicSpline, QuinticSpline
+from pysph.base.nnps import DomainManager
+from pysph.base.utils import (get_particle_array_beadchain,
+                              get_particle_array_beadchain_fiber)
 
 from pysph.tools.interpolator import Interpolator
 
 from pysph.solver.application import Application
-from pysph.solver.utils import load,remove_irrelevant_files
-from pysph.solver.solver import Solver
+from pysph.solver.utils import load, remove_irrelevant_files
 from pysph.solver.tools import FiberIntegrator
 
 from pysph.sph.scheme import BeadChainScheme
-from pysph.sph.integrator import EulerIntegrator, EPECIntegrator
-from pysph.sph.integrator_step import TransportVelocityStep, EBGStep
-from pysph.sph.acceleration_eval import AccelerationEval
-from pysph.sph.sph_compiler import SPHCompiler
-from pysph.sph.equation import Group
-from pysph.sph.wc.transport_velocity import (SummationDensity, VolumeSummation,
-    StateEquation, MomentumEquationPressureGradient, ContinuityEquation,
-    MomentumEquationViscosity, MomentumEquationArtificialStress,
-    SolidWallPressureBC, SolidWallNoSlipBC, SetWallVelocity,
-    VolumeFromMassDensity)
-from pysph.sph.fiber.utils import (Damping, HoldPoints, VelocityGradient,
-    Contact, ComputeDistance)
-from pysph.sph.fiber.beadchain import (Tension, Bending, EBGVelocityReset,
-    Friction, ArtificialDamping)
+
+matplotlib.use('Agg')
+rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
+rc('text', usetex=True)
 
 
 # Jeffrey's equivalent aspect ratio (coarse approximation)
@@ -79,8 +64,7 @@ def jeffery_ode(phi, t, ar, G):
 
 class Channel(Application):
     def create_scheme(self):
-        """There is no scheme used in this application and equations are set up
-        manually."""
+        """The BeadChainScheme is used for this application."""
         return BeadChainScheme(['fluid'], ['channel'], ['fiber'], dim=2)
 
     def add_user_options(self, group):
@@ -351,17 +335,17 @@ class Channel(Application):
         # Finally create all particle arrays. Note that fluid particles are
         # removed in the area, where the fiber is placed.
         if self.options.dim == 2:
-            channel = get_particle_array(name='channel', x=cx, y=cy)
-            fluid = get_particle_array(name='fluid', x=fx, y=fy)
+            channel = get_particle_array_beadchain(name='channel', x=cx, y=cy)
+            fluid = get_particle_array_beadchain(name='fluid', x=fx, y=fy)
             fluid.remove_particles(indices)
-            fiber = get_particle_array(name='fiber', x=fibx, y=fiby)
+            fiber = get_particle_array_beadchain_fiber(name='fiber', x=fibx, y=fiby)
         else:
-            channel = get_particle_array(name='channel', x=cx, y=cy, z=cz)
-            fluid = get_particle_array(name='fluid', x=fx, y=fy, z=fz)
+            channel = get_particle_array_beadchain(name='channel', x=cx, y=cy, z=cz)
+            fluid = get_particle_array_beadchain(name='fluid', x=fx, y=fy, z=fz)
             fluid.remove_particles(indices)
-            fiber = get_particle_array(name='fiber', x=fibx, y=fiby, z=fibz)
+            fiber = get_particle_array_beadchain_fiber(name='fiber', x=fibx, y=fiby, z=fibz)
             if self.options.dim == 3 and self.options.g > 0:
-                obstacle = get_particle_array(name='obstacle', x=obsx, y=obsy, z=obsz)
+                obstacle = get_particle_array_beadchain_fiber(name='obstacle', x=obsx, y=obsy, z=obsz)
 
         # Print number of particles.
         print("Shear flow : nfluid = %d, nchannel = %d, nfiber = %d"%(
@@ -375,37 +359,6 @@ class Channel(Application):
         if self.options.dim == 3 and self.options.g > 0:
             assert(obstacle.get_number_of_particles() == self.options.ar)
 
-        # Add requisite variables needed for this formulation
-        for name in ('V', 'wf','uf','vf','wg','wij','vg','ug', 'phifrac',
-                     'awhat', 'avhat','auhat', 'vhat', 'what', 'uhat', 'vmag2',
-                     'arho', 'phi0', 'fractag', 'rho0','holdtag', 'eu', 'ev',
-                     'ew', 'dudx', 'dudy', 'dudz', 'dvdx', 'dvdy', 'dvdz',
-                     'dwdx','dwdy', 'dwdz', 'Fx', 'Fy', 'Fz', 'arho', 'ex',
-                     'ey', 'ez'):
-            fluid.add_property(name)
-            channel.add_property(name)
-            fiber.add_property(name)
-            if self.options.dim == 3 and self.options.g > 0:
-                obstacle.add_property(name)
-        for name in ('lprev', 'lnext', 'phi0', 'xcenter',
-                     'ycenter', 'rxnext', 'rynext', 'rznext', 'rnext', 'rxprev',
-                     'ryprev', 'rzprev', 'rprev', 'fidx'):
-            fiber.add_property(name)
-            if self.options.dim == 3 and self.options.g > 0:
-                obstacle.add_property(name)
-
-        # set the output property arrays
-        fluid.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm','h', 'p',
-                        'pid', 'holdtag', 'gid', 'V'])
-        channel.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm','h', 'p',
-                        'pid', 'holdtag', 'gid', 'V'])
-        fiber.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm', 'h', 'p',
-                        'pid', 'holdtag', 'gid','ug', 'vg', 'wg', 'V', 'Fx',
-                        'Fy', 'Fz'])
-        if self.options.dim == 3 and self.options.g > 0:
-            obstacle.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm', 'h', 'p',
-                            'pid', 'holdtag', 'gid','ug', 'vg', 'wg', 'V', 'Fx',
-                            'Fy', 'Fz'])
 
         # Computation of each particles initial volume.
         volume = fdx**self.options.dim
@@ -419,8 +372,7 @@ class Channel(Application):
             obstacle.m[:] = fiber_volume * self.rho0
 
         # Set initial distances and angles. This represents a straight
-        # unstreched fiber in rest state. It fractures, if a segment of length
-        # 2 dx is bend more than 11.5°.
+        # unstreched fiber in rest state.
         fiber.lprev[:] = self.dx
         fiber.lnext[:] = self.dx
         fiber.phi0[:] = np.pi
@@ -686,23 +638,24 @@ class Channel(Application):
 
         # FEM solution for disturbed velocity field (ar=1, g=10, G=0, width=20)
         y_fem = np.array([4.80E-05,1.44E-04,2.40E-04,3.36E-04,4.32E-04,5.28E-04,
-                        6.24E-04,7.20E-04,8.16E-04,9.12E-04,1.01E-03,1.10E-03,
-                        1.20E-03,1.30E-03,1.39E-03,1.49E-03,1.58E-03,1.68E-03,
-                        1.78E-03,1.87E-03,1.97E-03,2.06E-03,2.16E-03,2.26E-03,
-                        2.35E-03,2.45E-03,2.54E-03,2.64E-03,2.74E-03,2.83E-03,
-                        2.93E-03,3.02E-03,3.12E-03,3.22E-03,3.31E-03,3.41E-03,
-                        3.50E-03,3.60E-03,3.70E-03,3.79E-03,3.89E-03,3.98E-03,
-                        4.08E-03,4.18E-03,4.27E-03,4.37E-03,4.46E-03,4.56E-03,
-                        4.66E-03,4.75E-03])
+                          6.24E-04,7.20E-04,8.16E-04,9.12E-04,1.01E-03,1.10E-03,
+                          1.20E-03,1.30E-03,1.39E-03,1.49E-03,1.58E-03,1.68E-03,
+                          1.78E-03,1.87E-03,1.97E-03,2.06E-03,2.16E-03,2.26E-03,
+                          2.35E-03,2.45E-03,2.54E-03,2.64E-03,2.74E-03,2.83E-03,
+                          2.93E-03,3.02E-03,3.12E-03,3.22E-03,3.31E-03,3.41E-03,
+                          3.50E-03,3.60E-03,3.70E-03,3.79E-03,3.89E-03,3.98E-03,
+                          4.08E-03,4.18E-03,4.27E-03,4.37E-03,4.46E-03,4.56E-03,
+                          4.66E-03,4.75E-03])
 
         u_fem = np.array([1.21E-06,3.50E-06,5.59E-06,7.51E-06,9.26E-06,1.09E-05,
-                    1.23E-05,1.36E-05,1.47E-05,1.57E-05,1.66E-05,1.73E-05,
-                    1.78E-05,1.83E-05,1.85E-05,1.86E-05,1.84E-05,1.81E-05,
-                    1.75E-05,1.66E-05,1.53E-05,1.34E-05,1.05E-05,5.16E-06,0,0,
-                    5.13E-06,1.05E-05,1.34E-05,1.53E-05,1.66E-05,1.75E-05,
-                    1.81E-05,1.84E-05,1.86E-05,1.85E-05,1.83E-05,1.78E-05,
-                    1.73E-05,1.66E-05,1.57E-05,1.47E-05,1.36E-05,1.23E-05,
-                    1.09E-05,9.26E-06,7.51E-06,5.59E-06,3.50E-06,1.22E-06])
+                          1.23E-05,1.36E-05,1.47E-05,1.57E-05,1.66E-05,1.73E-05,
+                          1.78E-05,1.83E-05,1.85E-05,1.86E-05,1.84E-05,1.81E-05,
+                          1.75E-05,1.66E-05,1.53E-05,1.34E-05,1.05E-05,5.16E-06,
+                          0,0,5.13E-06,1.05E-05,1.34E-05,1.53E-05,1.66E-05,
+                          1.75E-05,1.81E-05,1.84E-05,1.86E-05,1.85E-05,1.83E-05,
+                          1.78E-05,1.73E-05,1.66E-05,1.57E-05,1.47E-05,1.36E-05,
+                          1.23E-05,1.09E-05,9.26E-06,7.51E-06,5.59E-06,3.50E-06,
+                          1.22E-06])
 
         # open new plot
         plt.figure()

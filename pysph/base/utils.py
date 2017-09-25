@@ -382,7 +382,7 @@ def get_particle_array_gasd(constants=None, **props):
 
     pa.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm', 'h', 'cs', 'p', 'e',
                           'au', 'av', 'ae', 'pid', 'gid', 'tag', 'dwdh',
-                          'alpha1', 'alpha2'] )
+                          'alpha1', 'alpha2'])
 
     return pa
 
@@ -426,3 +426,72 @@ def create_dummy_particles(info):
         particles.append(pa)
 
     return particles
+
+def get_particle_array_beadchain(constants=None, **props):
+    """Return a particle array for the BeadChainScheme for a fluid and solid.
+
+    Parameters
+    ----------
+    constants : dict
+        Dictionary of constants
+
+    Other Parameters
+    ----------------
+    props : dict
+        Additional keywords passed are set as the property arrays.
+
+    See Also
+    --------
+    get_particle_array
+
+    """
+    fluid_props = ['V', 'wf', 'uf', 'vf', 'wg', 'wij', 'vg', 'ug', 'phifrac',
+                   'awhat', 'avhat', 'auhat', 'vhat', 'what', 'uhat', 'vmag2',
+                   'arho', 'phi0', 'fractag', 'rho0', 'holdtag', 'eu', 'ev',
+                   'ew', 'dudx', 'dudy', 'dudz', 'dvdx', 'dvdy', 'dvdz',
+                   'dwdx', 'dwdy', 'dwdz', 'Fx', 'Fy', 'Fz', 'arho', 'ex',
+                   'ey', 'ez']
+
+    pa = get_particle_array(
+        constants=constants, additional_props=fluid_props, **props
+    )
+    pa.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm','h', 'p',
+                          'pid', 'holdtag', 'gid', 'V'])
+
+    return pa
+
+def get_particle_array_beadchain_fiber(constants=None, **props):
+    """Return a particle array for the BeadChainScheme for a fiber.
+
+    Parameters
+    ----------
+    constants : dict
+        Dictionary of constants
+
+    Other Parameters
+    ----------------
+    props : dict
+        Additional keywords passed are set as the property arrays.
+
+    See Also
+    --------
+    get_particle_array
+
+    """
+    fiber_props = ['V', 'wf', 'uf', 'vf', 'wg', 'wij', 'vg', 'ug', 'phifrac',
+                   'awhat', 'avhat', 'auhat', 'vhat', 'what', 'uhat', 'vmag2',
+                   'arho', 'phi0', 'fractag', 'rho0', 'holdtag', 'eu', 'ev',
+                   'ew', 'dudx', 'dudy', 'dudz', 'dvdx', 'dvdy', 'dvdz',
+                   'dwdx', 'dwdy', 'dwdz', 'Fx', 'Fy', 'Fz', 'arho', 'ex',
+                   'ey', 'ez', 'lprev', 'lnext', 'phi0', 'xcenter', 'ycenter',
+                   'rxnext', 'rynext', 'rznext', 'rnext', 'rxprev', 'ryprev',
+                   'rzprev', 'rprev', 'fidx']
+
+    pa = get_particle_array(
+        constants=constants, additional_props=fiber_props, **props
+    )
+    pa.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm', 'h', 'p', 'pid',
+                          'holdtag', 'gid', 'ug', 'vg', 'wg', 'V', 'Fx', 'Fy',
+                          'Fz'])
+
+    return pa
