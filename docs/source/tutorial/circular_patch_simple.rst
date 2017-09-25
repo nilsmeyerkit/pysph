@@ -24,7 +24,7 @@ with increasing complexity.
 
 The first example we consider is a "patch" test for SPH formulations for
 incompressible fluids in `elliptical_drop_simple.py
-<https://github.com/pypr/pysph/src/master/pysph/examples/elliptical_drop_simple.py>`_.
+<https://github.com/pypr/pysph/tree/master/pysph/examples/elliptical_drop_simple.py>`_.
 This problem simulates the evolution of a 2D circular patch of fluid under the
 influence of an initial velocity field given by:
 
@@ -42,7 +42,7 @@ Imports
 ~~~~~~~~~~~~~
 
 Taking a look at the example (see `elliptical_drop_simple.py
-<https://github.com/pypr/pysph/src/master/pysph/examples/elliptical_drop_simple.py>`_),
+<https://github.com/pypr/pysph/tree/master/pysph/examples/elliptical_drop_simple.py>`_),
 the first several lines are imports of various modules:
 
 .. code-block:: python
@@ -476,8 +476,9 @@ Viewing the data in an IPython notebook
 PySPH makes it relatively easy to view the data inside an IPython notebook
 with minimal additional dependencies. A simple UI is provided to view the
 saved data using this interface. It requires jupyter_ and ipywidgets_.
-Currently, a 2D viewer is provided for the data. Here is a simple example of
-how one may use this in a notebook.  Inside a notebook, one needs the following::
+Currently, a 2D and 3D viewer are provided for the data. Here is a simple
+example of how one may use this in a notebook. Inside a notebook, one needs
+the following::
 
     %matplotlib notebook
     from pysph.tools.ipy_viewer import Viewer2D
@@ -502,9 +503,14 @@ load the files. It is useful although not mandatory to have the first line
 that sets the matplotlib backend to the ``notebook``. What this does is to
 allow you to zoom and interact with the interactive plots.
 
+There is also a 3D viewer which may be used using ``Viewer3D`` instead of the
+``Viewer2D`` above.  This viewer requires ipyvolume_ to be installed.
+
 
 .. _jupyter: https://jupyter.org
 .. _ipywidgets: https://github.com/jupyter-widgets/ipywidgets
+.. _ipyvolume: https://pypi.python.org/pypi/ipyvolume
+
 
 A slightly more complex example
 -------------------------------
@@ -514,7 +520,7 @@ of the results. Many pysph examples also include post processing code in the
 example. This makes it easy to reproduce results and also easily compare
 different schemes. A complete version of the elliptical drop example is
 available at `elliptical_drop.py
-<https://github.com/pypr/pysph/src/master/pysph/examples/elliptical_drop.py>`_.
+<https://github.com/pypr/pysph/tree/master/pysph/examples/elliptical_drop.py>`_.
 
 There are a few things that this example does a bit differently:
 
@@ -563,7 +569,7 @@ documentation to see these. The order of invocation of the various methods is
 also documented there.
 
 There are several `examples
-<https://github.com/pypr/pysph/src/master/pysph/examples/>`_ that
+<https://github.com/pypr/pysph/tree/master/pysph/examples/>`_ that
 ship with PySPH, explore these to get a better idea of what is possible.
 
 

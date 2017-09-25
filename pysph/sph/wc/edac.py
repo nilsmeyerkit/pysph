@@ -16,6 +16,9 @@ References
 
 """
 
+from math import sin
+from math import pi as M_PI
+
 from pysph.base.utils import get_particle_array
 from pysph.base.utils import DEFAULT_PROPS
 from pysph.sph.equation import Equation, Group
@@ -34,8 +37,8 @@ def get_particle_array_edac(constants=None, **props):
     pa = get_particle_array(
         constants=constants, additional_props=EDAC_PROPS, **props
     )
-    pa.set_output_arrays( ['x', 'y', 'z', 'u', 'v', 'w', 'rho', 'p',
-                           'au', 'av', 'aw', 'ap', 'm', 'h'] )
+    pa.set_output_arrays(['x', 'y', 'z', 'u', 'v', 'w', 'rho', 'p',
+                          'au', 'av', 'aw', 'ap', 'm', 'h'])
 
     return pa
 
@@ -50,8 +53,8 @@ def get_particle_array_edac_solid(constants=None, **props):
     pa = get_particle_array(
         constants=constants, additional_props=EDAC_SOLID_PROPS, **props
     )
-    pa.set_output_arrays( ['x', 'y', 'z', 'u', 'v', 'w', 'rho', 'p',
-                           'h'] )
+    pa.set_output_arrays(['x', 'y', 'z', 'u', 'v', 'w', 'rho', 'p',
+                          'h'])
 
     return pa
 
@@ -102,8 +105,8 @@ class EDACStep(IntegratorStep):
         d_p0[d_idx] = d_p[d_idx]
 
     def stage1(self, d_idx, d_x0, d_y0, d_z0, d_x, d_y, d_z,
-                   d_u0, d_v0, d_w0, d_u, d_v, d_w, d_p0, d_p, d_au, d_av,
-                   d_aw, d_ax, d_ay, d_az, d_ap, dt=0.0):
+               d_u0, d_v0, d_w0, d_u, d_v, d_w, d_p0, d_p, d_au, d_av,
+               d_aw, d_ax, d_ay, d_az, d_ap, dt=0.0):
         dtb2 = 0.5*dt
         d_u[d_idx] = d_u0[d_idx] + dtb2*d_au[d_idx]
         d_v[d_idx] = d_v0[d_idx] + dtb2*d_av[d_idx]
@@ -116,8 +119,8 @@ class EDACStep(IntegratorStep):
         d_p[d_idx] = d_p0[d_idx] + dtb2 * d_ap[d_idx]
 
     def stage2(self, d_idx, d_x0, d_y0, d_z0, d_x, d_y, d_z,
-                   d_u0, d_v0, d_w0, d_u, d_v, d_w, d_p0, d_p, d_au, d_av,
-                   d_aw, d_ax, d_ay, d_az, d_ap, dt=0.0):
+               d_u0, d_v0, d_w0, d_u, d_v, d_w, d_p0, d_p, d_au, d_av,
+               d_aw, d_ax, d_ay, d_az, d_ap, dt=0.0):
 
         d_u[d_idx] = d_u0[d_idx] + dt*d_au[d_idx]
         d_v[d_idx] = d_v0[d_idx] + dt*d_av[d_idx]
@@ -206,7 +209,7 @@ class SetWallVelocity(Equation):
         d_wf[d_idx] += s_w[s_idx] * WIJ
 
     def post_loop(self, d_uf, d_vf, d_wf, d_wij, d_idx,
-            d_ug, d_vg, d_wg, d_u, d_v, d_w):
+                  d_ug, d_vg, d_wg, d_u, d_v, d_w):
 
         # calculation is done only for the relevant boundary particles.
         # d_wij (and d_uf) is 0 for particles sufficiently away from the
@@ -247,22 +250,23 @@ class MomentumEquation(Equation):
     def loop(self, d_idx, s_idx, d_m, d_rho, d_p, d_V, d_au, d_av, d_aw,
              s_m, s_rho, s_p, s_V, DWIJ):
 
-        rhoi = d_rho[d_idx]; rhoj = s_rho[s_idx]
-        pi = d_p[d_idx]; pj = s_p[s_idx]
+        rhoi = d_rho[d_idx]
+        rhoj = s_rho[s_idx]
+        p_i = d_p[d_idx]
+        p_j = s_p[s_idx]
 
-        pij = rhoj * pi + rhoi * pj
+        pij = rhoj * p_i + rhoi * p_j
         pij /= (rhoj + rhoi)
 
-        Vi = 1./d_V[d_idx]; Vj = 1./s_V[s_idx]
-        Vi2 = Vi * Vi; Vj2 = Vj * Vj
+        Vi = 1./d_V[d_idx]
+        Vj = 1./s_V[s_idx]
+        Vi2 = Vi * Vi
+        Vj2 = Vj * Vj
 
         # inverse mass of destination particle
         mi1 = 1.0/d_m[d_idx]
 
         tmp = -pij * mi1 * (Vi2 + Vj2)
-
-        # Morris 1996 scheme.
-        #tmp = -s_m[s_idx]*(pj - pi)/(rhoi*rhoj)
 
         d_au[d_idx] += tmp * DWIJ[0]
         d_av[d_idx] += tmp * DWIJ[1]
@@ -271,17 +275,17 @@ class MomentumEquation(Equation):
     def post_loop(self, d_idx, d_au, d_av, d_aw, t, DT_ADAPT):
         damping_factor = 1.0
         if t < self.tdamp:
-            damping_factor = 0.5 * ( sin((-0.5 + t/self.tdamp)*M_PI)+ 1.0 )
-        d_au[d_idx] +=  damping_factor*self.gx
-        d_av[d_idx] +=  damping_factor*self.gy
-        d_aw[d_idx] +=  damping_factor*self.gz
+            damping_factor = 0.5 * (sin((-0.5 + t/self.tdamp)*M_PI) + 1.0)
+        d_au[d_idx] += damping_factor*self.gx
+        d_av[d_idx] += damping_factor*self.gy
+        d_aw[d_idx] += damping_factor*self.gz
 
-        acc2 = ( d_au[d_idx]*d_au[d_idx] + \
-                    d_av[d_idx]*d_av[d_idx] + \
-                    d_aw[d_idx]*d_aw[d_idx] )
+        acc2 = (d_au[d_idx]*d_au[d_idx] +
+                d_av[d_idx]*d_av[d_idx] +
+                d_aw[d_idx]*d_aw[d_idx])
 
         # store the square of the max acceleration
-        DT_ADAPT[1] = max( acc2, DT_ADAPT[1] )
+        DT_ADAPT[1] = max(acc2, DT_ADAPT[1])
 
 
 class EDACEquation(Equation):
@@ -298,8 +302,10 @@ class EDACEquation(Equation):
     def loop(self, d_idx, d_m, d_rho, d_ap, d_p, d_V, s_idx, s_m, s_rho, s_p,
              s_V, DWIJ, VIJ, XIJ, R2IJ, EPS):
 
-        Vi = 1./d_V[d_idx]; Vj = 1./s_V[s_idx]
-        Vi2 = Vi * Vi; Vj2 = Vj * Vj
+        Vi = 1./d_V[d_idx]
+        Vj = 1./s_V[s_idx]
+        Vi2 = Vi * Vi
+        Vj2 = Vj * Vj
 
         etai = d_rho[d_idx]
         etaj = s_rho[s_idx]
@@ -351,8 +357,8 @@ class MomentumEquationPressureGradient(Equation):
         This function also computes the contribution to the background
         pressure and accelerations due to a body force or gravity.
 
-        The body forces are damped according to Eq. (13) in [Adami2012] to avoid
-        instantaneous accelerations. By default, damping is neglected.
+        The body forces are damped according to Eq. (13) in [Adami2012] to
+        avoid instantaneous accelerations. By default, damping is neglected.
         """
 
         self.pb = pb
@@ -376,16 +382,20 @@ class MomentumEquationPressureGradient(Equation):
              d_auhat, d_avhat, d_awhat, d_V, s_V, DWIJ):
 
         # averaged pressure Eq. (7)
-        rhoi = d_rho[d_idx]; rhoj = s_rho[s_idx]
+        rhoi = d_rho[d_idx]
+        rhoj = s_rho[s_idx]
         pavg = d_pavg[d_idx]
-        pi = d_p[d_idx]; pj = s_p[s_idx]
+        pi = d_p[d_idx]
+        pj = s_p[s_idx]
 
         pij = rhoj * (pi - pavg) + rhoi * (pj - pavg)
         pij /= (rhoj + rhoi)
 
         # particle volumes
-        Vi = 1./d_V[d_idx]; Vj = 1./s_V[s_idx]
-        Vi2 = Vi * Vi; Vj2 = Vj * Vj
+        Vi = 1./d_V[d_idx]
+        Vj = 1./s_V[s_idx]
+        Vi2 = Vi * Vi
+        Vj2 = Vj * Vj
 
         # inverse mass of destination particle
         mi1 = 1.0/d_m[d_idx]
@@ -408,7 +418,7 @@ class MomentumEquationPressureGradient(Equation):
         # damped accelerations due to body or external force
         damping_factor = 1.0
         if t < self.tdamp:
-            damping_factor = 0.5 * ( sin((-0.5 + t/self.tdamp)*M_PI)+ 1.0 )
+            damping_factor = 0.5 * (sin((-0.5 + t/self.tdamp)*M_PI) + 1.0)
 
         d_au[d_idx] += self.gx * damping_factor
         d_av[d_idx] += self.gy * damping_factor
@@ -465,7 +475,6 @@ class EDACTVFStep(IntegratorStep):
         d_z[d_idx] = d_z0[d_idx] + dt * d_what[d_idx]
 
         d_p[d_idx] = d_p0[d_idx] + dt * d_ap[d_idx]
-
 
 
 class EDACScheme(Scheme):
@@ -530,37 +539,38 @@ class EDACScheme(Scheme):
         self.h = h
         self.attributes_changed()
 
-    #### Public protocol ###################################################
+    # Public protocol ###################################################
     def add_user_options(self, group):
         group.add_argument(
             "--alpha", action="store", type=float, dest="alpha",
-            default=self.alpha,
+            default=None,
             help="Alpha for the artificial viscosity."
         )
         group.add_argument(
             "--edac-alpha", action="store", type=float, dest="edac_alpha",
-            default=self.edac_alpha,
+            default=None,
             help="Alpha for the EDAC scheme viscosity."
         )
         add_bool_argument(
             group, 'clamp-pressure', dest='clamp_p',
             help="Clamp pressure on boundaries to be non-negative.",
-            default=self.clamp_p
+            default=None
         )
         add_bool_argument(
             group, 'use-bql', dest='bql',
             help="Use the Basa-Quinlan-Lastiwka correction.",
-            default=self.bql
+            default=None
         )
         group.add_argument(
             "--tdamp", action="store", type=float, dest="tdamp",
-            default=self.tdamp,
+            default=None,
             help="Time for which the accelerations are damped."
         )
 
     def consume_user_options(self, options):
         vars = ['alpha', 'edac_alpha', 'clamp_p', 'bql', 'tdamp']
-        data = dict((var, getattr(options, var)) for var in vars)
+        data = dict((var, self._smart_getattr(options, var))
+                    for var in vars)
         self.configure(**data)
 
     def attributes_changed(self):
@@ -570,7 +580,7 @@ class EDACScheme(Scheme):
             self.art_nu = self.edac_alpha*self.h*self.c0/8
 
     def configure_solver(self, kernel=None, integrator_cls=None,
-                           extra_steppers=None, **kw):
+                         extra_steppers=None, **kw):
         """Configure the solver to be generated.
 
         This is to be called before `get_solver` is called.
@@ -635,19 +645,20 @@ class EDACScheme(Scheme):
             If True, removes any unnecessary properties.
         """
         particle_arrays = dict([(p.name, p) for p in particles])
-        TVF_FLUID_PROPS = set(['uhat', 'vhat', 'what', 'ap',
-                               'auhat', 'avhat', 'awhat', 'V',
-                               'p0', 'u0', 'v0', 'w0', 'x0', 'y0', 'z0',
-                               'pavg', 'nnbr'
-                           ])
+        TVF_FLUID_PROPS = set([
+            'uhat', 'vhat', 'what', 'ap',
+            'auhat', 'avhat', 'awhat', 'V',
+            'p0', 'u0', 'v0', 'w0', 'x0', 'y0', 'z0',
+            'pavg', 'nnbr'
+        ])
         extra_props = TVF_FLUID_PROPS if self.use_tvf else EDAC_PROPS
 
         all_fluid_props = DEFAULT_PROPS.union(extra_props)
         for fluid in self.fluids:
             pa = particle_arrays[fluid]
             self._ensure_properties(pa, all_fluid_props, clean)
-            pa.set_output_arrays( ['x', 'y', 'z', 'u', 'v', 'w', 'rho', 'p',
-                                   'm', 'h', 'V'] )
+            pa.set_output_arrays(['x', 'y', 'z', 'u', 'v', 'w', 'rho', 'p',
+                                  'm', 'h', 'V'])
             if 'pavg' in pa.properties:
                 pa.add_output_arrays(['pavg'])
 
@@ -658,23 +669,24 @@ class EDACScheme(Scheme):
         for solid in self.solids:
             pa = particle_arrays[solid]
             self._ensure_properties(pa, all_solid_props, clean)
-            pa.set_output_arrays( ['x', 'y', 'z', 'u', 'v', 'w', 'rho', 'p',
-                                   'm', 'h', 'V'] )
+            pa.set_output_arrays(['x', 'y', 'z', 'u', 'v', 'w', 'rho', 'p',
+                                  'm', 'h', 'V'])
 
-    #### Private protocol ###################################################
+    # Private protocol ###################################################
     def _get_edac_nu(self):
         if self.art_nu > 0:
             nu = self.art_nu
-            print("Using artificial viscosity for EDAC with nu = %s"%nu)
+            print("Using artificial viscosity for EDAC with nu = %s" % nu)
         else:
             nu = self.nu
-            print("Using real viscosity for EDAC with nu = %s"%self.nu)
+            print("Using real viscosity for EDAC with nu = %s" % self.nu)
         return nu
 
     def _get_internal_flow_equations(self):
         from pysph.sph.wc.transport_velocity import (
             VolumeSummation, SolidWallNoSlipBC, SummationDensity,
-            MomentumEquationArtificialStress, MomentumEquationArtificialViscosity,
+            MomentumEquationArtificialStress,
+            MomentumEquationArtificialViscosity,
             MomentumEquationViscosity
         )
         edac_nu = self._get_edac_nu()
