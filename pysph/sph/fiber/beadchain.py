@@ -4,8 +4,8 @@ Equations for fibers based on bead chain model.
 
 """
 
+from math import sqrt, acos, sin
 from pysph.sph.equation import Equation
-from math import sqrt, acos, atan, sin, pi, floor
 
 class EBGVelocityReset(Equation):
     r"""** Resets EBG velocities **"""
