@@ -478,7 +478,8 @@ def get_particle_array_beadchain(constants=None, **props):
                    'arho', 'phi0', 'fractag', 'rho0', 'holdtag', 'eu', 'ev',
                    'ew', 'dudx', 'dudy', 'dudz', 'dvdx', 'dvdy', 'dvdz',
                    'dwdx', 'dwdy', 'dwdz', 'Fx', 'Fy', 'Fz', 'arho', 'ex',
-                   'ey', 'ez']
+                   'ey', 'ez','rxnext', 'rynext', 'rznext', 'rxprev', 'ryprev',
+                   'rzprev', 'fidx']
 
     pa = get_particle_array(
         constants=constants, additional_props=fluid_props, **props
@@ -520,6 +521,7 @@ def get_particle_array_beadchain_fiber(constants=None, **props):
     )
     pa.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm', 'h', 'p', 'pid',
                           'holdtag', 'gid', 'ug', 'vg', 'wg', 'V', 'Fx', 'Fy',
-                          'Fz'])
+                          'Fz','rxnext', 'rynext', 'rznext', 'rnext', 'rxprev',
+                          'ryprev', 'rzprev', 'rprev', 'fidx'])
 
     return pa

@@ -7,6 +7,8 @@ Flow with fibers in a channel. There are different setups:
                         perpendicular to 2D field.)
     dim=3 and g>0:      3D Poiseuille flow with moving fiber and obstacle fiber
                         (use smaller artificial damping, e.g. 100!)
+                        e.g: pysph run fiber.channel --ar 11 --dim 3 --g 10
+                                --G 0 --D 10 --vtk --massscale 1E8 --E 1E5
 ################################################################################
 """
 # general imports
@@ -24,9 +26,13 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 # matplotlib (set up for server use)
+# matplotlib (set up for server use)
 import matplotlib
+matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 from matplotlib import rc
+rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
+rc('text', usetex=True)
 
 # numpy and scipy
 import numpy as np
@@ -44,10 +50,6 @@ from pysph.solver.utils import load, remove_irrelevant_files
 from pysph.solver.tools import FiberIntegrator
 
 from pysph.sph.scheme import BeadChainScheme
-
-matplotlib.use('Agg')
-rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
-rc('text', usetex=True)
 
 
 # Jeffrey's equivalent aspect ratio (coarse approximation)
@@ -98,7 +100,7 @@ class Channel(Application):
         )
         group.add_argument(
             "--D", action="store", type=float, dest="D",
-            default=10000, help="Damping coefficient for arificial damping"
+            default=10000, help="Damping coefficient for artificial damping"
         )
         group.add_argument(
             "--dim", action="store", type=int, dest="dim",
@@ -332,20 +334,49 @@ class Channel(Application):
             cy = np.concatenate((ty, by, ry, ly))
             cz = np.concatenate((tz, bz, rz, lz))
 
+        # Computation of each particles initial volume.
+        volume = fdx**self.options.dim
+        fiber_volume = self.dx**self.options.dim
+
+        # Mass is set to get the reference density of rho0.
+        mass = volume * self.rho0
+        fiber_mass = fiber_volume * self.rho0
+
+        # assign unique ID (within fiber) to each fiber particle.
+        fidx = range(0,self.options.ar)
+
+        # Initial inverse volume (necessary for transport velocity equations)
+        V = 1./volume
+        fiber_V = 1./fiber_volume
+
+
         # Finally create all particle arrays. Note that fluid particles are
         # removed in the area, where the fiber is placed.
         if self.options.dim == 2:
-            channel = get_particle_array_beadchain(name='channel', x=cx, y=cy)
-            fluid = get_particle_array_beadchain(name='fluid', x=fx, y=fy)
+            channel = get_particle_array_beadchain(name='channel',
+                        x=cx, y=cy, m=mass, rho=self.rho0, h=self.h0, V=V)
+            fluid = get_particle_array_beadchain(name='fluid',
+                        x=fx, y=fy, m=mass, rho=self.rho0, h=self.h0, V=V)
             fluid.remove_particles(indices)
-            fiber = get_particle_array_beadchain_fiber(name='fiber', x=fibx, y=fiby)
+            fiber = get_particle_array_beadchain_fiber(name='fiber',
+                        x=fibx, y=fiby, m=fiber_mass, rho=self.rho0, h=self.h0,
+                        lprev=self.dx, lnext=self.dx, phi0=np.pi, phifrac=2.0,
+                        fidx=fidx, V=fiber_V)
         else:
-            channel = get_particle_array_beadchain(name='channel', x=cx, y=cy, z=cz)
-            fluid = get_particle_array_beadchain(name='fluid', x=fx, y=fy, z=fz)
+            channel = get_particle_array_beadchain(name='channel',
+                        x=cx, y=cy, z=cz, m=mass, rho=self.rho0, h=self.h0, V=V)
+            fluid = get_particle_array_beadchain(name='fluid',
+                        x=fx, y=fy, z=fz, m=mass, rho=self.rho0, h=self.h0, V=V)
             fluid.remove_particles(indices)
-            fiber = get_particle_array_beadchain_fiber(name='fiber', x=fibx, y=fiby, z=fibz)
+            fiber = get_particle_array_beadchain_fiber(name='fiber',
+                        x=fibx, y=fiby, z=fibz, m=fiber_mass, rho=self.rho0,
+                        h=self.h0, lprev=self.dx, lnext=self.dx, phi0=np.pi,
+                        phifrac=2.0, fidx=fidx, V=fiber_V)
             if self.options.dim == 3 and self.options.g > 0:
-                obstacle = get_particle_array_beadchain_fiber(name='obstacle', x=obsx, y=obsy, z=obsz)
+                obstacle = get_particle_array_beadchain_fiber(name='obstacle',
+                            x=obsx, y=obsy, z=obsz, m=fiber_mass, rho=self.rho0,
+                            h=self.h0, lprev=self.dx, lnext=self.dx, phi0=np.pi,
+                            phifrac=2.0, fidx=fidx, V=fiber_V)
 
         # Print number of particles.
         print("Shear flow : nfluid = %d, nchannel = %d, nfiber = %d"%(
@@ -359,30 +390,6 @@ class Channel(Application):
         if self.options.dim == 3 and self.options.g > 0:
             assert(obstacle.get_number_of_particles() == self.options.ar)
 
-
-        # Computation of each particles initial volume.
-        volume = fdx**self.options.dim
-        fiber_volume = self.dx**self.options.dim
-
-        # Mass is set to get the reference density of rho0.
-        fluid.m[:] = volume * self.rho0
-        channel.m[:] = volume * self.rho0
-        fiber.m[:] = fiber_volume * self.rho0
-        if self.options.dim == 3 and self.options.g > 0:
-            obstacle.m[:] = fiber_volume * self.rho0
-
-        # Set initial distances and angles. This represents a straight
-        # unstreched fiber in rest state.
-        fiber.lprev[:] = self.dx
-        fiber.lnext[:] = self.dx
-        fiber.phi0[:] = np.pi
-        fiber.phifrac[:] = 2.0
-        if self.options.dim == 3 and self.options.g > 0:
-            obstacle.lprev[:] = self.dx
-            obstacle.lnext[:] = self.dx
-            obstacle.phi0[:] = np.pi
-            obstacle.phifrac[:] = 2.0
-
         # Tag particles to be hold, if requested.
         fiber.holdtag[:] = 0
         if self.options.holdcenter:
@@ -391,32 +398,6 @@ class Channel(Application):
         if self.options.dim == 3 and self.options.g > 0:
             obstacle.holdtag[0] = 100
             obstacle.holdtag[-1] = 100
-
-        # assign unique ID (within fiber) to each fiber particle.
-        fiber.fidx[:] = range(0,fiber.get_number_of_particles())
-        if self.options.dim == 3 and self.options.g > 0:
-            obstacle.fidx[:] = range(0,obstacle.get_number_of_particles())
-
-        # Set the default density.
-        fluid.rho[:] = self.rho0
-        channel.rho[:] = self.rho0
-        fiber.rho[:] = self.rho0
-        if self.options.dim == 3 and self.options.g > 0:
-            obstacle.rho[:] = self.rho0
-
-        # Initial inverse volume (necessary for transport velocity equations)
-        fluid.V[:] = 1./volume
-        channel.V[:] = 1./volume
-        fiber.V[:] = 1./fiber_volume
-        if self.options.dim == 3 and self.options.g > 0:
-            obstacle.V[:] = 1./fiber_volume
-
-        # The smoothing lengths are set accorindg to each particles size.
-        fluid.h[:] = self.h0
-        channel.h[:] = self.h0
-        fiber.h[:] = self.h0
-        if self.options.dim == 3 and self.options.g > 0:
-            obstacle.h[:] = self.h0
 
         # Setting the initial velocities for a shear flow.
         fluid.u[:] = self.options.G*(fluid.y[:]-self.Ly/2)
