@@ -14,5 +14,5 @@ do
   M=$((1000000/$ar))
 
   # running problem with openmp
-  sqsub -q threaded -n 16 -o /home/nmeyer7/ar=${ar}.log -r ${ar}h --mpp 2.5G pysph run fiber.channel --ar ${ar} --massscale ${M}--rot 10 --holdcenter --D ${D} --openmp
+  sqsub -q threaded -n 16 -o /home/nmeyer7/ar=${ar}.log -r ${ar}h --mpp 2.5G pysph run fiber.channel --ar ${ar} --massscale ${M} --rot 10 --holdcenter --D ${D} --openmp
 done
