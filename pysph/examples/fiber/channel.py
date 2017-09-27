@@ -424,7 +424,8 @@ class Channel(Application):
 
     def create_tools(self):
         il = self.options.ar > 1
-        return [FiberIntegrator(self.particles, self.scheme, self.Lx, il)]
+        ud = not self.options.holdcenter
+        return [FiberIntegrator(self.particles, self.scheme, self.Lx, il, ud)]
 
     def get_meshgrid(self, xx, yy, zz):
         """This function is just a shorthand for the generation of meshgrids."""
