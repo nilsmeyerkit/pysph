@@ -89,7 +89,7 @@ class SimpleRemesher(Tool):
             self.array.set(**data)
 
 class FiberIntegrator(Tool):
-    def __init__(self, all_particles, scheme, L, innerloop=True):
+    def __init__(self, all_particles, scheme, L, innerloop=True, updates=True):
         """The second integrator is a simple Euler-Integrator (accurate
         enough due to very small time steps; very fast) using EBGSteps.
         EBGSteps are basically the same as EulerSteps, exept for the fact
@@ -117,6 +117,7 @@ class FiberIntegrator(Tool):
         self.innerloop = innerloop
         self.dt = scheme.dt
         self.fiber_dt = scheme.fiber_dt
+        self.domain_updates = updates
 
         # if there are more than 1 particles involved, elastic equations are
         # iterated in an inner loop.
@@ -141,7 +142,7 @@ class FiberIntegrator(Tool):
                 g2.append(Tension(dest=fiber, sources=None, ea=scheme.E*scheme.A))
                 g2.append(Bending(dest=fiber, sources=None, ei=scheme.E*scheme.I))
                 g2.append(Contact(dest=fiber, sources=scheme.fibers, E=scheme.E,
-                            d=scheme.dx))#,scale=scheme.scale_factor))
+                            d=scheme.dx, k=scheme.k))#,scale=scheme.scale_factor))
                 g2.append(ArtificialDamping(dest=fiber, sources=None, d=scheme.D))
             equations.append(Group(equations=g2))
 
@@ -155,11 +156,11 @@ class FiberIntegrator(Tool):
             particles = [p for p in all_particles if p.name in scheme.fibers]
             # A seperate DomainManager is needed to ensure that particles don't
             # leave the domain.
-            domain = DomainManager(xmin=0, xmax=L, periodic_in_x=True)
+            self.domain = DomainManager(xmin=0, xmax=L, periodic_in_x=True)
             # A seperate list for the nearest neighbourhood search is benefitial
             # since it is much smaller than the original one.
             nnps = LinkedListNNPS(dim=scheme.dim, particles=particles,
-                            radius_scale=kernel.radius_scale, domain=domain,
+                            radius_scale=kernel.radius_scale, domain=self.domain,
                             fixed_h=False, cache=False, sort_gids=False)
             # The acceleration evaluator needs to be set up in order to compile
             # it together with the integrator.
@@ -192,5 +193,7 @@ class FiberIntegrator(Tool):
                 for n in range(0,N):
                     self.fiber_integrator.step(current_time,dt/N)
                     current_time += dt/N
+                    if self.domain_updates:
+                        self.domain.update()
             # 3) Evaluation
             # 4) post stage 2
