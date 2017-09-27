@@ -667,7 +667,7 @@ class TVFScheme(Scheme):
             pa.set_output_arrays(output_props)
 
 class BeadChainScheme(Scheme):
-    def __init__(self, fluids, solids, fibers, dim,
+    def __init__(self, fluids, solids, fibers, dim, k=0.0,
                     tag=100, gx=0.0, gy=0.0, gz=0.0, alpha=0.0, tdamp=0.0):
         self.fluids = fluids
         self.solids = solids
@@ -687,6 +687,7 @@ class BeadChainScheme(Scheme):
         self.J = None
         self.D = None
         self.scale_factor = None
+        self.k = k
         self.tag = tag
         self.gx = gx
         self.gy = gy
@@ -789,7 +790,7 @@ class BeadChainScheme(Scheme):
         for fiber in self.fibers:
             g1.append(EBGVelocityReset(dest=fiber, sources=None))
             g1.append(SummationDensity(dest=fiber, sources=all))
-            g1.append(ComputeDistance(dest=fiber, sources=[fiber]))
+            #g1.append(ComputeDistance(dest=fiber, sources=[fiber]))
         for solid in self.solids:
             g1.append(VolumeFromMassDensity(dest=solid, sources=all))
 
@@ -824,55 +825,61 @@ class BeadChainScheme(Scheme):
         equations.append(Group(equations=g3, real=False))
 
         g4 = []
-        for fluid in self.fluids:
-            g4.append(MomentumEquationPressureGradient(dest=fluid, sources=all,
-                pb=self.pb, gx=self.gx,gy=self.gy,gz=self.gz,tdamp=self.tdamp))
-            if self.nu > 0.0:
-                if no_slip_flag:
-                    g4.append(MomentumEquationViscosity(dest=fluid,
-                        sources=self.fluids, nu=self.nu))
-                    g4.append(SolidWallNoSlipBC(dest=fluid,
-                            sources=self.solids+self.fibers,nu=self.nu))
-                else:
-                    g4.append(MomentumEquationViscosity(dest=fluid,
-                        sources=self.fluids+self.fibers, nu=self.nu))
-                    if len(self.solids) > 0:
-                        g4.append(SolidWallNoSlipBC(dest=fluid,
-                            sources=self.solids,nu=self.nu))
-
-            g4.append(MomentumEquationArtificialStress(dest=fluid,
-                sources=self.fluids+self.fibers))
-
         for fiber in self.fibers:
-            g4.append(MomentumEquationPressureGradient(dest=fiber, sources=all,
-                pb=0.0, gx=self.gx,gy=self.gy, gz=self.gz, tdamp=self.tdamp))
-            if self.nu > 0.0:
-                g4.append(MomentumEquationViscosity(dest=fiber,
-                    sources=self.fluids+self.fibers, nu=self.nu))
-                if len(self.solids) > 0:
-                    g4.append(SolidWallNoSlipBC(dest=fiber, sources=self.solids,
-                        nu=self.nu))
-
-            # g4.append(Tension(dest=fiber, sources=None, ea=self.E*self.A))
-            # g4.append(Bending(dest=fiber, sources=None, ei=self.E*self.I))
-            # g4.append(Contact(dest=fiber, sources=self.fibers, E=self.E,
-            #             d=self.dx,scale=self.scale_factor))
-            # g4.append(ArtificialDamping(dest=fiber, sources=None, d=self.D))
-
-            g4.append(MomentumEquationArtificialStress(dest=fiber,
-                sources=self.fluids+self.fibers))
-            g4.append(Friction(dest=fiber, sources=None, J=self.J, A=self.A,
-                mu=self.nu*self.rho0, d=self.dx))
-            g4.append(Contact(dest=fiber, sources=self.fibers, E=self.E,
-                d=self.dx))#,scale=self.scale_factor))
+            g4.append(ComputeDistance(dest=fiber, sources=[fiber]))
 
         equations.append(Group(equations=g4))
 
         g5 = []
+        for fluid in self.fluids:
+            g5.append(MomentumEquationPressureGradient(dest=fluid, sources=all,
+                pb=self.pb, gx=self.gx,gy=self.gy,gz=self.gz,tdamp=self.tdamp))
+            if self.nu > 0.0:
+                if no_slip_flag:
+                    g5.append(MomentumEquationViscosity(dest=fluid,
+                        sources=self.fluids, nu=self.nu))
+                    g5.append(SolidWallNoSlipBC(dest=fluid,
+                            sources=self.solids+self.fibers,nu=self.nu))
+                else:
+                    g5.append(MomentumEquationViscosity(dest=fluid,
+                        sources=self.fluids+self.fibers, nu=self.nu))
+                    if len(self.solids) > 0:
+                        g5.append(SolidWallNoSlipBC(dest=fluid,
+                            sources=self.solids,nu=self.nu))
+
+            g5.append(MomentumEquationArtificialStress(dest=fluid,
+                sources=self.fluids+self.fibers))
+
         for fiber in self.fibers:
-            g5.append(HoldPoints(dest=fiber, sources=None, tag=100))
+            g5.append(MomentumEquationPressureGradient(dest=fiber, sources=all,
+                pb=0.0, gx=self.gx,gy=self.gy, gz=self.gz, tdamp=self.tdamp))
+            if self.nu > 0.0:
+                g5.append(MomentumEquationViscosity(dest=fiber,
+                    sources=self.fluids+self.fibers, nu=self.nu))
+                if len(self.solids) > 0:
+                    g5.append(SolidWallNoSlipBC(dest=fiber, sources=self.solids,
+                        nu=self.nu))
+
+            # g5.append(Tension(dest=fiber, sources=None, ea=self.E*self.A))
+            # g5.append(Bending(dest=fiber, sources=None, ei=self.E*self.I))
+            # g5.append(Contact(dest=fiber, sources=self.fibers, E=self.E,
+            #             d=self.dx,scale=self.scale_factor))
+            # g5.append(ArtificialDamping(dest=fiber, sources=None, d=self.D))
+
+            g5.append(MomentumEquationArtificialStress(dest=fiber,
+                sources=self.fluids+self.fibers))
+            g5.append(Friction(dest=fiber, sources=None, J=self.J, A=self.A,
+                mu=self.nu*self.rho0, d=self.dx))
+            g5.append(Contact(dest=fiber, sources=self.fibers, E=self.E,
+                d=self.dx, k=self.k))#, scale=self.scale_factor))
 
         equations.append(Group(equations=g5))
+
+        g6 = []
+        for fiber in self.fibers:
+            g6.append(HoldPoints(dest=fiber, sources=None, tag=100))
+
+        equations.append(Group(equations=g6))
 
         return equations
 
