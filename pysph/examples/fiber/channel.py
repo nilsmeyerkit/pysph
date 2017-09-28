@@ -195,7 +195,8 @@ class Channel(Application):
         # scaled (!) density.
         self.nu = self.options.mu/self.rho0
 
-        self.D = self.options.D or self.options.ar*1000
+        # empirical determination for the damping, which is just enough
+        self.D = self.options.D or self.options.ar*500
 
         # For 2 dimensions surface, mass and moments have a different coputation
         # than for 3 dimensions.

@@ -117,7 +117,7 @@ class RVE(Application):
 
         # If a specific width is set, use this as multiple of dx to determine
         # the channel width. Otherwise use the fiber aspect ratio.
-        multiples = self.options.width or self.options.ar
+        multiples = self.options.ar
         self.Ly = multiples*self.dx + 2*int(0.1*multiples)*self.dx
 
         # Computation of a scale factor in a way that dt_cfl exactly matches
@@ -133,6 +133,11 @@ class RVE(Application):
         auto_scale_factor = self.options.mu/(nu_needed*self.options.rho0)
         self.scale_factor = self.options.scale_factor or auto_scale_factor
 
+        # The density can be scaled using the mass scaling factor. To account
+        # for proper external forces, gravity is scaled just the other way.
+        self.rho0 = self.options.rho0*self.scale_factor
+        self.options.g = self.options.g/self.scale_factor
+
         # The channel length is twice the width + dx to make it symmetric.
         self.Lx = 2.0*self.Ly + self.dx
 
@@ -140,7 +145,8 @@ class RVE(Application):
         # scaled (!) density.
         self.nu = self.options.mu/self.rho0
 
-        self.D = self.options.D or self.options.ar*1000
+        # empirical determination for the damping, which is just enough
+        self.D = self.options.D or self.options.ar*500
 
         # For 2 dimensions surface, mass and moments have a different coputation
         # than for 3 dimensions.
