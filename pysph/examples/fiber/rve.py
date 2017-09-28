@@ -68,7 +68,7 @@ class RVE(Application):
         )
         group.add_argument(
             "--D", action="store", type=float, dest="D",
-            default=10000, help="Damping coefficient for artificial damping"
+            default=None, help="Damping coefficient for artificial damping"
         )
         group.add_argument(
             "--dim", action="store", type=int, dest="dim",
@@ -84,7 +84,7 @@ class RVE(Application):
         )
         group.add_argument(
             "--massscale", action="store", type=float, dest="scale_factor",
-            default=1E5, help="Factor of mass scaling"
+            default=None, help="Factor of mass scaling"
         )
         group.add_argument(
             "--volfrac", action="store", type=float, dest="vol_frac",
@@ -112,17 +112,26 @@ class RVE(Application):
         # large as dx
         self.h0 = self.dx
 
-        # The density can be scaled using the mass scaling factor. To account
-        # for proper external forces, gravity is scaled just the other way.
-        self.rho0 = self.options.rho0*self.options.scale_factor
-        self.options.g = self.options.g/self.options.scale_factor
-
         # The fiber length is the aspect ratio times fiber diameter
         self.Lf = self.options.ar*self.dx
 
-        # Determine channel width
-        multiples = self.options.ar
+        # If a specific width is set, use this as multiple of dx to determine
+        # the channel width. Otherwise use the fiber aspect ratio.
+        multiples = self.options.width or self.options.ar
         self.Ly = multiples*self.dx + 2*int(0.1*multiples)*self.dx
+
+        # Computation of a scale factor in a way that dt_cfl exactly matches
+        # dt_viscous.
+        a = self.h0*0.125*11/0.4
+        #nu_needed = a*self.options.G*self.Ly/2
+        nu_needed = (a*self.options.G*self.Ly/4
+                     +np.sqrt(a/8*self.options.g*self.Ly**2
+                              +(a/2)**2/4*self.options.G**2*self.Ly**2))
+
+        # If there is no other scale scale factor provided, use automatically
+        # computed factor.
+        auto_scale_factor = self.options.mu/(nu_needed*self.options.rho0)
+        self.scale_factor = self.options.scale_factor or auto_scale_factor
 
         # The channel length is twice the width + dx to make it symmetric.
         self.Lx = 2.0*self.Ly + self.dx
@@ -130,6 +139,8 @@ class RVE(Application):
         # The kinematic viscosity is computed from absolute viscosity and
         # scaled (!) density.
         self.nu = self.options.mu/self.rho0
+
+        self.D = self.options.D or self.options.ar*1000
 
         # For 2 dimensions surface, mass and moments have a different coputation
         # than for 3 dimensions.
@@ -179,8 +190,8 @@ class RVE(Application):
         self.scheme.configure(dim=self.options.dim, fibers=names)
         self.scheme.configure(rho0=self.rho0, c0=self.c0, nu=self.nu,
             p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=self.A, I=self.I,
-            J=self.J, E=self.options.E, D=self.options.D, dim=self.options.dim,
-            scale_factor=self.options.scale_factor, gx=self.options.g,
+            J=self.J, E=self.options.E, D=self.D, dim=self.options.dim,
+            scale_factor=self.scale_factor, gx=self.options.g,
             k=self.options.k)
         self.scheme.configure_solver(tf=self.t, vtk = self.options.vtk,
             N=100)
