@@ -773,8 +773,8 @@ class Channel(Application):
 
         # iteration over all output files
         output_files = remove_irrelevant_files(self.output_files)
-        bar = FloatPBar(0, len(output_files), show=True)
         print("Evaluating Results.")
+        bar = FloatPBar(0, len(output_files), show=True)
         for i,fname in enumerate(output_files):
             data = load(fname)
             bar.update(i)
