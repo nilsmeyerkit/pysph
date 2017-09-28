@@ -46,7 +46,7 @@ from pysph.base.utils import (get_particle_array_beadchain,
 from pysph.tools.interpolator import Interpolator
 
 from pysph.solver.application import Application
-from pysph.solver.utils import load, remove_irrelevant_files
+from pysph.solver.utils import load, remove_irrelevant_files, FloatPBar
 from pysph.solver.tools import FiberIntegrator
 
 from pysph.sph.scheme import BeadChainScheme
@@ -773,8 +773,11 @@ class Channel(Application):
 
         # iteration over all output files
         output_files = remove_irrelevant_files(self.output_files)
-        for fname in output_files:
+        bar = FloatPBar(0, len(output_files), show=True)
+        print("Evaluating Results.")
+        for i,fname in enumerate(output_files):
             data = load(fname)
+            bar.update(i)
 
             # extracting time
             t.append(data['solver_data']['t'])
@@ -831,6 +834,8 @@ class Channel(Application):
                 Fx.append(fiber.Fx[idx][0])
                 Fy.append(fiber.Fy[idx][0])
                 Fz.append(fiber.Fz[idx][0])
+
+        bar.finish()
 
         # evaluate roation statistics
         if self.options.G > 0:
