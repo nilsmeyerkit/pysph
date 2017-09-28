@@ -132,7 +132,7 @@ class Channel(Application):
         )
         group.add_argument(
             "--massscale", action="store", type=float, dest="scale_factor",
-            default=1E5, help="Factor of mass scaling"
+            default=None, help="Factor of mass scaling"
         )
         group.add_argument(
             "--fluidres", action="store", type=float, dest="fluid_res",
@@ -155,11 +155,6 @@ class Channel(Application):
         # large as dx
         self.h0 = self.dx
 
-        # The density can be scaled using the mass scaling factor. To account
-        # for proper external forces, gravity is scaled just the other way.
-        self.rho0 = self.options.rho0*self.options.scale_factor
-        self.options.g = self.options.g/self.options.scale_factor
-
         # The fiber length is the aspect ratio times fiber diameter
         self.Lf = self.options.ar*self.dx
 
@@ -167,6 +162,25 @@ class Channel(Application):
         # the channel width. Otherwise use the fiber aspect ratio.
         multiples = self.options.width or self.options.ar
         self.Ly = multiples*self.dx + 2*int(0.1*multiples)*self.dx
+
+        # Computation of a scale factor in a way that dt_cfl exactly matches
+        # dt_viscous.
+        a = self.h0*0.125*11/0.4
+        #nu_needed = a*self.options.G*self.Ly/2
+        nu_needed = (a*self.options.G*self.Ly/4
+                     +np.sqrt(a/8*self.options.g*self.Ly**2
+                              +(a/2)**2/4*self.options.G**2*self.Ly**2))
+
+        # If there is no other scale scale factor provided, use automatically
+        # computed factor.
+        auto_scale_factor = self.options.mu/(nu_needed*self.options.rho0)
+        self.scale_factor = self.options.scale_factor or auto_scale_factor
+
+        # The density can be scaled using the mass scaling factor. To account
+        # for proper external forces, gravity is scaled just the other way.
+        self.rho0 = self.options.rho0*self.scale_factor
+        self.options.g = self.options.g/self.scale_factor
+
 
         # The channel length is twice the width + dx to make it symmetric.
         self.Lx = 2.0*self.Ly + self.dx
@@ -221,14 +235,14 @@ class Channel(Application):
                 l = (self.options.ar+1.0/self.options.ar)
                 self.t = self.options.rot*np.pi*l/self.options.G
             else:
-                self.t = 1.5E-5*self.options.scale_factor
+                self.t = 1.5E-5*self.scale_factor
         print("Simulated time is %g s"%self.t)
 
     def configure_scheme(self):
         self.scheme.configure(rho0=self.rho0, c0=self.c0, nu=self.nu,
             p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=self.A, I=self.I,
             J=self.J, E=self.options.E, D=self.options.D, dim=self.options.dim,
-            scale_factor=self.options.scale_factor, gx=self.options.g)
+            scale_factor=self.scale_factor, gx=self.options.g)
         if self.options.dim == 3 and self.options.g > 0:
             self.scheme.configure(dim=self.options.dim, fibers=['fiber', 'obstacle'])
         # Return the particle list.
@@ -940,7 +954,7 @@ class Channel(Application):
 
         # applying appropriate scale factors
         t_fem = t_fem/1E5
-        t = np.array(t)/self.options.scale_factor*1000
+        t = np.array(t)/self.scale_factor*1000
 
         # Reaction force is plotted only for flow around single cylindrical
         # fiber
