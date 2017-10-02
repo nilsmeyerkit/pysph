@@ -4,7 +4,7 @@
 cd /home/nmeyer7/virtual_python
 source fake_venv.sh
 
-for ar in 5 11 21 31 41 51 61
+for ar in 5 11 21 31 41
 do
   # changing to scratch directory
   mkdir /scratch/nmeyer7/ar=${ar}
