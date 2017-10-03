@@ -176,7 +176,7 @@ class Channel(Application):
         if self.options.ar < 35:
             auto_scale_factor = self.options.mu/(nu_needed*self.options.rho0)
         else:
-            auto_scale_factor = 0.5*self.options.mu/nu_needed/self.options.rho0
+            auto_scale_factor = 0.6*self.options.mu/nu_needed/self.options.rho0
         self.scale_factor = self.options.scale_factor or auto_scale_factor
 
         # The density can be scaled using the mass scaling factor. To account
