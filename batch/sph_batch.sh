@@ -43,7 +43,7 @@ pysph run fiber.channel --ar 31 --holdcenter --openmp
 mv channel_output/ \
 ~/Dropbox/Thesis/Documentation/SPH/Shearflow_Gleb/31particles/
 
-# echo "Running aspect ratio: 41 ..."
-# pysph run fiber.channel --ar 41 --holdcenter --openmp
-# mv channel_output/ \
-# ~/Dropbox/Thesis/Documentation/SPH/Shearflow_Gleb/41particles/
+echo "Running aspect ratio: 41 ..."
+pysph run fiber.channel --ar 41 --holdcenter --openmp
+mv channel_output/ \
+~/Dropbox/Thesis/Documentation/SPH/Shearflow_Gleb/41particles/

@@ -11,5 +11,5 @@ do
   cd /scratch/nmeyer7/phi=${phi}
 
   # running problem with openmp
-  sqsub -q threaded -n 16 -o /home/nmeyer7/phi=${phi}.log -r 10h --mpp 2.5G pysph run fiber.rve --dim 3 --volfrac ${phi} --ar 11 --massscale 1E8 --holdcenter --D 100 --openmp
+  sqsub -q threaded -n 16 -o /home/nmeyer7/phi=${phi}.log -r 10h --mpp 2.5G pysph run fiber.rve --dim 3 --volfrac ${phi} --ar 11 --massscale 1E8 --D 100 --openmp
 done
