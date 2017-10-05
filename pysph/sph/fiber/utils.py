@@ -299,7 +299,7 @@ class Contact(Equation):
                 ty = XIJ[1]-dot_prod*sy/sr
                 tz = XIJ[2]-dot_prod*sz/sr
                 tr = sqrt(tx**2 + ty**2 + tz**2)
-                
+
                 d = min(self.lim*self.d, max(self.d-tr,0))
                 F = self.scale*2*d*self.d*E_star
 
@@ -422,7 +422,8 @@ class Contact(Equation):
                     tz = XIJ[2]-dot_prod*dz/dr
                     tr = sqrt(tx**2 + ty**2 + tz**2)
 
-                    F = self.scale*2*max(self.d-tr,0)*self.d*E_star
+                    d = min(self.lim*self.d, max(self.d-tr,0))
+                    F = self.scale*2*d*self.d*E_star
 
                     d_Fx[d_idx] += (F*tx/tr - self.k*F*v_rel_x/v_rel)/d_m[d_idx]
                     d_Fy[d_idx] += (F*ty/tr - self.k*F*v_rel_y/v_rel)/d_m[d_idx]
