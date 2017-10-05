@@ -210,7 +210,7 @@ class Contact(Equation):
     computes the force between two spheres based on Hertz pressure between two
     cylinders. This Equation requires a computation of ditances by the Bending
     equation."""
-    def __init__(self, dest, sources, E, d, pois=0.3, k=0.0, scale=1):
+    def __init__(self, dest, sources, E, d, pois=0.3, k=0.0, scale=1, lim=0.5):
         r"""
         Parameters
         ----------
@@ -230,7 +230,7 @@ class Contact(Equation):
         self.pois = pois
         self.k = k
         self.scale = scale
-        self.lim = 0.5
+        self.lim = lim
         super(Contact, self).__init__(dest, sources)
 
     def initialize(self, d_idx, d_au, d_av, d_aw, d_Fx, d_Fy, d_Fz):
@@ -299,11 +299,7 @@ class Contact(Equation):
                 ty = XIJ[1]-dot_prod*sy/sr
                 tz = XIJ[2]-dot_prod*sz/sr
                 tr = sqrt(tx**2 + ty**2 + tz**2)
-                # print("Destination Contact.")
-                # print(d_idx)
-                # print(s_idx)
-                # print(tr)
-                # print(dot_prod)
+                
                 d = min(self.lim*self.d, max(self.d-tr,0))
                 F = self.scale*2*d*self.d*E_star
 
@@ -315,6 +311,7 @@ class Contact(Equation):
                 d_av[d_idx] += (F*ty/tr - self.k*F*v_rel_y/v_rel)/d_m[d_idx]
                 d_aw[d_idx] += (F*tz/tr - self.k*F*v_rel_z/v_rel)/d_m[d_idx]
 
+            # case for fiber end in source fiber
             elif s_rnext[s_idx] < 1E-14 or s_rprev[s_idx] < 1E-14:
 
 
@@ -355,14 +352,20 @@ class Contact(Equation):
                 dy = d_ryprev[d_idx]-d_rynext[d_idx]
                 dz = d_rzprev[d_idx]-d_rznext[d_idx]
                 dr = sqrt(dx**2+dy**2+dz**2)
-                dx = dx/dr; dy = dy/dr; dz = dz/dr
+
+                dx = dx/dr
+                dy = dy/dr
+                dz = dz/dr
 
                 # direction of source fiber
                 sx = s_rxprev[s_idx]-s_rxnext[s_idx]
                 sy = s_ryprev[s_idx]-s_rynext[s_idx]
                 sz = s_rzprev[s_idx]-s_rznext[s_idx]
                 sr = sqrt(sx**2+sy**2+sz**2)
-                sx = sx/sr; sy = sy/sr; sz = sz/sr
+
+                sx = sx/sr
+                sy = sy/sr
+                sz = sz/sr
 
                 # normal direction at contact
                 nx = dy * sz - dz * sy
@@ -371,10 +374,10 @@ class Contact(Equation):
                 nr = sqrt(nx**2+ny**2+nz**2)
 
                 # 3 vectors not in plane
-                if abs(nx*XIJ[0]+ny*XIJ[1]+nz*XIJ[2]) > 1E-14:
+                if abs(nx*XIJ[0]+ny*XIJ[1]+nz*XIJ[2]) > 1E-14 and nr > 1E14:
                     nx = -nx/nr
                     ny = -ny/nr
-                    nz = -nz/nr
+                    nz = +nz/nr
 
                     # relative velocity in each fiber direction
                     v_rel_d = dx*VIJ[0]+dy*VIJ[1]+dz*VIJ[2]

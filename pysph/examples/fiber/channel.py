@@ -176,7 +176,7 @@ class Channel(Application):
         if self.options.ar < 35:
             auto_scale_factor = self.options.mu/(nu_needed*self.options.rho0)
         else:
-            auto_scale_factor = 0.6*self.options.mu/nu_needed/self.options.rho0
+            auto_scale_factor = 0.7*self.options.mu/nu_needed/self.options.rho0
         self.scale_factor = self.options.scale_factor or auto_scale_factor
 
         # The density can be scaled using the mass scaling factor. To account
@@ -422,15 +422,7 @@ class Channel(Application):
         # Setting the initial velocities for a shear flow.
         fluid.u[:] = self.options.G*(fluid.y[:]-self.Ly/2)
         fiber.u[:] = self.options.G*(fiber.y[:]-self.Ly/2)
-
-        # Upper and lower walls move uniformly depending on shear rate.
-        N = channel.get_number_of_particles()-1
-        for i in range(0,N):
-            if channel.y[i] > self.Ly/2:
-                y = self.Ly/2
-            else:
-                y = -self.Ly/2
-            channel.u[i] = self.options.G*y
+        channel.u[:] = self.options.G*(channel.y[:]-self.L/2)
 
         # Return the particle list.
         if self.options.dim == 3 and self.options.g > 0:
