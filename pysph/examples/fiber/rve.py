@@ -186,15 +186,15 @@ class RVE(Application):
         dx2 = fdx/2
 
         _x = np.arange(dx2, self.L, fdx)
-        self.nx = round(sqrt(self.options.vol_frac)*len(_x))
         if self.options.dim == 3:
             _z = np.arange(dx2, self.L, fdx)
-            self.nz = round(sqrt(self.options.vol_frac)*len(_z))
         else:
-            self.nz = 1
+            _z = np.array([0.5*self.L])
+
+        self.n = round(self.options.vol_frac*len(_x)*len(_z))
 
     def configure_scheme(self):
-        names = ["fiber"+str(i) for i in range(self.nx*self.nz)]
+        names = ["fiber"+str(i) for i in range(self.n)]
         self.scheme.configure(dim=self.options.dim, fibers=names)
         self.scheme.configure(rho0=self.rho0, c0=self.c0, nu=self.nu,
             p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=self.A, I=self.I,
@@ -242,41 +242,43 @@ class RVE(Application):
         # Remove particles at fiber position.
         indices = []
         fibers = []
+        
         N = 0
-        for xx in random.sample(list(_x), self.nx):
-            for zz in random.sample(list(_z), self.nz):
-                name = "fiber" + str(N)
-                for i in range(len(fx)):
-                    yy = 0.5*self.L
+        x_samples = random.sample(list(_x), self.n)
+        z_samples = random.sample(list(_z), self.n)
+        for xx, zz in zip(x_samples, z_samples):
+            name = "fiber" + str(N)
+            for i in range(len(fx)):
+                yy = 0.5*self.L
 
-                    # vertical
-                    if (fx[i] < xx+self.dx/2 and fx[i] > xx-self.dx/2 and
-                        fy[i] < yy+self.Lf/2 and fy[i] > yy-self.Lf/2 and
-                        fz[i] < zz+self.dx/2 and fz[i] > zz-self.dx/2):
-                        indices.append(i)
+                # vertical
+                if (fx[i] < xx+self.dx/2 and fx[i] > xx-self.dx/2 and
+                    fy[i] < yy+self.Lf/2 and fy[i] > yy-self.Lf/2 and
+                    fz[i] < zz+self.dx/2 and fz[i] > zz-self.dx/2):
+                    indices.append(i)
 
-                # Generating fiber particle grid. Uncomment proper section for
-                # horizontal or vertical alignment respectivley.
+            # Generating fiber particle grid. Uncomment proper section for
+            # horizontal or vertical alignment respectivley.
 
-                # vertical fiber
-                _fibx = np.array([xx])
-                _fiby = np.arange(yy-self.Lf/2+self.dx/2, yy+self.Lf/2+self.dx/4, self.dx)
-                _fibz = np.array([zz])
-                fibx,fiby,fibz = self.get_meshgrid(_fibx, _fiby, _fibz)
+            # vertical fiber
+            _fibx = np.array([xx])
+            _fiby = np.arange(yy-self.Lf/2+self.dx/2, yy+self.Lf/2+self.dx/4, self.dx)
+            _fibz = np.array([zz])
+            fibx,fiby,fibz = self.get_meshgrid(_fibx, _fiby, _fibz)
 
-                # Finally create all particle arrays. Note that fluid particles are
-                # removed in the area, where the fiber is placed.
-                if self.options.dim == 2:
-                    fibers.append(get_particle_array_beadchain_fiber(name=name,
-                                x=fibx, y=fiby, m=fiber_mass, rho=self.rho0, h=self.h0,
-                                lprev=self.dx, lnext=self.dx, phi0=np.pi, phifrac=2.0,
-                                fidx=fidx, V=fiber_V))
-                else:
-                    fibers.append(get_particle_array_beadchain_fiber(name=name,
-                                x=fibx, y=fiby, z=fibz, m=fiber_mass, rho=self.rho0,
-                                h=self.h0, lprev=self.dx, lnext=self.dx, phi0=np.pi,
-                                phifrac=2.0, fidx=fidx, V=fiber_V))
-                N += 1
+            # Finally create all particle arrays. Note that fluid particles are
+            # removed in the area, where the fiber is placed.
+            if self.options.dim == 2:
+                fibers.append(get_particle_array_beadchain_fiber(name=name,
+                            x=fibx, y=fiby, m=fiber_mass, rho=self.rho0, h=self.h0,
+                            lprev=self.dx, lnext=self.dx, phi0=np.pi, phifrac=2.0,
+                            fidx=fidx, V=fiber_V))
+            else:
+                fibers.append(get_particle_array_beadchain_fiber(name=name,
+                            x=fibx, y=fiby, z=fibz, m=fiber_mass, rho=self.rho0,
+                            h=self.h0, lprev=self.dx, lnext=self.dx, phi0=np.pi,
+                            phifrac=2.0, fidx=fidx, V=fiber_V))
+            N += 1
         print("Created %d fibers."%N)
 
         # Determine the size of dummy region
