@@ -52,6 +52,10 @@ class Beam(Application):
             "--gy", action="store", type=float, dest="gy",
             default=0, help="Body force in y-direction."
         )
+        group.add_argument(
+            "--k", action="store", type=float, dest="k",
+            default=0.0, help="Friction coefficient."
+        )
 
     def consume_user_options(self):
         # fiber length
@@ -107,6 +111,9 @@ class Beam(Application):
         _x = np.linspace(-self.dx, self.l-self.dx, self.N+1)
         _y = np.array([0.0])
         _z = np.array([0.0])
+        # _x = np.array([0.0])
+        # _y = np.linspace(-self.dx, self.l-self.dx, self.N+1)
+        # _z = np.array([0.0])
         x, y, z = np.meshgrid(_x, _y, _z)
         fiber1_x = x.ravel()
         fiber1_y = y.ravel()
@@ -115,8 +122,8 @@ class Beam(Application):
         _x = np.array([0.75*self.l])
         _y = np.array([-2*self.dx])
         _z = np.linspace(-0.25*self.l, 0.75*self.l, self.N+1)
-        # _x = np.linspace(-self.dx, self.l-self.dx, self.N+1)
-        # _y = np.array([-2*self.dx])
+        # _x = np.array([-self.dx])
+        # _y = np.linspace(-self.dx, self.l-self.dx, self.N+1)
         # _z = np.array([0.0])
         x, y, z = np.meshgrid(_x, _y, _z)
         fiber2_x = x.ravel()
@@ -216,10 +223,10 @@ class Beam(Application):
                         ei=self.E*self.I),
                     Contact(dest='fiber1',
                        sources=['fiber1', 'fiber2'],
-                       E = self.E, d=self.dx, k=1),
+                       E = self.E, d=self.dx, k=self.options.k),
                     Contact(dest='fiber2',
                         sources=['fiber1', 'fiber2'],
-                        E = self.E, d=self.dx, k=1),
+                        E = self.E, d=self.dx, k=self.options.k),
                     Damping(dest='fiber1',
                         sources=None,
                         d = self.D),
@@ -287,7 +294,7 @@ class Beam(Application):
         integrator = EPECIntegrator(fiber1=TransportVelocityStep(),
             fiber2=TransportVelocityStep())
         solver = Solver(kernel=kernel, dim=3, integrator=integrator, dt=self.dt,
-                         tf=self.tf, pfreq=int(np.ceil(self.tf/(1000*self.dt))),
+                         tf=self.tf, N=1000,
                          vtk=True)
         return solver
 
