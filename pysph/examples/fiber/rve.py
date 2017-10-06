@@ -242,10 +242,10 @@ class RVE(Application):
         # Remove particles at fiber position.
         indices = []
         fibers = []
-        
+
         N = 0
-        x_samples = random.sample(list(_x), self.n)
-        z_samples = random.sample(list(_z), self.n)
+        x_samples = np.random.choice(list(_x), self.n)
+        z_samples = np.random.choice(list(_z), self.n)
         for xx, zz in zip(x_samples, z_samples):
             name = "fiber" + str(N)
             for i in range(len(fx)):
