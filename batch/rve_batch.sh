@@ -1,17 +1,17 @@
 #!/bin/bash
+#SBATCH --account=nmeyer7
+#SBATCH --time=10:00:00
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=4000M
+#SBATCH --output=%x-%j.out
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
-# setting up virtual python
-cd /home/nmeyer7/virtual_python
-source fake_venv.sh
-
-for phi in 0.1 0.3 0.5
+for phi in 0.05 0.1
 do
   # changing to scratch directory
-  mkdir /scratch/nmeyer7/phi=${phi}
-  cd /scratch/nmeyer7/phi=${phi}
-
-  MEM=$((phi*50))
+  mkdir scratch/phi=${phi}
+  cd scratch/phi=${phi}
 
   # running problem with openmp
-  sqsub -q threaded -n 8 -o /home/nmeyer7/phi=${phi}.log -r 10h --mpp ${MEM}G pysph run fiber.rve --dim 3 --volfrac ${phi} --ar 11 --massscale 1E8 --D 2 --folgartucker --openmp
+  sbatch pysph run fiber.rve --dim 3 --volfrac ${phi} --ar 11 --massscale 1E8 --D 2 --folgartucker --openmp
 done
