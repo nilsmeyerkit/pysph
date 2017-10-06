@@ -1,10 +1,9 @@
 #!/bin/bash
-#SBATCH --account=def-hrymak-ab
-#SBATCH --time=10:00:00
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=4G
-#SBATCH --output=%x-%j.out
-export OMP_NUM_THREADS=8
+#SBATCH --account=def-hrymak-ab  # account name
+#SBATCH --ntasks=8               # number of MPI processes
+#SBATCH --mem-per-cpu=1024M      # memory; default unit is megabytes
+#SBATCH --time=0-02:00           # time (DD-HH:MM)
+#SBATCH --output=%x-%j.out       # output log
 
 for phi in 0.05 0.1
 do
@@ -13,5 +12,5 @@ do
   cd /scratch/nmeyer7/phi=${phi}
 
   # running problem with openmp
-  sbatch pysph run fiber.rve --dim 3 --volfrac ${phi} --ar 11 --D 2 --folgartucker --openmp
+  srun pysph run fiber.rve --dim 3 --volfrac ${phi} --ar 11 --D 2 --folgartucker --openmp
 done
