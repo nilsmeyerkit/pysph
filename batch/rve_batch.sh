@@ -2,9 +2,9 @@
 #SBATCH --account=def-hrymak-ab
 #SBATCH --time=10:00:00
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=4000M
+#SBATCH --mem=4G
 #SBATCH --output=%x-%j.out
-export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+export OMP_NUM_THREADS=8
 
 for phi in 0.05 0.1
 do
