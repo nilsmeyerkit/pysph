@@ -3,7 +3,7 @@
 #SBATCH --mem-per-cpu=2G         # memory; default unit is megabytes
 #SBATCH --time=0-02:00           # time (DD-HH:MM)
 #SBATCH --output=%x-%j.out       # output log (<filename>-<jobid>.out)
-#SBATCH --ntasks=8               # number of MPI processes
+#SBATCH --ntasks=32               # number of MPI processes
 
 # changing to scratch directory
 mkdir /scratch/nmeyer7/phi=$1
