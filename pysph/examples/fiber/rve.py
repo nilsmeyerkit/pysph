@@ -148,7 +148,10 @@ class RVE(Application):
         self.nu = self.options.mu/self.rho0
 
         # empirical determination for the damping, which is just enough
-        self.D = self.options.D or self.options.ar*1000
+        if self.options.dim == 2:
+            self.D = self.options.D or self.options.ar*500
+        else:
+            self.D = self.options.D or self.options.ar
 
         # For 2 dimensions surface, mass and moments have a different coputation
         # than for 3 dimensions.
