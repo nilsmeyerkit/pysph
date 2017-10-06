@@ -151,7 +151,7 @@ class RVE(Application):
         if self.options.dim == 2:
             self.D = self.options.D or self.options.ar*500
         else:
-            self.D = self.options.D or self.options.ar
+            self.D = self.options.D or self.options.ar*2
 
         # For 2 dimensions surface, mass and moments have a different coputation
         # than for 3 dimensions.
