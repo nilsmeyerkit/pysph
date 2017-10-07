@@ -6,6 +6,7 @@ Mini RVE
 # general imports
 import os
 import random
+import itertools
 import numpy as np
 from scipy.integrate import odeint
 from math import sqrt
@@ -248,9 +249,8 @@ class RVE(Application):
         fibers = []
 
         N = 0
-        x_samples = np.random.choice(list(_x), self.n)
-        z_samples = np.random.choice(list(_z), self.n)
-        for xx, zz in zip(x_samples, z_samples):
+        positions = list(itertools.product(_x,_z))
+        for xx, zz in random.sample(positions, self.n):
             name = "fiber" + str(N)
             for i in range(len(fx)):
                 yy = 0.5*self.L
