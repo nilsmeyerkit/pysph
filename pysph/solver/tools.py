@@ -169,8 +169,7 @@ class FiberIntegrator(Tool):
                 self.acceleration_eval = AccelerationEval(
                             particle_arrays=particles,
                             equations=equations,
-                            kernel=kernel,
-                            mode='parallel')
+                            kernel=kernel)
             else:
                 self.acceleration_eval = AccelerationEval(
                             particle_arrays=particles,
