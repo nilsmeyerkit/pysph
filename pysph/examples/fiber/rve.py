@@ -182,7 +182,8 @@ class RVE(Application):
         if self.options.postonly:
             self.t = 0
         else:
-            self.t = 10
+            l = (self.options.ar+1.0/self.options.ar)
+            self.t = np.pi*l/self.options.G
         print("Simulated time is %g s"%self.t)
 
         fdx = self.dx
@@ -349,7 +350,8 @@ class RVE(Application):
 
     def create_tools(self):
         il = self.options.ar > 1
-        return [FiberIntegrator(self.particles, self.scheme, self.L, il)]
+        return [FiberIntegrator(self.particles, self.scheme, self.L, il,
+                                parallel=True)]
 
     # def post_stage(self, current_time, dt, stage):
     #     self.nnps.update_domain()

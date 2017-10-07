@@ -89,7 +89,8 @@ class SimpleRemesher(Tool):
             self.array.set(**data)
 
 class FiberIntegrator(Tool):
-    def __init__(self, all_particles, scheme, L, innerloop=True, updates=True):
+    def __init__(self, all_particles, scheme, L, innerloop=True, updates=True,
+            parallel=False):
         """The second integrator is a simple Euler-Integrator (accurate
         enough due to very small time steps; very fast) using EBGSteps.
         EBGSteps are basically the same as EulerSteps, exept for the fact
@@ -172,10 +173,13 @@ class FiberIntegrator(Tool):
             # Compilation of the integrator not using openmp, because the
             # overhead is too large for those few fiber particles.
             comp = SPHCompiler(self.acceleration_eval, self.fiber_integrator)
-            config = get_config()
-            config.use_openmp = False
-            comp.compile()
-            config.use_openmp = True
+            if parallel:
+                comp.compile()
+            else:
+                config = get_config()
+                config.use_openmp = False
+                comp.compile()
+                config.use_openmp = True
             self.acceleration_eval.set_nnps(nnps)
 
             # Connecting neighbourhood list to integrator.
