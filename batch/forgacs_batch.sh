@@ -1,15 +1,13 @@
 #!/bin/bash
-
-# G = 1.0, 3.20, 3.54, 4.35
-G=1.0
-
-# setting up virtual python
-cd /home/nmeyer7/virtual_python
-source fake_venv.sh
+#SBATCH --account=def-hrymak-ab  # account name
+#SBATCH --mem-per-cpu=2G         # memory; default unit is megabytes
+#SBATCH --time=6-00:00           # time (DD-HH:MM)
+#SBATCH --output=%x-%j.out       # output log (<filename>-<jobid>.out)
+#SBATCH --ntasks=32               # number of MPI processes
 
 # changing to scratch directory
-mkdir /scratch/nmeyer7/G=${G}
-cd /scratch/nmeyer7/G=${G}
+mkdir /scratch/nmeyer7/G=$1
+cd /scratch/nmeyer7/G=$1
 
 # running problem with openmp
-sqsub -q threaded -n 24 -o /home/nmeyer7/G=${G}.log -r 5d --mpp 1.5G pysph run fiber.channel --ar 171 --E 6.3E09 --d 0.0000122 --mu 9.12 --G ${G} --holdcenter --openmp
+ pysph run fiber.channel --ar 171 --E 6.3E09 --d 0.0000122 --mu 9.12 --G $1 --holdcenter --openmp
