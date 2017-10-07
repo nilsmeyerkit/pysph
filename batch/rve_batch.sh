@@ -9,4 +9,4 @@
 mkdir /scratch/nmeyer7/phi=$1
 cd /scratch/nmeyer7/phi=$1
 # running problem with openmp
-pysph run fiber.rve --dim 3 --volfrac $1 --ar 20 --D 5 --folgartucker
+pysph run fiber.rve --dim 3 --volfrac $1 --ar 20 --D 5 --folgartucker --openmp

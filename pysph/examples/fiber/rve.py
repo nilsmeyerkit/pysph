@@ -350,8 +350,7 @@ class RVE(Application):
 
     def create_tools(self):
         il = self.options.ar > 1
-        return [FiberIntegrator(self.particles, self.scheme, self.L, il,
-                                parallel=True)]
+        return [FiberIntegrator(self.particles, self.scheme, self.L, il)]
 
     # def post_stage(self, current_time, dt, stage):
     #     self.nnps.update_domain()

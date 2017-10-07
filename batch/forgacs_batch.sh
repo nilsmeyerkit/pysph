@@ -10,4 +10,4 @@ mkdir /scratch/nmeyer7/G=$1
 cd /scratch/nmeyer7/G=$1
 
 # running problem with openmp
- pysph run fiber.channel --ar 171 --E 6.3E09 --d 0.0000122 --mu 9.12 --G $1 --holdcenter
+ pysph run fiber.channel --ar 171 --E 6.3E09 --d 0.0000122 --mu 9.12 --G $1 --holdcenter --openmp
