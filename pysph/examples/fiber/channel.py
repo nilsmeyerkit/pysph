@@ -422,7 +422,7 @@ class Channel(Application):
         # Setting the initial velocities for a shear flow.
         fluid.u[:] = self.options.G*(fluid.y[:]-self.Ly/2)
         fiber.u[:] = self.options.G*(fiber.y[:]-self.Ly/2)
-        channel.u[:] = self.options.G*(channel.y[:]-self.L/2)
+        channel.u[:] = self.options.G*(channel.y[:]-self.Ly/2)
 
         # Return the particle list.
         if self.options.dim == 3 and self.options.g > 0:
