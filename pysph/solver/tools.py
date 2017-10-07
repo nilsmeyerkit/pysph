@@ -165,11 +165,18 @@ class FiberIntegrator(Tool):
                             fixed_h=False, cache=False, sort_gids=False)
             # The acceleration evaluator needs to be set up in order to compile
             # it together with the integrator.
-            self.acceleration_eval = AccelerationEval(
-                        particle_arrays=particles,
-                        equations=equations,
-                        kernel=kernel,
-                        mode='serial')
+            if parallel:
+                self.acceleration_eval = AccelerationEval(
+                            particle_arrays=particles,
+                            equations=equations,
+                            kernel=kernel,
+                            mode='parallel')
+            else:
+                self.acceleration_eval = AccelerationEval(
+                            particle_arrays=particles,
+                            equations=equations,
+                            kernel=kernel,
+                            mode='serial')
             # Compilation of the integrator not using openmp, because the
             # overhead is too large for those few fiber particles.
             comp = SPHCompiler(self.acceleration_eval, self.fiber_integrator)
