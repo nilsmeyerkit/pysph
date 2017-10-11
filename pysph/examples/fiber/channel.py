@@ -250,7 +250,7 @@ class Channel(Application):
             J=self.J, E=self.options.E, D=self.D, dim=self.options.dim,
             scale_factor=self.scale_factor, gx=self.options.g)
         if self.options.dim == 3 and self.options.g > 0:
-            self.scheme.configure(dim=self.options.dim, fibers=['fiber', 'obstacle'])
+            self.scheme.configure(fibers=['fiber', 'obstacle'])
         # Return the particle list.
         self.scheme.configure_solver(tf=self.t, vtk = self.options.vtk,
             N=self.options.rot*200)
@@ -479,7 +479,7 @@ class Channel(Application):
         u = interp.interpolate('u')
         v = interp.interpolate('v')
         p = interp.interpolate('p')
-        vmag = np.sqrt(u**2 + v**2 )
+        vmag = factor*np.sqrt(u**2 + v**2 )
 
         if self.options.ar == 1:
             upper = 2.5E-5
@@ -501,7 +501,8 @@ class Channel(Application):
         plt.scatter(fx*factor,fy*factor, color='w')
 
         # set labels
-        cbar = plt.colorbar(vel, label='Velocity Magnitude', format='%.2e')
+        cbar = plt.colorbar(vel, format='%.2f')
+        cbar.set_label('Velocity Magnitude [mm/s]', labelpad=20.0)
         plt.axis('equal')
         plt.xlabel('x [mm]')
         plt.ylabel('y [mm]')
@@ -855,12 +856,14 @@ class Channel(Application):
         plt.figure()
 
         # plot end points
-        plt.plot(x_begin, y_begin, '-ok', markersize=3)
-        plt.plot(x_end, y_end, '-xk', markersize=3)
+        plt.plot(np.array(x_begin)*factor, np.array(y_begin)*factor, '-ok', markersize=3)
+        plt.plot(np.array(x_end)*factor, np.array(y_end)*factor, '-xk', markersize=3)
 
         # set equally scaled axis to not distort the orbit
         plt.axis('equal')
         plt.title('Orbitplot')
+        plt.xlabel('x [mm]')
+        plt.ylabel('y [mm]')
 
         # save plot of orbit
         orbfig = os.path.join(self.output_dir, 'orbitplot.eps')
