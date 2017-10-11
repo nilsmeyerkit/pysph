@@ -625,7 +625,7 @@ class RVE(Application):
         A0 = np.array([[0.0,0.0,0.0],[0.0,1.0,0.0],[0.0,0.0,0.0]])
         are = self.get_equivalent_aspect_ratio(self.options.ar)
         A_FT = []
-        cis = [0.0, 0.001, 0.01]
+        cis = [0.0, 0.001]
         for Ci in cis:
             print("Solving Folgar-Tucker equation with Ci=%f"%Ci)
             A_FT.append(odeint(self.folgar_tucker_ode,A0.ravel(),tt, atol=1E-15,
