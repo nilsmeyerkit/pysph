@@ -184,7 +184,7 @@ class RVE(Application):
             self.t = 0
         else:
             l = (self.options.ar+1.0/self.options.ar)
-            self.t = np.pi*l/self.options.G
+            self.t = 2*np.pi*l/self.options.G
         print("Simulated time is %g s"%self.t)
 
         fdx = self.dx
