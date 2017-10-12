@@ -38,7 +38,7 @@ class RVE(Application):
     def create_scheme(self):
         """There is no scheme used in this application and equations are set up
         manually."""
-        return BeadChainScheme(['fluid'], ['channel'], ['fiber0'], dim=3)
+        return BeadChainScheme(['fluid'], ['channel'], ['fibers'], dim=3)
 
     def add_user_options(self, group):
         group.add_argument(
@@ -199,8 +199,7 @@ class RVE(Application):
         self.n = round(self.options.vol_frac*len(_x)*len(_z))
 
     def configure_scheme(self):
-        names = ["fiber"+str(i) for i in range(self.n)]
-        self.scheme.configure(dim=self.options.dim, fibers=names)
+        self.scheme.configure(dim=self.options.dim)
         self.scheme.configure(rho0=self.rho0, c0=self.c0, nu=self.nu,
             p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=self.A, I=self.I,
             J=self.J, E=self.options.E, D=self.D, dim=self.options.dim,
@@ -228,9 +227,6 @@ class RVE(Application):
         mass = volume * self.rho0
         fiber_mass = fiber_volume * self.rho0
 
-        # assign unique ID (within fiber) to each fiber particle.
-        fidx = range(0,self.options.ar)
-
         # Initial inverse volume (necessary for transport velocity equations)
         V = 1./volume
         fiber_V = 1./fiber_volume
@@ -247,11 +243,12 @@ class RVE(Application):
         # Remove particles at fiber position.
         indices = []
         fibers = []
+        fibx = tuple()
+        fiby = tuple()
+        fibz = tuple()
 
-        N = 0
         positions = list(itertools.product(_x,_z))
         for xx, zz in random.sample(positions, self.n):
-            name = "fiber" + str(N)
             for i in range(len(fx)):
                 yy = 0.5*self.L
 
@@ -268,28 +265,18 @@ class RVE(Application):
             _fibx = np.array([xx])
             _fiby = np.arange(yy-self.Lf/2+self.dx/2, yy+self.Lf/2+self.dx/4, self.dx)
             _fibz = np.array([zz])
-            fibx,fiby,fibz = self.get_meshgrid(_fibx, _fiby, _fibz)
+            _fibx,_fiby,_fibz = self.get_meshgrid(_fibx, _fiby, _fibz)
+            fibx = fibx + (_fibx,)
+            fiby = fiby + (_fiby,)
+            fibz = fibz + (_fibz,)
 
-            # Finally create all particle arrays. Note that fluid particles are
-            # removed in the area, where the fiber is placed.
-            if self.options.dim == 2:
-                fibers.append(get_particle_array_beadchain_fiber(name=name,
-                            x=fibx, y=fiby, m=fiber_mass, rho=self.rho0, h=self.h0,
-                            lprev=self.dx, lnext=self.dx, phi0=np.pi, phifrac=2.0,
-                            fidx=fidx, V=fiber_V))
-            else:
-                fibers.append(get_particle_array_beadchain_fiber(name=name,
-                            x=fibx, y=fiby, z=fibz, m=fiber_mass, rho=self.rho0,
-                            h=self.h0, lprev=self.dx, lnext=self.dx, phi0=np.pi,
-                            phifrac=2.0, fidx=fidx, V=fiber_V))
-            N += 1
-        print("Created %d fibers."%N)
+        print("Created %d fibers."%self.n)
 
         # Determine the size of dummy region
         ghost_extent = 3*fdx
 
         # Create the channel particles at the top
-        _y = np.arange(self.L+dx2, self.L+dx2+ghost_extent, fdx)
+        _y = np.arange(self.L+dx2, self.L+ghost_extent, fdx)
         tx,ty,tz = self.get_meshgrid(_x, _y, _z)
 
         # Create the channel particles at the bottom
@@ -302,7 +289,7 @@ class RVE(Application):
         rx,ry,rz = self.get_meshgrid(_x, _y, _z)
 
         # Create the channel particles at the left
-        _z = np.arange(self.L+dx2, self.L+dx2+ghost_extent, fdx)
+        _z = np.arange(self.L+dx2, self.L+ghost_extent, fdx)
         _y = np.arange(dx2-ghost_extent, self.L+ghost_extent, fdx)
         lx,ly,lz = self.get_meshgrid(_x, _y, _z)
 
@@ -325,24 +312,39 @@ class RVE(Application):
             fluid = get_particle_array_beadchain(name='fluid',
                         x=fx, y=fy, m=mass, rho=self.rho0, h=self.h0, V=V)
             fluid.remove_particles(indices)
+            fibers = get_particle_array_beadchain_fiber(name='fibers',
+                        x=np.concatenate(fibx), y=np.concatenate(fiby),
+                        m=fiber_mass, rho=self.rho0, h=self.h0,
+                        lprev=self.dx, lnext=self.dx, phi0=np.pi, phifrac=2.0,
+                        fidx=range(self.options.ar*self.n), V=fiber_V)
         else:
             channel = get_particle_array_beadchain(name='channel',
                         x=cx, y=cy, z=cz, m=mass, rho=self.rho0, h=self.h0, V=V)
             fluid = get_particle_array_beadchain(name='fluid',
                         x=fx, y=fy, z=fz, m=mass, rho=self.rho0, h=self.h0, V=V)
             fluid.remove_particles(indices)
+            fibers = get_particle_array_beadchain_fiber(name='fibers',
+                        x=np.concatenate(fibx), y=np.concatenate(fiby),
+                        z=np.concatenate(fibz), m=fiber_mass, rho=self.rho0,
+                        h=self.h0, lprev=self.dx, lnext=self.dx, phi0=np.pi,
+                        phifrac=2.0, fidx=range(self.options.ar*self.n),
+                        V=fiber_V)
 
         # Print number of particles.
         print("Shear flow : nfluid = %d, nchannel = %d"%(
             fluid.get_number_of_particles(),
             channel.get_number_of_particles()))
 
+        # 'Break' fibers in segments
+        endpoints = [i*self.options.ar-1 for i in range(self.n-1)]
+        fibers.fractag[endpoints] = 1
+
 
         # Setting the initial velocities for a shear flow.
         fluid.u[:] = self.options.G*(fluid.y[:]-self.L/2)
         channel.u[:] = self.options.G*(channel.y[:]-self.L/2)
 
-        return [fluid, channel] + fibers
+        return [fluid, channel, fibers]
 
     def create_domain(self):
         """The channel has periodic boundary conditions in x-direction."""
