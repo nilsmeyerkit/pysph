@@ -206,7 +206,7 @@ class RVE(Application):
             scale_factor=self.scale_factor, gx=self.options.g,
             k=self.options.k)
         self.scheme.configure_solver(tf=self.t, vtk = self.options.vtk,
-            N=100)
+            N=300)
         #self.scheme.configure_solver(tf=self.t, pfreq=1, vtk = self.options.vtk)
 
     def create_particles(self):
