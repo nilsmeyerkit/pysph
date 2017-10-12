@@ -1,14 +1,14 @@
 #!/bin/bash
 #SBATCH --account=def-hrymak-ab  # account name
 #SBATCH --mem-per-cpu=3G         # memory; default unit is megabytes
-#SBATCH --time=0-20:00           # time (DD-HH:MM)
+#SBATCH --time=0-5:00           # time (DD-HH:MM)
 #SBATCH --output=%x-%j.out       # output log (<filename>-<jobid>.out)
 #SBATCH --nodes=1
-#SBATCH --cpus-per-node=32
-export OMP_NUM_THREADS=32
+#SBATCH --cpus-per-node=16
+export OMP_NUM_THREADS=16
 
 # changing to scratch directory
-mkdir /scratch/nmeyer7/ar20_phi_$1
-cd /scratch/nmeyer7/ar20_phi_$1
+mkdir /scratch/nmeyer7/phi=$1
+cd /scratch/nmeyer7/phi=$1
 # running problem with openmp
-pysph run fiber.rve --dim 3 --E 1E9 --volfrac $1 --ar 20 --D 10 --vtk --folgartucker --openmp
+pysph run fiber.rve --dim 3 --E 1E9 --volfrac $1 --ar 10 --D 2 --folgartucker --openmp
