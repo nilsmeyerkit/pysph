@@ -31,8 +31,8 @@ from pyopencl.elementwise import ElementwiseKernel
 
 from pysph.base.nnps_base cimport *
 from pysph.base.config import get_config
-from pysph.base.opencl import (DeviceHelper, get_context, get_queue,
-                               set_context, set_queue)
+from pysph.base.opencl import (DeviceArray, DeviceHelper, get_context,
+                                get_queue, set_context, set_queue)
 
 # Particle Tag information
 from pyzoltan.core.carray cimport BaseArray, aligned_malloc, aligned_free
@@ -54,8 +54,10 @@ cdef class GPUNeighborCache:
         self._cached = False
         self._copied_to_cpu = False
 
-        self._nbr_lengths_gpu = cl.array.zeros(self._nnps.queue,
-                (n_p,), dtype=np.uint32)
+        self._nbr_lengths_gpu = DeviceArray(np.uint32, n=n_p)
+        self._nbr_lengths_gpu.fill(0)
+
+        self._neighbors_gpu = DeviceArray(np.uint32)
 
     #### Public protocol ################################################
 
@@ -74,17 +76,16 @@ cdef class GPUNeighborCache:
     #### Private protocol ################################################
 
     cdef void _find_neighbors(self):
-        self._nnps.find_neighbor_lengths(self._nbr_lengths_gpu)
+        self._nnps.find_neighbor_lengths(self._nbr_lengths_gpu.array)
         # FIXME:
         # - Store sum kernel
         # - don't allocate neighbors_gpu each time.
         # - Don't allocate _nbr_lengths and start_idx.
-        total_size_gpu = cl.array.sum(self._nbr_lengths_gpu)
+        total_size_gpu = cl.array.sum(self._nbr_lengths_gpu.array)
         cdef unsigned long total_size = <unsigned long>(total_size_gpu.get())
 
         # Allocate _neighbors_cpu and neighbors_gpu
-        self._neighbors_gpu = cl.array.empty(self._nnps.queue, (total_size,),
-                dtype=np.uint32)
+        self._neighbors_gpu.resize(total_size)
 
         self._start_idx_gpu = self._nbr_lengths_gpu.copy()
 
@@ -94,18 +95,18 @@ cdef class GPUNeighborCache:
                 self._nnps.ctx, np.uint32, scan_expr="a+b", neutral="0"
             )
 
-        self._get_start_indices(self._start_idx_gpu)
-        self._nnps.find_nearest_neighbors_gpu(self._neighbors_gpu,
-                self._start_idx_gpu)
+        self._get_start_indices(self._start_idx_gpu.array)
+        self._nnps.find_nearest_neighbors_gpu(self._neighbors_gpu.array,
+                self._start_idx_gpu.array)
         self._cached = True
 
     cdef void copy_to_cpu(self):
         self._copied_to_cpu = True
-        self._neighbors_cpu = self._neighbors_gpu.get()
+        self._neighbors_cpu = self._neighbors_gpu.array.get()
         self._neighbors_cpu_ptr = <unsigned int*> self._neighbors_cpu.data
-        self._nbr_lengths = self._nbr_lengths_gpu.get()
+        self._nbr_lengths = self._nbr_lengths_gpu.array.get()
         self._nbr_lengths_ptr = <unsigned int*> self._nbr_lengths.data
-        self._start_idx = self._start_idx_gpu.get()
+        self._start_idx = self._start_idx_gpu.array.get()
         self._start_idx_ptr = <unsigned int*> self._start_idx.data
 
     cpdef update(self):
@@ -113,8 +114,8 @@ cdef class GPUNeighborCache:
         self._cached = False
         self._copied_to_cpu = False
         cdef long n_p = self._particles[self._dst_index].get_number_of_particles()
-        self._nbr_lengths_gpu = cl.array.zeros(self._nnps.queue, n_p, dtype=np.uint32)
-        self._start_idx_gpu = cl.array.empty(self._nnps.queue, n_p, dtype=np.uint32)
+        self._nbr_lengths_gpu.resize(n_p)
+        self._nbr_lengths_gpu.fill(0)
 
     cpdef get_neighbors(self, int src_index, size_t d_idx, UIntArray nbrs):
         self.get_neighbors_raw(d_idx, nbrs)
@@ -179,6 +180,8 @@ cdef class GPUNNPS(NNPSBase):
             set_queue(self.queue)
 
         self.use_double = get_config().use_double
+        self.dtype = np.float64 if self.use_double else np.float32
+        self.dtype_max = np.finfo(self.dtype).max
 
         # Set the device helper if needed.
         for pa in particles:
@@ -192,6 +195,8 @@ cdef class GPUNNPS(NNPSBase):
             for s_idx in range(len(particles)):
                 _cache.append(GPUNeighborCache(self, d_idx, s_idx))
         self.cache = _cache
+        self.use_double = get_config().use_double
+
 
     cdef void get_nearest_neighbors(self, size_t d_idx, UIntArray nbrs):
         if self.use_cache:
@@ -232,8 +237,8 @@ cdef class GPUNNPS(NNPSBase):
         cdef DomainManager domain = self.domain
 
         # use cell sizes computed by the domain.
-        self.cell_size = domain.cell_size
-        self.hmin = domain.hmin
+        self.cell_size = domain.manager.cell_size
+        self.hmin = domain.manager.hmin
 
         # compute bounds and refresh the data structure
         self._compute_bounds()
@@ -247,6 +252,52 @@ cdef class GPUNNPS(NNPSBase):
         if self.use_cache:
             for cache in self.cache:
                 cache.update()
+
+    def update_domain(self, *args, **kwargs):
+        self.domain.update()
+
+    cdef _compute_bounds(self):
+        """Compute coordinate bounds for the particles"""
+        cdef list pa_wrappers = self.pa_wrappers
+        cdef NNPSParticleArrayWrapper pa_wrapper
+        xmax = -self.dtype_max
+        ymax = -self.dtype_max
+        zmax = -self.dtype_max
+
+        xmin = self.dtype_max
+        ymin = self.dtype_max
+        zmin = self.dtype_max
+
+        for pa_wrapper in pa_wrappers:
+            x = pa_wrapper.pa.gpu.x
+            y = pa_wrapper.pa.gpu.y
+            z = pa_wrapper.pa.gpu.z
+
+            # find min and max of variables
+            xmax = np.maximum(cl.array.max(x), xmax)
+            ymax = np.maximum(cl.array.max(y), ymax)
+            zmax = np.maximum(cl.array.max(z), zmax)
+
+            xmin = np.minimum(cl.array.min(x), xmin)
+            ymin = np.minimum(cl.array.min(y), ymin)
+            zmin = np.minimum(cl.array.min(z), zmin)
+
+        # Add a small offset to the limits.
+        lx, ly, lz = xmax - xmin, ymax - ymin, zmax - zmin
+        xmin -= lx*0.01; ymin -= ly*0.01; zmin -= lz*0.01
+        xmax += lx*0.01; ymax += ly*0.01; zmax += lz*0.01
+
+        # If all of the dimensions have very small extent give it a unit size.
+        _eps = 1e-12
+        if (np.abs(xmax - xmin) < _eps) and (np.abs(ymax - ymin) < _eps) \
+            and (np.abs(zmax - zmin) < _eps):
+            xmin -= 0.5; xmax += 0.5
+            ymin -= 0.5; ymax += 0.5
+            zmin -= 0.5; zmax += 0.5
+
+        # store the minimum and maximum of physical coordinates
+        self.xmin = np.asarray([xmin.get(), ymin.get(), zmin.get()])
+        self.xmax = np.asarray([xmax.get(), ymax.get(), zmax.get()])
 
     cpdef _bin(self, int pa_index):
         raise NotImplementedError("NNPS :: _bin called")

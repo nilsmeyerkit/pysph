@@ -20,9 +20,12 @@ cdef class ZOrderGPUNNPS(GPUNNPS):
     cdef list max_cid
     cdef object dst_to_src
     cdef object overflow_cid_to_idx
+    cdef object curr_cid
+    cdef object max_cid_src
 
     cdef object helper
     cdef object radix_sort
+    cdef object make_vec
 
     cdef bint _sorted
     cdef bint dst_src

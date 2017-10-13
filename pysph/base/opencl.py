@@ -1,14 +1,18 @@
 """Common OpenCL related functionality.
 """
 
+from __future__ import print_function
 import numpy as np
 import pyopencl as cl
 import pyopencl.array  # noqa: 401
+from collections import defaultdict
+from operator import itemgetter
 
 from .config import get_config
 
 _ctx = None
 _queue = None
+_profile_info = defaultdict(float)
 
 
 def get_context():
@@ -26,13 +30,95 @@ def set_context(ctx):
 def get_queue():
     global _queue
     if _queue is None:
-        _queue = cl.CommandQueue(get_context())
+        properties = None
+        if get_config().profile:
+            properties = cl.command_queue_properties.PROFILING_ENABLE
+        _queue = cl.CommandQueue(get_context(), properties=properties)
     return _queue
 
 
 def set_queue(q):
     global _queue
     _queue = q
+
+
+def profile(name, event):
+    global _profile_info
+    event.wait()
+    time = (event.profile.end - event.profile.start) * 1e-9
+    _profile_info[name] += time
+
+
+def print_profile():
+    global _profile_info
+    _profile_info = sorted(_profile_info.iteritems(), key=itemgetter(1),
+                           reverse=True)
+    if len(_profile_info) == 0:
+        print("No profile information available")
+        return
+    print("{:<30} {:<30}".format('Kernel', 'Time'))
+    tot_time = 0
+    for kernel, time in _profile_info:
+        print("{:<30} {:<30}".format(kernel, time))
+        tot_time += time
+    print("Total profiled time: %g secs" % tot_time)
+
+
+def profile_kernel(kernel, name):
+    def _profile_knl(*args):
+        event = kernel(*args)
+        profile(name, event)
+        return event
+    if get_config().profile:
+        return _profile_knl
+    else:
+        return kernel
+
+
+class DeviceArray(cl.array.Array):
+    def __init__(self, dtype, n=0):
+        self.queue = get_queue()
+        length = n
+        if n == 0:
+            n = 16
+        data = cl.array.empty(self.queue, n, dtype)
+        self.set_data(data)
+        self.length = length
+        self._update_array_ref()
+
+    def _update_array_ref(self):
+        self.array = self._data[:self.length]
+
+    def resize(self, size):
+        self.reserve(size)
+        self.length = size
+        self._update_array_ref()
+
+    def reserve(self, size):
+        if size > self.alloc:
+            new_data = cl.array.empty(self.queue, size, self.dtype)
+            new_data[:self.alloc] = self._data
+            self._data = new_data
+            self.alloc = size
+            self._update_array_ref()
+
+    def set_data(self, data):
+        self._data = data
+        self.length = data.size
+        self.alloc = data.size
+        self.dtype = data.dtype
+        self._update_array_ref()
+
+    def get_data(self):
+        return self._data
+
+    def copy(self):
+        arr_copy = DeviceArray(self.dtype)
+        arr_copy.set_data(self.array.copy())
+        return arr_copy
+
+    def fill(self, value):
+        self.array.fill(value)
 
 
 class DeviceHelper(object):
@@ -43,6 +129,7 @@ class DeviceHelper(object):
     constants and properties do not clash.
 
     """
+
     def __init__(self, particle_array):
         self._particle_array = pa = particle_array
         self._queue = get_queue()
