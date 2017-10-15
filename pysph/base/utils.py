@@ -484,8 +484,8 @@ def get_particle_array_beadchain(constants=None, **props):
     pa = get_particle_array(
         constants=constants, additional_props=fluid_props, **props
     )
-    pa.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm','h', 'p',
-                          'pid', 'holdtag', 'gid', 'V'])
+    pa.set_output_arrays(['x', 'y', 'z', 'u', 'v', 'w', 'rho', 'm','h', 'p',
+                          'pid', 'holdtag', 'gid', 'V', 'ug', 'vg', 'wg'])
 
     return pa
 
@@ -519,7 +519,7 @@ def get_particle_array_beadchain_fiber(constants=None, **props):
     pa = get_particle_array(
         constants=constants, additional_props=fiber_props, **props
     )
-    pa.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm', 'h', 'p', 'pid',
+    pa.set_output_arrays(['x', 'y', 'z', 'u', 'v', 'w', 'rho', 'm', 'h', 'p', 'pid',
                           'holdtag', 'gid', 'ug', 'vg', 'wg', 'V', 'Fx', 'Fy',
                           'Fz','rxnext', 'rynext', 'rznext', 'rnext', 'rxprev',
                           'ryprev', 'rzprev', 'rprev', 'fidx'])
