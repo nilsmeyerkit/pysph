@@ -508,7 +508,7 @@ class Channel(Application):
         plt.ylabel('y [mm]')
 
         # save plot
-        fig = os.path.join(self.output_dir, 'streamplot.eps')
+        fig = os.path.join(self.output_dir, 'streamplot.pdf')
         plt.savefig(fig, dpi=300)
         print("Streamplot written to %s."% fig)
 
@@ -536,7 +536,7 @@ class Channel(Application):
         plt.ylabel('y [mm]')
 
         # save plot
-        p_fig = os.path.join(self.output_dir, 'pressure.eps')
+        p_fig = os.path.join(self.output_dir, 'pressure.pdf')
         plt.savefig(p_fig, dpi=300)
         print("Pressure written to %s."% p_fig)
 
@@ -602,7 +602,7 @@ class Channel(Application):
             plt.legend(['SPH Simulation', 'No obstacle'])
 
         # save figure
-        fig = os.path.join(self.output_dir, 'inlet_velocity.eps')
+        fig = os.path.join(self.output_dir, 'inlet_velocity.pdf')
         plt.savefig(fig, dpi=300)
         print("Inlet velocity plot written to %s."% fig)
 
@@ -671,7 +671,7 @@ class Channel(Application):
             plt.legend(['SPH', 'FEM'])
 
         # save figure
-        fig = os.path.join(self.output_dir, 'center_velocity.eps')
+        fig = os.path.join(self.output_dir, 'center_velocity.pdf')
         plt.savefig(fig, dpi=300)
         print("Center velocity plot written to %s."% fig)
 
@@ -726,7 +726,7 @@ class Channel(Application):
         plt.ylabel('p [Pa]')
 
         # save figure
-        pcenter_fig = os.path.join(self.output_dir, 'pressure_centerline.eps')
+        pcenter_fig = os.path.join(self.output_dir, 'pressure_centerline.pdf')
         plt.savefig(pcenter_fig, dpi=300)
         print("Pressure written to %s."% pcenter_fig)
 
@@ -866,7 +866,7 @@ class Channel(Application):
         plt.ylabel('y [mm]')
 
         # save plot of orbit
-        orbfig = os.path.join(self.output_dir, 'orbitplot.eps')
+        orbfig = os.path.join(self.output_dir, 'orbitplot.pdf')
         plt.savefig(orbfig, dpi=300)
         print("Orbitplot written to %s."% orbfig)
 
@@ -898,7 +898,7 @@ class Channel(Application):
         plt.title("ar=%g"%self.options.ar)
 
         # save figure
-        angfig = os.path.join(self.output_dir, 'angleplot.eps')
+        angfig = os.path.join(self.output_dir, 'angleplot.pdf')
         plt.savefig(angfig, dpi=300)
         print("Angleplot written to %s."% angfig)
 
@@ -920,7 +920,7 @@ class Channel(Application):
         plt.legend(['Pressure', 'Kinetic Energy'])
 
         # save figure
-        engfig = os.path.join(self.output_dir, 'energyplot.eps')
+        engfig = os.path.join(self.output_dir, 'energyplot.pdf')
         plt.savefig(engfig, dpi=300)
         print("Energyplot written to %s."% engfig)
 
@@ -938,7 +938,7 @@ class Channel(Application):
         plt.legend(['Mass', 'Volume', 'Density'])
 
         # save figure
-        mfig = os.path.join(self.output_dir, 'massplot.eps')
+        mfig = os.path.join(self.output_dir, 'massplot.pdf')
         plt.savefig(mfig, dpi=300)
         print("Mass plot written to %s."% mfig)
 
@@ -979,7 +979,7 @@ class Channel(Application):
             plt.legend(['SPH Simulation', 'FEM total force', 'FEM viscous force'])
 
             # save figure
-            forcefig = os.path.join(self.output_dir, 'forceplot.eps')
+            forcefig = os.path.join(self.output_dir, 'forceplot.pdf')
             plt.savefig(forcefig, dpi=300)
             print("Reaction Force plot written to %s."% forcefig)
             return [orbfig, angfig, engfig, forcefig]
