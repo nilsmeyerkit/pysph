@@ -267,7 +267,7 @@ class Beam(Application):
             self.D,self.omega0_tension, self.omega0_bending, self.dt))
         plt.xlabel('t'); plt.ylabel('Displacement')
         plt.legend(['x-direction', 'y-direction'])
-        fig = os.path.join(self.output_dir, "oscillation.eps")
+        fig = os.path.join(self.output_dir, "oscillation.pdf")
         plt.savefig(fig, dpi=300)
         print("Figure written to %s." % fig)
 
@@ -279,7 +279,7 @@ class Beam(Application):
         plt.title("Displacement in x")
         plt.legend(['simulation', 'exact'])
         plt.xlabel('x'); plt.ylabel('u')
-        fig = os.path.join(self.output_dir, "displacement_x.eps")
+        fig = os.path.join(self.output_dir, "displacement_x.pdf")
         plt.savefig(fig, dpi=300)
         print("Figure written to %s." % fig)
 
@@ -291,7 +291,7 @@ class Beam(Application):
         plt.title("Displacement in y")
         plt.legend(['simulation', 'exact'])
         plt.xlabel('x'); plt.ylabel('y')
-        fig = os.path.join(self.output_dir, "displacement_y.eps")
+        fig = os.path.join(self.output_dir, "displacement_y.pdf")
         plt.savefig(fig, dpi=300)
         print("Figure written to %s." % fig)
 
