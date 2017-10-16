@@ -561,6 +561,8 @@ class Solver(object):
             dump_vtk(fname, self.particles,
                 scalars=['rho', 'p', 'holdtag', 'fractag', 'V'],
                 velocity=['u', 'v', 'w'],
+                next=['rxnext','rynext','rznext'],
+                prev=['rxprev','ryprev','rzprev'],
                 acceleration=['au','av','aw'],
                 reaction_force=['Fx','Fy','Fz'])
 
