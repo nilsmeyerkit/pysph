@@ -59,7 +59,7 @@ class Tension(Equation):
 
     def loop(self, d_idx, s_idx, d_m, d_lprev, d_lnext, s_fractag, d_fractag,
              d_au, d_av, d_aw, d_rxnext, d_rynext, d_rznext, d_rnext, d_rxprev,
-             d_ryprev, d_rzprev, d_rprev, XIJ, RIJ):
+             d_ryprev, d_rzprev, d_rprev):
 
         # previous particle
         if d_rprev[d_idx] > 1E-14:
