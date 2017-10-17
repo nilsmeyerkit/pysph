@@ -6,7 +6,7 @@ echo "#####################"
 
 echo "### Running Oscillations ###"
 E=1E8
-N=20
+N=30
 
 for D in 0 0.5 1 2
 do
@@ -25,8 +25,8 @@ do
   mv beam_output/* $diry
   plot_list_y+="${diry}/oscillation_${D}.csv "
 done
-python ~/Dropbox/Thesis/Documentation/EBG/Batch/plot_osci.py 'oscillation_x.eps' ${plot_list_x[*]}
-python ~/Dropbox/Thesis/Documentation/EBG/Batch/plot_osci.py 'oscillation_y.eps' ${plot_list_y[*]}
+python ~/Dropbox/Thesis/Documentation/EBG/Batch/plot_osci.py 'oscillation_x.pdf' ${plot_list_x[*]}
+python ~/Dropbox/Thesis/Documentation/EBG/Batch/plot_osci.py 'oscillation_y.pdf' ${plot_list_y[*]}
 
 
 echo "### Running Displacements ###"
@@ -52,10 +52,10 @@ do
   mv beam_output/* $diry
   plot_list_y+="${diry}/disp_${N}.csv "
 done
-python ~/Dropbox/Thesis/Documentation/EBG/Batch/plot_disp.py 'displacement_x.eps' ${plot_list_x[*]}
-python ~/Dropbox/Thesis/Documentation/EBG/Batch/plot_disp.py 'displacement_y.eps' ${plot_list_y[*]}
+python ~/Dropbox/Thesis/Documentation/EBG/Batch/plot_disp.py 'displacement_x.pdf' ${plot_list_x[*]}
+python ~/Dropbox/Thesis/Documentation/EBG/Batch/plot_disp.py 'displacement_y.pdf' ${plot_list_y[*]}
 
-echo "### Running Large Deformation Run ###"
+echo "### Running Large Deformation ###"
 plot_list_y=()
 E=1E4
 D=1
@@ -70,4 +70,4 @@ do
   mv beam_output/* $diry
   plot_list_y+="${diry}/disp_${N}.csv "
 done
-python ~/Dropbox/Thesis/Documentation/EBG/Batch/plot_large_disp.py 'large_displacement_y.eps' ${plot_list_y[*]}
+python ~/Dropbox/Thesis/Documentation/EBG/Batch/plot_large_disp.py 'large_displacement_y.pdf' ${plot_list_y[*]}

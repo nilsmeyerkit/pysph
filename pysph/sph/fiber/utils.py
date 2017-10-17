@@ -53,7 +53,8 @@ class HoldPoints(Equation):
     little trick allows testing of fibers with fixed BCs.
     """
 
-    def __init__(self, dest, sources, tag, x=True, y=True, z=True):
+    def __init__(self, dest, sources, tag, x=True, y=True, z=True,
+                 mirror_particle=0):
         r"""
         Parameters
         ----------
@@ -65,31 +66,49 @@ class HoldPoints(Equation):
             True, if y-position should not be changed
         z : boolean
             True, if z-position should not be changed
+        mirror_particle : int
+            idx shift to a particle, which displacement should be mirrored to
+            origin
         """
         self.tag = tag
         self.x = x
         self.y = y
         self.z = z
+        self.mirror = mirror_particle
         super(HoldPoints, self).__init__(dest, sources)
 
     def loop(self, d_idx, d_holdtag, d_au, d_av, d_aw, d_auhat, d_avhat,
-             d_awhat, d_u, d_v, d_w, d_Fx, d_Fy, d_Fz, d_m):
+             d_awhat, d_u, d_v, d_w, d_x, d_y, d_z, d_Fx, d_Fy, d_Fz, d_m):
         if d_holdtag[d_idx] == self.tag :
             if self.x:
                 d_Fx[d_idx] =  d_m[d_idx] * d_au[d_idx]
                 d_au[d_idx] = 0
                 d_auhat[d_idx] = 0
                 d_u[d_idx] = 0
+            elif not self.mirror == 0:
+                # Copy properties to mirror particle
+                d_x[d_idx+self.mirror] = -d_x[d_idx]
+                d_u[d_idx+self.mirror] = -d_u[d_idx]
+
             if self.y:
                 d_Fy[d_idx] =  d_m[d_idx] * d_av[d_idx]
                 d_av[d_idx] = 0
                 d_avhat[d_idx] = 0
                 d_v[d_idx] = 0
+            elif not self.mirror == 0:
+                # Copy properties to mirror particle
+                d_y[d_idx+self.mirror] = -d_y[d_idx]
+                d_v[d_idx+self.mirror] = -d_v[d_idx]
+
             if self.z:
                 d_Fz[d_idx] =  d_m[d_idx] * d_aw[d_idx]
                 d_aw[d_idx] = 0
                 d_awhat[d_idx] = 0
                 d_w[d_idx] = 0
+            elif not self.mirror == 0:
+                # Copy properties to mirror particle
+                d_z[d_idx+self.mirror] = -d_z[d_idx]
+                d_w[d_idx+self.mirror] = -d_w[d_idx]
 
 class Vorticity(Equation):
     r"""** Computes vorticity of velocity field**
@@ -253,8 +272,7 @@ class Contact(Equation):
         if (RIJ > 1E-14
             and RIJ < 1.5*self.d
             and abs(RIJ-d_rprev[d_idx]) > 1E-14
-            and abs(RIJ-d_rnext[d_idx]) > 1E-14
-            and s_tag[s_idx] == 0):
+            and abs(RIJ-d_rnext[d_idx]) > 1E-14):
 
             # elastic factor from Hertz' pressure in contact
             E_star = 1/(2*((1-self.pois**2)/self.E))

@@ -9,7 +9,7 @@ rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
 rc('text', usetex=True)
 
 # PySPH imports
-from pysph.base.utils import get_particle_array
+from pysph.base.utils import get_particle_array_beadchain_fiber
 from pysph.base.kernels import QuinticSpline
 from pysph.base.config import get_config
 from pysph.base.nnps import LinkedListNNPS
@@ -60,8 +60,7 @@ class Beam(Application):
 
         # numerical setup
         self.N = self.options.N
-        self.l = self.L/(1-1/(2*self.N))
-        self.dx = self.l/self.N     # particle spacing
+        self.dx = self.L/(self.N-1)
         self.h = self.dx
 
         # fluid properties
@@ -72,15 +71,19 @@ class Beam(Application):
         self.A = 1.0
         self.I = self.A/12.0
         self.E = self.options.E
+
         # Analytical solution for angular eigenfrequencies:
         #       Pi/L np.sqrt(E/rho) (2n-1)/2
         # --> first analytical eigenfrequency:
         self.omega0_tension = np.pi/(2*self.L)*np.sqrt(self.E/self.rho0)
         self.omega0_bending = 3.5156*np.sqrt(self.E*self.I/(self.rho0*self.A*self.L**4))
+
+        # This is valid when gx >> gy and meant to be used for just one case
         if self.options.gx > self.options.gy:
             self.omega0 = self.omega0_tension
         else:
             self.omega0 = self.omega0_bending
+
         m = self.rho0*self.A*self.dx
         self.D = self.options.d*m*self.omega0
         self.AD = 5*m*self.omega0
@@ -92,22 +95,16 @@ class Beam(Application):
         dt_force = 0.25 * np.sqrt(self.h/(sqrt(self.gx**2+self.gy**2)))
         dt_tension = 0.5*self.h*np.sqrt(self.rho0/self.E)
         dt_bending = 0.5*self.h**2*np.sqrt(self.rho0*self.A/(self.E*2*self.I))
-        print(dt_force)
-        print(dt_tension)
-        print(dt_bending)
 
         self.tf = 4*np.pi/self.omega0
 
         self.dt = min(dt_force,dt_tension, dt_bending)
-        #self.fiber_dt = min(dt_tension, dt_bending)
-        #self.dt = self.fiber_dt
-        #print("Time step ratio is %g"%(self.dt/self.fiber_dt))
 
     def create_scheme(self):
         return None
 
     def create_particles(self):
-        _x = np.linspace(-self.dx, self.l-self.dx, self.N+1)
+        _x = np.linspace(-self.dx/2, self.L-self.dx/2, self.N)
         _y = np.array([0.0])
         _z = np.array([0.0])
         x, y, z = np.meshgrid(_x, _y, _z)
@@ -115,51 +112,19 @@ class Beam(Application):
         fiber_y = y.ravel()
         fiber_z = z.ravel()
 
-        # create array
-        fiber = get_particle_array(name='fiber', x=fiber_x, y=fiber_y, z=fiber_z)
-
-        # add requisite variables needed for this formulation
-        for name in ('V', 'wij', 'vmag2', 'lprev', 'lnext', 'arho',
-                     'uf', 'vf', 'wf', 'ug', 'vg', 'wg', 'phi0', 'phifrac',
-                     'auhat', 'avhat','awhat', 'uhat', 'vhat', 'what', 'fractag',
-                     'rxnext', 'rynext', 'rznext', 'rnext', 'rxprev', 'ryprev',
-                     'rzprev', 'rprev', 'eu', 'ev', 'ew', 'holdtag', 'Fx',
-                     'Fy', 'Fz', 'ex', 'ey', 'ez', 'fidx'):
-            fiber.add_property(name)
-
-        # set the output property arrays
-        fiber.set_output_arrays(['x', 'y', 'u', 'v', 'rho', 'm', 'fractag',
-                              'h', 'p', 'pid', 'tag', 'gid', 'lprev'])
-
-        # set initial distances
-        fiber.lprev[:] = self.dx
-        fiber.lnext[:] = self.dx
-        fiber.phi0[:] = np.pi
-        fiber.phifrac[:] = np.pi/2
-
-        # tag particles to be hold
-        fiber.holdtag[:] = 0
-        fiber.holdtag[0] = 2
-        fiber.holdtag[1] = 1
-        fiber.holdtag[2] = 2
-
-        # assign unique ID (within fiber) to each fiber particle.
-        fiber.fidx[:] = range(0,fiber.get_number_of_particles())
-
         # volume is set as dx * A
         volume = self.A * self.dx
 
-        # mass is set to get the reference density of rho0
-        fiber.m[:] = volume * self.rho0
+        # create array
+        fiber = get_particle_array_beadchain_fiber(name='fiber', x=fiber_x,
+                y=fiber_y, z=fiber_z, m=volume*self.rho0, rho=self.rho0,
+                h=self.h, lprev=self.dx, lnext=self.dx, phi0=np.pi,
+                phifrac=2.0, fidx=range(self.N), V=1./volume)
 
-        # Set the default rho.
-        fiber.rho[:] = self.rho0
 
-        # inverse volume (necessary for transport velocity equations)
-        fiber.V[:] = 1./volume
-
-        # smoothing lengths
-        fiber.h[:] = self.h
+        # tag particles to be hold
+        fiber.holdtag[0] = 1
+        fiber.holdtag[1] = 2
 
         # return the particle list
         return [fiber]
@@ -187,56 +152,13 @@ class Beam(Application):
             ),
             Group(
                 equations=[
-                    HoldPoints(dest='fiber', sources=None, tag=2, x=False),
-                    HoldPoints(dest='fiber', sources=None, tag=1, y=False),
+                    HoldPoints(dest='fiber', sources=None, tag=1),
+                    HoldPoints(dest='fiber', sources=None, tag=2, x=False,
+                               mirror_particle=-1),
                 ],
             ),
         ]
         return equations
-
-    # def _configure(self):
-    #     super(Beam, self)._configure()
-    #     self.fiber_integrator = EulerIntegrator(fiber=EBGStep())
-    #     kernel = QuinticSpline(dim=3)
-    #     equations = [
-    #                     Group(
-    #                         equations=[
-    #                             Tension(dest='fiber',
-    #                                     sources=['fiber'],
-    #                                     ea=self.E*self.A),
-    #                             Bending(dest='fiber',
-    #                                     sources=['fiber'],
-    #                                     ei=self.E*self.I),
-    #                             ArtificialDamping(dest='fiber',
-    #                                     sources=None,
-    #                                     d = self.AD)
-    #                         ],
-    #                     ),
-    #                     Group(
-    #                         equations=[
-    #                             HoldPoints(dest='fiber', sources=None, tag=2,
-    #                                 x=False),
-    #                             HoldPoints(dest='fiber', sources=None, tag=1,
-    #                                 y=False),
-    #                         ]
-    #                     ),
-    #                 ]
-    #     particles = [p for p in self.particles if p.name == 'fiber']
-    #     nnps = LinkedListNNPS(dim=3, particles=particles,
-    #                     radius_scale=kernel.radius_scale,
-    #                     fixed_h=False, cache=False, sort_gids=False)
-    #     acceleration_eval = AccelerationEval(
-    #                 particle_arrays=particles,
-    #                 equations=equations,
-    #                 kernel=kernel,
-    #                 mode='serial')
-    #     comp = SPHCompiler(acceleration_eval, self.fiber_integrator)
-    #     config = get_config()
-    #     config.use_openmp = False
-    #     comp.compile()
-    #     config.use_openmp = True
-    #     acceleration_eval.set_nnps(nnps)
-    #     self.fiber_integrator.set_nnps(nnps)
 
     def create_solver(self):
         # Setting up the default integrator for fiber particles
@@ -246,17 +168,6 @@ class Beam(Application):
                          tf=self.tf, pfreq=int(np.ceil(self.tf/(100*self.dt))),
                          vtk=True)
         return solver
-
-    # def post_stage(self, current_time, dt, stage):
-    #     # 1) predictor
-    #     # 2) post stage 1:
-    #     if stage == 1:
-    #         N = int(np.ceil(dt/self.fiber_dt))
-    #         for n in range(0,N):
-    #             self.fiber_integrator.step(current_time,dt/N)
-    #             current_time += dt/N
-    #     # 3) Evaluation
-    #     # 4) post stage 2
 
     def _plot_oscillation(self, file):
         t, disp_x, disp_y = np.loadtxt(file, delimiter=',')
