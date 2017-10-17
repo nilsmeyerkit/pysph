@@ -559,7 +559,7 @@ class Solver(object):
             compress=self.compress_output)
         if self.vtk:
             dump_vtk(fname, self.particles,
-                scalars=['rho', 'p', 'holdtag', 'fractag', 'V'],
+                scalars=['rho', 'p', 'holdtag', 'fractag', 'V', 'color'],
                 velocity=['u', 'v', 'w'],
                 next=['rxnext','rynext','rznext'],
                 prev=['rxprev','ryprev','rzprev'],
