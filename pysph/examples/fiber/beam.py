@@ -11,25 +11,18 @@ rc('text', usetex=True)
 # PySPH imports
 from pysph.base.utils import get_particle_array_beadchain_fiber
 from pysph.base.kernels import QuinticSpline
-from pysph.base.config import get_config
-from pysph.base.nnps import LinkedListNNPS
 
 from pysph.solver.application import Application
-from pysph.solver.utils import load, remove_irrelevant_files
-from pysph.solver.vtk_output import dump_vtk
-from pysph.solver.output import output_formats
+from pysph.solver.utils import load
 from pysph.solver.solver import Solver
 
-from pysph.sph.integrator import EPECIntegrator, EulerIntegrator
-from pysph.sph.integrator_step import TransportVelocityStep, EulerStep, EBGStep
-from pysph.sph.acceleration_eval import AccelerationEval
-from pysph.sph.sph_compiler import SPHCompiler
+from pysph.sph.integrator import EPECIntegrator
+from pysph.sph.integrator_step import TransportVelocityStep
 
 from pysph.sph.equation import Group
 from pysph.sph.wc.transport_velocity import MomentumEquationPressureGradient
-from pysph.sph.fiber.utils import (Damping, HoldPoints, ComputeDistance)
-from pysph.sph.fiber.beadchain import (Tension, Bending, EBGVelocityReset,
-    ArtificialDamping)
+from pysph.sph.fiber.utils import Damping, HoldPoints, ComputeDistance
+from pysph.sph.fiber.beadchain import Tension, Bending
 
 class Beam(Application):
     def add_user_options(self, group):
@@ -52,6 +45,10 @@ class Beam(Application):
         group.add_argument(
             "--gy", action="store", type=float, dest="gy",
             default=0, help="Body force in y-direction."
+        )
+        group.add_argument(
+            "--gz", action="store", type=float, dest="gz",
+            default=0, help="Body force in z-direction."
         )
 
     def consume_user_options(self):
@@ -76,7 +73,8 @@ class Beam(Application):
         #       Pi/L np.sqrt(E/rho) (2n-1)/2
         # --> first analytical eigenfrequency:
         self.omega0_tension = np.pi/(2*self.L)*np.sqrt(self.E/self.rho0)
-        self.omega0_bending = 3.5156*np.sqrt(self.E*self.I/(self.rho0*self.A*self.L**4))
+        self.omega0_bending = 3.5156*np.sqrt(
+                                self.E*self.I/(self.rho0*self.A*self.L**4))
 
         # This is valid when gx >> gy and meant to be used for just one case
         if self.options.gx > self.options.gy:
@@ -89,10 +87,12 @@ class Beam(Application):
         self.AD = 5*m*self.omega0
         self.gx = self.options.gx
         self.gy = self.options.gy
+        self.gz = self.options.gz
         print('Damping: %g, Omega0: %g'%(self.D,self.omega0))
 
         # setup time step
-        dt_force = 0.25 * np.sqrt(self.h/(sqrt(self.gx**2+self.gy**2)))
+        dt_force = 0.25 * np.sqrt(
+                                self.h/(sqrt(self.gx**2+self.gy**2+self.gz**2)))
         dt_tension = 0.5*self.h*np.sqrt(self.rho0/self.E)
         dt_bending = 0.5*self.h**2*np.sqrt(self.rho0*self.A/(self.E*2*self.I))
 
@@ -133,14 +133,14 @@ class Beam(Application):
         equations = [
             Group(
                 equations=[
-                    EBGVelocityReset(dest='fiber',sources=None),
                     ComputeDistance(dest='fiber', sources=['fiber'])
                 ],
             ),
             Group(
                 equations=[
                     MomentumEquationPressureGradient(dest='fiber',
-                       sources=['fiber'], pb=0.0, gx=self.gx, gy=self.gy),
+                       sources=['fiber'], pb=0.0, gx=self.gx, gy=self.gy,
+                       gz=self.gz),
                     Tension(dest='fiber', sources=None,
                         ea=self.E*self.A),
                     Bending(dest='fiber', sources=None,
