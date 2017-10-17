@@ -11,7 +11,6 @@ from pysph.base.kernels import QuinticSpline
 
 from pysph.solver.application import Application
 from pysph.solver.solver import Solver
-from pysph.base.nnps import DomainManager
 
 from pysph.sph.integrator import EPECIntegrator
 from pysph.sph.integrator_step import TransportVelocityStep
@@ -199,11 +198,6 @@ class Beam(Application):
                          tf=self.tf, N=200,
                          vtk=True)
         return solver
-
-    def create_domain(self):
-        return DomainManager(xmin=-self.L, xmax=self.L, ymin=-3.0, ymax=3.0,
-                             zmin=-self.L, zmax=self.L, periodic_in_y=True)
-
 
 if __name__ == '__main__':
     app = Beam()
