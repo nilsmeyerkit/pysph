@@ -435,9 +435,9 @@ class Channel(Application):
         return DomainManager(xmin=0, xmax=self.Lx, periodic_in_x=True)
 
     def create_tools(self):
-        il = self.options.ar > 1
         ud = not self.options.holdcenter
-        return [FiberIntegrator(self.particles, self.scheme, self.domain, il, ud)]
+        return [FiberIntegrator(self.particles, self.scheme, self.domain,
+                                innerloop=self.options.ar>1, updates=ud)]
 
     def get_meshgrid(self, xx, yy, zz):
         """This function is just a shorthand for the generation of meshgrids."""
