@@ -553,6 +553,9 @@ class RVE(Application):
         # empty lists for fiber orientation tensors
         A = []
 
+        # empty list for viscosity
+        eta = []
+
         # iteration over all output files
         output_files = remove_irrelevant_files(self.output_files)
         for fname in output_files:
@@ -561,19 +564,24 @@ class RVE(Application):
             # extracting time
             t.append(data['solver_data']['t'])
 
+            channel = data['arrays']['channel']
+            Fw = np.sqrt(channel.Fwx[:]**2+channel.Fwy[:]**2+channel.Fwz[:]**2)
+            surface = self.L**2
+            tau = np.sum(Fw)/(2*surface)
+            eta.append(tau/self.options.G)
+
             # extrating all arrays.
             directions = []
-            for f in self.scheme.fibers:
-                fiber = data['arrays'][f]
-
-                # evaluate fiber orientation at center
-                idx = 5
-                px = fiber.rxnext[idx]
-                py = fiber.rynext[idx]
-                pz = fiber.rznext[idx]
+            fiber = data['arrays']['fibers']
+            startpoints = [i*self.options.ar-1 for i in range(0,self.n-1)]
+            endpoints = [i*self.options.ar-1 for i in range(1,self.n)]
+            for i,j in zip(startpoints, endpoints):
+                px = np.mean(fiber.rxnext[i:j])
+                py = np.mean(fiber.rynext[i:j])
+                pz = np.mean(fiber.rznext[i:j])
 
                 n = np.array([px, py, pz])
-                p = n/np.linalg.norm(n, 2)
+                p = n/np.linalg.norm(n)
                 directions.append(p)
 
             N = len(directions)
@@ -591,10 +599,26 @@ class RVE(Application):
         cis =       [0.00, 0.00, 0.01, 0.01]
         kappas =    [1.00, 0.90, 1.00, 0.90]
         for Ci, kappa in zip(cis, kappas):
-            print("Solving Folgar-Tucker equation with Ci=%.3f and kappa = %.2f"
+            print("Solving RSC equation with Ci=%.3f and kappa = %.2f"
                   %(Ci,kappa))
             A_FT.append(odeint(self.folgar_tucker_ode,A0.ravel(),tt, atol=1E-15,
                                     args=(are,self.options.G, Ci, kappa)))
+
+        eta_fluid = self.options.mu*np.ones_like(eta)
+        # open new plot
+        plt.figure()
+        plt.plot(t[1:], eta[1:], '--k',
+                 t[1:], eta_fluid[1:], '-k')
+        plt.legend(['Simulated effective value', 'Fluid only'])
+        plt.title('Viscosity with %d fibers'%self.n)
+        plt.ylim([0.8*self.options.mu, 1.2*self.options.mu])
+        plt.xlabel('t [s]')
+        plt.ylabel('$\eta$ [Pa s]')
+
+        # save figure
+        visfig = os.path.join(self.output_dir, 'viscosity.pdf')
+        plt.savefig(visfig, dpi=300)
+        print("Viscosity plot written to %s."% visfig)
 
         # open new plot
         plt.figure()
