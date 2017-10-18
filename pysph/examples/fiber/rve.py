@@ -310,7 +310,7 @@ class RVE(Application):
 
     def create_tools(self):
         return [FiberIntegrator(self.particles, self.scheme, self.domain,
-                                parallel=True)]
+                                parallel=False)]
 
 
     def get_meshgrid(self, xx, yy, zz):
@@ -573,12 +573,12 @@ class RVE(Application):
             # extrating all arrays.
             directions = []
             fiber = data['arrays']['fibers']
-            startpoints = [i*self.options.ar-1 for i in range(0,self.n-1)]
-            endpoints = [i*self.options.ar-1 for i in range(1,self.n)]
-            for i,j in zip(startpoints, endpoints):
-                px = np.mean(fiber.rxnext[i:j])
-                py = np.mean(fiber.rynext[i:j])
-                pz = np.mean(fiber.rznext[i:j])
+            startpoints = [i*self.options.ar for i in range(0,self.n)]
+            endpoints = [i*self.options.ar-1 for i in range(1,self.n+1)]
+            for start,end in zip(startpoints, endpoints):
+                px = np.mean(fiber.rxnext[start:end])
+                py = np.mean(fiber.rynext[start:end])
+                pz = np.mean(fiber.rznext[start:end])
 
                 n = np.array([px, py, pz])
                 p = n/np.linalg.norm(n)
@@ -596,8 +596,8 @@ class RVE(Application):
         A0 = np.array([[0.0,0.0,0.0],[0.0,1.0,0.0],[0.0,0.0,0.0]])
         are = self.get_equivalent_aspect_ratio(self.options.ar)
         A_FT = []
-        cis =       [0.00, 0.00, 0.01, 0.01]
-        kappas =    [1.00, 0.90, 1.00, 0.90]
+        cis =       [0.00, 0.001, 0.001]
+        kappas =    [1.00, 1.00, 0.50]
         for Ci, kappa in zip(cis, kappas):
             print("Solving RSC equation with Ci=%.3f and kappa = %.2f"
                   %(Ci,kappa))
@@ -649,20 +649,20 @@ class RVE(Application):
             legend_list.append('SPH')
 
             plt.subplot(3,3,1)
-            plt.plot(tt, np.transpose(AFT[:,:,0]), t, AA[:,0], '--k', alpha=0.5)
+            plt.plot(tt, np.transpose(AFT[:,:,0]), t, AA[:,0], '-k')
             plt.title('$A_{11}$')
             plt.ylim((-1,1))
             plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
             lgd = plt.legend(legend_list, bbox_to_anchor=(0.9, -1.8))
 
             plt.subplot(3,3,2)
-            plt.plot(tt, np.transpose(AFT[:,:,1]), t, AA[:,1], '--k', alpha=0.5)
+            plt.plot(tt, np.transpose(AFT[:,:,1]), t, AA[:,1], '-k')
             plt.title('$A_{12}$')
             plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
             plt.ylim((-1,1))
 
             plt.subplot(3,3,3)
-            plt.plot(tt, np.transpose(AFT[:,:,2]), t, AA[:,2], '--k', alpha=0.5)
+            plt.plot(tt, np.transpose(AFT[:,:,2]), t, AA[:,2], '-k')
             plt.title('$A_{13}$')
             plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
             plt.ylim((-1,1))
@@ -673,13 +673,13 @@ class RVE(Application):
             # plt.ylim((-1,1))
 
             plt.subplot(3,3,5)
-            plt.plot(tt, np.transpose(AFT[:,:,4]), t, AA[:,4], '--k', alpha=0.5)
+            plt.plot(tt, np.transpose(AFT[:,:,4]), t, AA[:,4], '-k')
             plt.title('$A_{22}$')
             plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
             plt.ylim((-1,1))
 
             plt.subplot(3,3,6)
-            plt.plot(tt, np.transpose(AFT[:,:,5]), t, AA[:,5], '--k', alpha=0.5)
+            plt.plot(tt, np.transpose(AFT[:,:,5]), t, AA[:,5], '-k')
             plt.title('$A_{23}$')
             plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
             plt.ylim((-1,1))
@@ -693,7 +693,7 @@ class RVE(Application):
             # plt.title('$A_{32}$')
 
             plt.subplot(3,3,9)
-            plt.plot(tt, np.transpose(AFT[:,:,8]), t, AA[:,8], '--k', alpha=0.5)
+            plt.plot(tt, np.transpose(AFT[:,:,8]), t, AA[:,8], '-k')
             plt.title('$A_{33}$')
             plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
             plt.ylim((-1,1))
