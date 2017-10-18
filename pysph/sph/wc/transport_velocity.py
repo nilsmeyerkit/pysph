@@ -97,11 +97,14 @@ class SetWallVelocity(Equation):
     *filtered* velocity variables :math:`uf, vf, wf`.
 
     """
-    def initialize(self, d_idx, d_uf, d_vf, d_wf, d_wij):
+    def initialize(self, d_idx, d_uf, d_vf, d_wf, d_wij, d_Fwx, d_Fwy, d_Fwz):
         d_uf[d_idx] = 0.0
         d_vf[d_idx] = 0.0
         d_wf[d_idx] = 0.0
         d_wij[d_idx] = 0.0
+        d_Fwx[d_idx] = 0.0
+        d_Fwy[d_idx] = 0.0
+        d_Fwz[d_idx] = 0.0
 
     def loop(self, d_idx, s_idx, d_uf, d_vf, d_wf,
              s_u, s_v, s_w, d_wij, WIJ):
@@ -591,6 +594,7 @@ class SolidWallNoSlipBC(Equation):
 
     def loop(self, d_idx, s_idx, d_m, s_m, d_rho, s_rho, d_V, s_V,
              d_u, d_v, d_w,
+             s_Fwx, s_Fwy, s_Fwz,
              d_au, d_av, d_aw,
              s_ug, s_vg, s_wg,
              DWIJ, R2IJ, EPS, XIJ):
@@ -617,6 +621,10 @@ class SolidWallNoSlipBC(Equation):
         d_au[d_idx] += tmp * (d_u[d_idx] - s_m[s_idx]/d_m[d_idx] * s_ug[s_idx])
         d_av[d_idx] += tmp * (d_v[d_idx] - s_m[s_idx]/d_m[d_idx] * s_vg[s_idx])
         d_aw[d_idx] += tmp * (d_w[d_idx] - s_m[s_idx]/d_m[d_idx] * s_wg[s_idx])
+
+        s_Fwx[s_idx] -= s_m[s_idx] * tmp * (d_u[d_idx] - s_m[s_idx]/d_m[d_idx] * s_ug[s_idx])
+        s_Fwy[s_idx] -= s_m[s_idx] * tmp * (d_v[d_idx] - s_m[s_idx]/d_m[d_idx] * s_vg[s_idx])
+        s_Fwz[s_idx] -= s_m[s_idx] * tmp * (d_w[d_idx] - s_m[s_idx]/d_m[d_idx] * s_wg[s_idx])
 
 
 class SolidWallPressureBC(Equation):
