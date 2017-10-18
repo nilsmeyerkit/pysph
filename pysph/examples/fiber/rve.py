@@ -59,7 +59,7 @@ class RVE(Application):
         )
         group.add_argument(
             "--E", action="store", type=float, dest="E",
-            default=1E8, help="Young's modulus"
+            default=1E9, help="Young's modulus"
         )
         group.add_argument(
             "--G", action="store", type=float, dest="G",
@@ -72,10 +72,6 @@ class RVE(Application):
         group.add_argument(
             "--D", action="store", type=float, dest="D",
             default=None, help="Damping coefficient for artificial damping"
-        )
-        group.add_argument(
-            "--dim", action="store", type=int, dest="dim",
-            default=3, help="Dimension of problem"
         )
         group.add_argument(
             "--vtk", action="store_true", dest='vtk',
@@ -101,6 +97,10 @@ class RVE(Application):
             "--k", action="store", type=float, dest="k",
             default=0.0, help="Friction coefficient between fibers."
         )
+        group.add_argument(
+            "--rot", action="store", type=float, dest="rot",
+            default=2.0, help="Number of half rotations."
+        )
 
 
     def consume_user_options(self):
@@ -116,12 +116,7 @@ class RVE(Application):
         self.h0 = self.dx
 
         # The fiber length is the aspect ratio times fiber diameter
-        self.Lf = self.options.ar*self.dx
-
-        # If a specific width is set, use this as multiple of dx to determine
-        # the channel width. Otherwise use the fiber aspect ratio.
-        multiples = self.options.ar
-        self.L = multiples*self.dx + 2*int(0.3*multiples)*self.dx
+        self.L = self.options.ar*self.dx
 
         # Computation of a scale factor in a way that dt_cfl exactly matches
         # dt_viscous.
@@ -149,24 +144,14 @@ class RVE(Application):
         self.nu = self.options.mu/self.rho0
 
         # empirical determination for the damping, which is just enough
-        if self.options.dim == 2:
-            self.D = self.options.D or self.options.ar*500
-        else:
-            self.D = self.options.D or self.options.ar*2
+        self.D = self.options.D or 0.2*self.options.ar
 
-        # For 2 dimensions surface, mass and moments have a different coputation
-        # than for 3 dimensions.
-        if self.options.dim == 2:
-            self.A = self.dx
-            self.I = self.dx**3/12
-            mass = 3*self.rho0*self.dx*self.A
-            self.J = 1/12*mass*(self.dx**2 + (3*self.dx)**2)
-        else:
-            R = self.dx/2
-            self.A = np.pi*R**2
-            self.I = np.pi*R**4/4.0
-            mass = 3*self.rho0*self.dx*self.A
-            self.J = 1/4*mass*R**2 + 1/12*mass*(3*self.dx)**2
+        # mechanical properties
+        R = self.dx/2
+        self.A = np.pi*R**2
+        self.I = np.pi*R**4/4.0
+        mass = 3*self.rho0*self.dx*self.A
+        self.J = 1/4*mass*R**2 + 1/12*mass*(3*self.dx)**2
 
         # SPH uses weakly compressible fluids. Therefore, the speed of sound c0
         # is computed as 10 times the maximum velocity. This should keep the
@@ -184,29 +169,25 @@ class RVE(Application):
             self.t = 0
         else:
             l = (self.options.ar+1.0/self.options.ar)
-            self.t = 2*np.pi*l/self.options.G
+            self.t = self.options.rot*np.pi*l/self.options.G
         print("Simulated time is %g s"%self.t)
 
         fdx = self.dx
         dx2 = fdx/2
 
         _x = np.arange(dx2, self.L, fdx)
-        if self.options.dim == 3:
-            _z = np.arange(dx2, self.L, fdx)
-        else:
-            _z = np.array([0.5*self.L])
+        _z = np.arange(dx2, self.L, fdx)
 
         self.n = round(self.options.vol_frac*len(_x)*len(_z))
 
     def configure_scheme(self):
-        self.scheme.configure(dim=self.options.dim)
         self.scheme.configure(rho0=self.rho0, c0=self.c0, nu=self.nu,
             p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=self.A, I=self.I,
-            J=self.J, E=self.options.E, D=self.D, dim=self.options.dim,
+            J=self.J, E=self.options.E, D=self.D,
             scale_factor=self.scale_factor, gx=self.options.g,
             k=self.options.k)
         self.scheme.configure_solver(tf=self.t, vtk = self.options.vtk,
-            N=300)
+            N=self.options.rot*100)
         #self.scheme.configure_solver(tf=self.t, pfreq=1, vtk = self.options.vtk)
 
     def create_particles(self):
@@ -220,8 +201,8 @@ class RVE(Application):
         dx2 = fdx/2
 
         # Computation of each particles initial volume.
-        volume = fdx**self.options.dim
-        fiber_volume = self.dx**self.options.dim
+        volume = fdx**3
+        fiber_volume = self.dx**3
 
         # Mass is set to get the reference density of rho0.
         mass = volume * self.rho0
@@ -234,10 +215,7 @@ class RVE(Application):
         # Creating grid points for particles
         _x = np.arange(dx2, self.L, fdx)
         _y = np.arange(dx2, self.L, fdx)
-        if self.options.dim == 3:
-            _z = np.arange(dx2, self.L, fdx)
-        else:
-            _z = np.array([0.5*self.L])
+        _z = np.arange(dx2, self.L, fdx)
         fx,fy,fz = self.get_meshgrid(_x, _y, _z)
 
         # Remove particles at fiber position.
@@ -254,7 +232,7 @@ class RVE(Application):
 
                 # vertical
                 if (fx[i] < xx+self.dx/2 and fx[i] > xx-self.dx/2 and
-                    fy[i] < yy+self.Lf/2 and fy[i] > yy-self.Lf/2 and
+                    fy[i] < yy+self.L/2  and fy[i] > yy-self.L/2 and
                     fz[i] < zz+self.dx/2 and fz[i] > zz-self.dx/2):
                     indices.append(i)
 
@@ -263,7 +241,7 @@ class RVE(Application):
 
             # vertical fiber
             _fibx = np.array([xx])
-            _fiby = np.arange(yy-self.Lf/2+self.dx/2, yy+self.Lf/2+self.dx/4, self.dx)
+            _fiby = np.arange(yy-self.L/2+self.dx/2, yy+self.L/2+self.dx/4, self.dx)
             _fibz = np.array([zz])
             _fibx,_fiby,_fibz = self.get_meshgrid(_fibx, _fiby, _fibz)
             fibx = fibx + (_fibx,)
@@ -283,52 +261,27 @@ class RVE(Application):
         _y = np.arange(-dx2, -dx2-ghost_extent, -fdx)
         bx,by,bz = self.get_meshgrid(_x, _y, _z)
 
-        # Create the channel particles at the right
-        _z = np.arange(-dx2, -dx2-ghost_extent, -fdx)
-        _y = np.arange(dx2-ghost_extent, self.L+ghost_extent, fdx)
-        rx,ry,rz = self.get_meshgrid(_x, _y, _z)
-
-        # Create the channel particles at the left
-        _z = np.arange(self.L+dx2, self.L+ghost_extent, fdx)
-        _y = np.arange(dx2-ghost_extent, self.L+ghost_extent, fdx)
-        lx,ly,lz = self.get_meshgrid(_x, _y, _z)
 
         # Concatenate the top and bottom arrays (and for 3D cas also right and
         # left arrays)
-        if self.options.dim ==2:
-            cx = np.concatenate((tx, bx))
-            cy = np.concatenate((ty, by))
-        else:
-            cx = np.concatenate((tx, bx, rx, lx))
-            cy = np.concatenate((ty, by, ry, ly))
-            cz = np.concatenate((tz, bz, rz, lz))
+        cx = np.concatenate((tx, bx))
+        cy = np.concatenate((ty, by))
+        cz = np.concatenate((tz, bz))
 
 
         # Finally create all particle arrays. Note that fluid particles are
         # removed in the area, where the fiber is placed.
-        if self.options.dim == 2:
-            channel = get_particle_array_beadchain(name='channel',
-                        x=cx, y=cy, m=mass, rho=self.rho0, h=self.h0, V=V)
-            fluid = get_particle_array_beadchain(name='fluid',
-                        x=fx, y=fy, m=mass, rho=self.rho0, h=self.h0, V=V)
-            fluid.remove_particles(indices)
-            fibers = get_particle_array_beadchain_fiber(name='fibers',
-                        x=np.concatenate(fibx), y=np.concatenate(fiby),
-                        m=fiber_mass, rho=self.rho0, h=self.h0,
-                        lprev=self.dx, lnext=self.dx, phi0=np.pi, phifrac=2.0,
-                        fidx=range(self.options.ar*self.n), V=fiber_V)
-        else:
-            channel = get_particle_array_beadchain(name='channel',
-                        x=cx, y=cy, z=cz, m=mass, rho=self.rho0, h=self.h0, V=V)
-            fluid = get_particle_array_beadchain(name='fluid',
-                        x=fx, y=fy, z=fz, m=mass, rho=self.rho0, h=self.h0, V=V)
-            fluid.remove_particles(indices)
-            fibers = get_particle_array_beadchain_fiber(name='fibers',
-                        x=np.concatenate(fibx), y=np.concatenate(fiby),
-                        z=np.concatenate(fibz), m=fiber_mass, rho=self.rho0,
-                        h=self.h0, lprev=self.dx, lnext=self.dx, phi0=np.pi,
-                        phifrac=2.0, fidx=range(self.options.ar*self.n),
-                        V=fiber_V)
+        channel = get_particle_array_beadchain(name='channel',
+                    x=cx, y=cy, z=cz, m=mass, rho=self.rho0, h=self.h0, V=V)
+        fluid = get_particle_array_beadchain(name='fluid',
+                    x=fx, y=fy, z=fz, m=mass, rho=self.rho0, h=self.h0, V=V)
+        fluid.remove_particles(indices)
+        fibers = get_particle_array_beadchain_fiber(name='fibers',
+                    x=np.concatenate(fibx), y=np.concatenate(fiby),
+                    z=np.concatenate(fibz), m=fiber_mass, rho=self.rho0,
+                    h=self.h0, lprev=self.dx, lnext=self.dx, phi0=np.pi,
+                    phifrac=2.0, fidx=range(self.options.ar*self.n),
+                    V=fiber_V)
 
         # Print number of particles.
         print("Shear flow : nfluid = %d, nchannel = %d"%(
@@ -336,9 +289,13 @@ class RVE(Application):
             channel.get_number_of_particles()))
 
         # 'Break' fibers in segments
-        endpoints = [i*self.options.ar-1 for i in range(self.n-1)]
+        endpoints = [i*self.options.ar-1 for i in range(1,self.n)]
         fibers.fractag[endpoints] = 1
 
+        # mark some fibers for colors
+        minimum = min(self.n, 3)
+        for i,ep in enumerate(endpoints[0:minimum]):
+            fibers.color[ep-(self.options.ar-1):ep+1] = i+1
 
         # Setting the initial velocities for a shear flow.
         fluid.u[:] = self.options.G*(fluid.y[:]-self.L/2)
@@ -348,27 +305,20 @@ class RVE(Application):
 
     def create_domain(self):
         """The channel has periodic boundary conditions in x-direction."""
-        return DomainManager(xmin=0, xmax=self.L, periodic_in_x=True)
+        return DomainManager(xmin=0, xmax=self.L, zmin=0, zmax=self.L,
+                             periodic_in_x=True, periodic_in_z=True)
 
     def create_tools(self):
-        il = self.options.ar > 1
-        return [FiberIntegrator(self.particles, self.scheme, self.L, il)]
+        return [FiberIntegrator(self.particles, self.scheme, self.domain,
+                                parallel=True)]
 
-    # def post_stage(self, current_time, dt, stage):
-    #     self.nnps.update_domain()
 
     def get_meshgrid(self, xx, yy, zz):
         """This function is just a shorthand for the generation of meshgrids."""
-        if self.options.dim == 2:
-            x, y = np.meshgrid(xx, yy)
-            x = x.ravel()
-            y = y.ravel()
-            z = 0.5*self.L*np.ones(np.shape(y))
-        else:
-            x, y, z = np.meshgrid(xx, yy, zz)
-            x = x.ravel()
-            y = y.ravel()
-            z = z.ravel()
+        x, y, z = np.meshgrid(xx, yy, zz)
+        x = x.ravel()
+        y = y.ravel()
+        z = z.ravel()
         return [x,y,z]
 
     def get_equivalent_aspect_ratio(self, aspect_ratio):
@@ -569,18 +519,29 @@ class RVE(Application):
                 + beta5*self.symm(np.einsum('ij,km,ml->ijkl', A, A, A))
                 + beta6*self.symm(np.einsum('im,mj,kn,nl->ijkl', A, A, A, A)))
 
-    def folgar_tucker_ode(self, A, t, ar, G, Ci=0):
+    def folgar_tucker_ode(self, A, t, ar, G, Ci=0.0, kappa=1.0):
         A = np.reshape(A,(3,3))
+        w,v = np.linalg.eig(A)
+        L = (w[0]*np.einsum('i,j,k,l->ijkl',v[:,0],v[:,0],v[:,0],v[:,0])
+             +w[1]*np.einsum('i,j,k,l->ijkl',v[:,1],v[:,1],v[:,1],v[:,1])
+             +w[2]*np.einsum('i,j,k,l->ijkl',v[:,2],v[:,2],v[:,2],v[:,2]))
+        M = (np.einsum('i,j,k,l->ijkl',v[:,0],v[:,0],v[:,0],v[:,0])
+             +np.einsum('i,j,k,l->ijkl',v[:,1],v[:,1],v[:,1],v[:,1])
+             +np.einsum('i,j,k,l->ijkl',v[:,2],v[:,2],v[:,2],v[:,2]))
+
         lbd = (ar**2-1.0)/(ar**2+1.0)
         omega = np.array([[0.0, G/2, 0.0],[-G/2, 0.0, 0.0],[0.0, 0.0, 0.0]])
         D = np.array([[0.0, G/2, 0.0],[G/2, 0.0, 0.0],[0.0, 0.0, 0.0]])
         AA = self.generate_fourth_order_tensor(A)
+        closure = AA+(1.0-kappa)*(L-np.einsum('ijmn,mnkl->ijkl',M,AA))
+        #print(np.linalg.norm(RSC-AA))
         delta = np.eye(3)
+
         DADT = (np.einsum('ik,kj->ij', omega, A)
                 -np.einsum('ik,kj->ij', A, omega)
                 +lbd*(np.einsum('ik,kj->ij', D, A)
                       +np.einsum('ik,kj->ij', A, D)
-                      -2*np.einsum('ijkl,kl->ij', AA, D))
+                      -2*np.einsum('ijkl,kl->ij', closure, D))
                 +2*Ci*G*(delta-3*A))
         return DADT.ravel()
 
@@ -627,11 +588,13 @@ class RVE(Application):
         A0 = np.array([[0.0,0.0,0.0],[0.0,1.0,0.0],[0.0,0.0,0.0]])
         are = self.get_equivalent_aspect_ratio(self.options.ar)
         A_FT = []
-        cis = [0.0, 0.001, 0.01, 0.1]
-        for Ci in cis:
-            print("Solving Folgar-Tucker equation with Ci=%f"%Ci)
+        cis =       [0.00, 0.00, 0.01, 0.01]
+        kappas =    [1.00, 0.90, 1.00, 0.90]
+        for Ci, kappa in zip(cis, kappas):
+            print("Solving Folgar-Tucker equation with Ci=%.3f and kappa = %.2f"
+                  %(Ci,kappa))
             A_FT.append(odeint(self.folgar_tucker_ode,A0.ravel(),tt, atol=1E-15,
-                                    args=(are,self.options.G, Ci)))
+                                    args=(are,self.options.G, Ci, kappa)))
 
         # open new plot
         plt.figure()
@@ -649,7 +612,7 @@ class RVE(Application):
         plt.ylabel('Component value')
 
         # save figure
-        fig = os.path.join(self.output_dir, 'orientation_tensor.eps')
+        fig = os.path.join(self.output_dir, 'orientation_tensor.pdf')
         plt.savefig(fig, dpi=300)
         print("Orientation tensor plot written to %s."% fig)
 
@@ -657,25 +620,25 @@ class RVE(Application):
             AA = np.vstack(A)
             AFT = np.array(A_FT)
             legend_list = []
-            for ci in cis:
-                legend_list.append("$C_I=%.3f$"%ci)
+            for ci, kappa in zip(cis,kappas):
+                legend_list.append("$C_I=%.3f, \kappa=%.2f$"%(ci,kappa))
             legend_list.append('SPH')
 
             plt.subplot(3,3,1)
-            plt.plot(tt, np.transpose(AFT[:,:,0]), t, AA[:,0], '--k')
+            plt.plot(tt, np.transpose(AFT[:,:,0]), t, AA[:,0], '--k', alpha=0.5)
             plt.title('$A_{11}$')
             plt.ylim((-1,1))
             plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
-            lgd = plt.legend(legend_list, bbox_to_anchor=(0.8, -1.8))
+            lgd = plt.legend(legend_list, bbox_to_anchor=(0.9, -1.8))
 
             plt.subplot(3,3,2)
-            plt.plot(tt, np.transpose(AFT[:,:,1]), t, AA[:,1], '--k')
+            plt.plot(tt, np.transpose(AFT[:,:,1]), t, AA[:,1], '--k', alpha=0.5)
             plt.title('$A_{12}$')
             plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
             plt.ylim((-1,1))
 
             plt.subplot(3,3,3)
-            plt.plot(tt, np.transpose(AFT[:,:,2]), t, AA[:,2], '--k')
+            plt.plot(tt, np.transpose(AFT[:,:,2]), t, AA[:,2], '--k', alpha=0.5)
             plt.title('$A_{13}$')
             plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
             plt.ylim((-1,1))
@@ -686,13 +649,13 @@ class RVE(Application):
             # plt.ylim((-1,1))
 
             plt.subplot(3,3,5)
-            plt.plot(tt, np.transpose(AFT[:,:,4]), t, AA[:,4], '--k')
+            plt.plot(tt, np.transpose(AFT[:,:,4]), t, AA[:,4], '--k', alpha=0.5)
             plt.title('$A_{22}$')
             plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
             plt.ylim((-1,1))
 
             plt.subplot(3,3,6)
-            plt.plot(tt, np.transpose(AFT[:,:,5]), t, AA[:,5], '--k')
+            plt.plot(tt, np.transpose(AFT[:,:,5]), t, AA[:,5], '--k', alpha=0.5)
             plt.title('$A_{23}$')
             plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
             plt.ylim((-1,1))
@@ -706,7 +669,7 @@ class RVE(Application):
             # plt.title('$A_{32}$')
 
             plt.subplot(3,3,9)
-            plt.plot(tt, np.transpose(AFT[:,:,8]), t, AA[:,8], '--k')
+            plt.plot(tt, np.transpose(AFT[:,:,8]), t, AA[:,8], '--k', alpha=0.5)
             plt.title('$A_{33}$')
             plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
             plt.ylim((-1,1))
@@ -714,7 +677,7 @@ class RVE(Application):
 
             # save figure
             plt.tight_layout()
-            ori = os.path.join(self.output_dir, 'orientation.eps')
+            ori = os.path.join(self.output_dir, 'orientation.pdf')
             plt.savefig(ori, dpi=300)
             print("Orientation plot written to %s."% ori)
 
