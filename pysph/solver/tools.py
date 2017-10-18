@@ -89,7 +89,7 @@ class SimpleRemesher(Tool):
             self.array.set(**data)
 
 class FiberIntegrator(Tool):
-    def __init__(self, all_particles, scheme, L, innerloop=True, updates=True,
+    def __init__(self, all_particles, scheme, domain, innerloop=True, updates=True,
             parallel=False):
         """The second integrator is a simple Euler-Integrator (accurate
         enough due to very small time steps; very fast) using EBGSteps.
@@ -157,7 +157,20 @@ class FiberIntegrator(Tool):
             particles = [p for p in all_particles if p.name in scheme.fibers]
             # A seperate DomainManager is needed to ensure that particles don't
             # leave the domain.
-            self.domain = DomainManager(xmin=0, xmax=L, periodic_in_x=True)
+            xmin = domain.manager.xmin
+            ymin = domain.manager.ymin
+            zmin = domain.manager.zmin
+            xmax = domain.manager.xmax
+            ymax = domain.manager.ymax
+            zmax = domain.manager.zmax
+            periodic_in_x = domain.manager.periodic_in_x
+            periodic_in_y = domain.manager.periodic_in_y
+            periodic_in_z = domain.manager.periodic_in_z
+            self.domain = DomainManager(xmin=xmin, xmax=xmax, ymin=ymin,
+                                        ymax=ymax, zmin=zmin, zmax=zmax,
+                                        periodic_in_x=periodic_in_x,
+                                        periodic_in_y=periodic_in_y,
+                                        periodic_in_z=periodic_in_z)
             # A seperate list for the nearest neighbourhood search is benefitial
             # since it is much smaller than the original one.
             nnps = LinkedListNNPS(dim=scheme.dim, particles=particles,
