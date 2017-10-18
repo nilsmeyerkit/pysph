@@ -12,4 +12,4 @@ export OMP_NUM_THREADS=32
 mkdir /scratch/nmeyer7/ar20_phi_$1
 cd /scratch/nmeyer7/ar20_phi_$1
 # running problem with openmp
-pysph run fiber.rve --dim 3 --E 1E9 --volfrac $1 --ar 20 --D 10 --vtk --folgartucker --openmp
+pysph run fiber.rve --dim 3 --E 1E9 --volfrac $1 --ar 20 --D 10 --folgartucker --openmp
