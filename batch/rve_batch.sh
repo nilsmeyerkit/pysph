@@ -4,7 +4,8 @@
 #SBATCH --time=0-20:00           # time (DD-HH:MM)
 #SBATCH --output=%x-%j.out       # output log (<filename>-<jobid>.out)
 #SBATCH --nodes=1
-#SBATCH --cpus-per-node=32
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=32
 export OMP_NUM_THREADS=32
 
 # changing to scratch directory
