@@ -479,14 +479,14 @@ def get_particle_array_beadchain(constants=None, **props):
                    'ew', 'dudx', 'dudy', 'dudz', 'dvdx', 'dvdy', 'dvdz',
                    'dwdx', 'dwdy', 'dwdz', 'Fx', 'Fy', 'Fz', 'arho', 'ex',
                    'ey', 'ez','rxnext', 'rynext', 'rznext', 'rxprev', 'ryprev',
-                   'rzprev', 'fidx', 'color']
+                   'rzprev', 'fidx', 'color', 'Fwx', 'Fwy', 'Fwz']
 
     pa = get_particle_array(
         constants=constants, additional_props=fluid_props, **props
     )
     pa.set_output_arrays(['x', 'y', 'z', 'u', 'v', 'w', 'rho', 'm','h', 'p',
                           'pid', 'holdtag', 'gid', 'V', 'ug', 'vg', 'wg',
-                          'color'])
+                          'color', 'Fwx', 'Fwy', 'Fwz'])
 
     return pa
 
@@ -515,7 +515,7 @@ def get_particle_array_beadchain_fiber(constants=None, **props):
                    'dwdx', 'dwdy', 'dwdz', 'Fx', 'Fy', 'Fz', 'arho', 'ex',
                    'ey', 'ez', 'lprev', 'lnext', 'phi0', 'xcenter', 'ycenter',
                    'rxnext', 'rynext', 'rznext', 'rnext', 'rxprev', 'ryprev',
-                   'rzprev', 'rprev', 'fidx', 'color']
+                   'rzprev', 'rprev', 'fidx', 'color', 'Fwx', 'Fwy', 'Fwz']
 
     pa = get_particle_array(
         constants=constants, additional_props=fiber_props, **props
@@ -524,6 +524,6 @@ def get_particle_array_beadchain_fiber(constants=None, **props):
                           'holdtag', 'gid', 'ug', 'vg', 'wg', 'V', 'Fx', 'Fy',
                           'Fz','rxnext', 'rynext', 'rznext', 'rnext', 'rxprev',
                           'ryprev', 'rzprev', 'rprev', 'fidx', 'color',
-                          'fractag'])
+                          'fractag', 'Fwx', 'Fwy', 'Fwz'])
 
     return pa
