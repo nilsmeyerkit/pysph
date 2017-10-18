@@ -310,7 +310,7 @@ class RVE(Application):
 
     def create_tools(self):
         return [FiberIntegrator(self.particles, self.scheme, self.domain,
-                                parallel=True)]
+                                parallel=False)]
 
 
     def get_meshgrid(self, xx, yy, zz):
