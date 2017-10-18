@@ -553,6 +553,9 @@ class RVE(Application):
         # empty lists for fiber orientation tensors
         A = []
 
+        # empty list for viscosity
+        eta = []
+
         # iteration over all output files
         output_files = remove_irrelevant_files(self.output_files)
         for fname in output_files:
@@ -561,19 +564,24 @@ class RVE(Application):
             # extracting time
             t.append(data['solver_data']['t'])
 
+            channel = data['arrays']['channel']
+            Fw = np.sqrt(channel.Fwx[:]**2+channel.Fwy[:]**2+channel.Fwz[:]**2)
+            surface = self.L**2
+            tau = np.sum(Fw)/(2*surface)
+            eta.append(tau/self.options.G)
+
             # extrating all arrays.
             directions = []
-            for f in self.scheme.fibers:
-                fiber = data['arrays'][f]
-
-                # evaluate fiber orientation at center
-                idx = 5
-                px = fiber.rxnext[idx]
-                py = fiber.rynext[idx]
-                pz = fiber.rznext[idx]
+            fiber = data['arrays']['fibers']
+            startpoints = [i*self.options.ar for i in range(0,self.n)]
+            endpoints = [i*self.options.ar-1 for i in range(1,self.n+1)]
+            for start,end in zip(startpoints, endpoints):
+                px = np.mean(fiber.rxnext[start:end])
+                py = np.mean(fiber.rynext[start:end])
+                pz = np.mean(fiber.rznext[start:end])
 
                 n = np.array([px, py, pz])
-                p = n/np.linalg.norm(n, 2)
+                p = n/np.linalg.norm(n)
                 directions.append(p)
 
             N = len(directions)
@@ -588,13 +596,29 @@ class RVE(Application):
         A0 = np.array([[0.0,0.0,0.0],[0.0,1.0,0.0],[0.0,0.0,0.0]])
         are = self.get_equivalent_aspect_ratio(self.options.ar)
         A_FT = []
-        cis =       [0.00, 0.00, 0.01, 0.01]
-        kappas =    [1.00, 0.90, 1.00, 0.90]
+        cis =       [0.00, 0.001, 0.001]
+        kappas =    [1.00, 1.00, 0.50]
         for Ci, kappa in zip(cis, kappas):
-            print("Solving Folgar-Tucker equation with Ci=%.3f and kappa = %.2f"
+            print("Solving RSC equation with Ci=%.3f and kappa = %.2f"
                   %(Ci,kappa))
             A_FT.append(odeint(self.folgar_tucker_ode,A0.ravel(),tt, atol=1E-15,
                                     args=(are,self.options.G, Ci, kappa)))
+
+        eta_fluid = self.options.mu*np.ones_like(eta)
+        # open new plot
+        plt.figure()
+        plt.plot(t[1:], eta[1:], '--k',
+                 t[1:], eta_fluid[1:], '-k')
+        plt.legend(['Simulated effective value', 'Fluid only'])
+        plt.title('Viscosity with %d fibers'%self.n)
+        plt.ylim([0.8*self.options.mu, 1.2*self.options.mu])
+        plt.xlabel('t [s]')
+        plt.ylabel('$\eta$ [Pa s]')
+
+        # save figure
+        visfig = os.path.join(self.output_dir, 'viscosity.pdf')
+        plt.savefig(visfig, dpi=300)
+        print("Viscosity plot written to %s."% visfig)
 
         # open new plot
         plt.figure()
@@ -625,20 +649,20 @@ class RVE(Application):
             legend_list.append('SPH')
 
             plt.subplot(3,3,1)
-            plt.plot(tt, np.transpose(AFT[:,:,0]), t, AA[:,0], '--k', alpha=0.5)
+            plt.plot(tt, np.transpose(AFT[:,:,0]), t, AA[:,0], '-k')
             plt.title('$A_{11}$')
             plt.ylim((-1,1))
             plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
             lgd = plt.legend(legend_list, bbox_to_anchor=(0.9, -1.8))
 
             plt.subplot(3,3,2)
-            plt.plot(tt, np.transpose(AFT[:,:,1]), t, AA[:,1], '--k', alpha=0.5)
+            plt.plot(tt, np.transpose(AFT[:,:,1]), t, AA[:,1], '-k')
             plt.title('$A_{12}$')
             plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
             plt.ylim((-1,1))
 
             plt.subplot(3,3,3)
-            plt.plot(tt, np.transpose(AFT[:,:,2]), t, AA[:,2], '--k', alpha=0.5)
+            plt.plot(tt, np.transpose(AFT[:,:,2]), t, AA[:,2], '-k')
             plt.title('$A_{13}$')
             plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
             plt.ylim((-1,1))
@@ -649,13 +673,13 @@ class RVE(Application):
             # plt.ylim((-1,1))
 
             plt.subplot(3,3,5)
-            plt.plot(tt, np.transpose(AFT[:,:,4]), t, AA[:,4], '--k', alpha=0.5)
+            plt.plot(tt, np.transpose(AFT[:,:,4]), t, AA[:,4], '-k')
             plt.title('$A_{22}$')
             plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
             plt.ylim((-1,1))
 
             plt.subplot(3,3,6)
-            plt.plot(tt, np.transpose(AFT[:,:,5]), t, AA[:,5], '--k', alpha=0.5)
+            plt.plot(tt, np.transpose(AFT[:,:,5]), t, AA[:,5], '-k')
             plt.title('$A_{23}$')
             plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
             plt.ylim((-1,1))
@@ -669,7 +693,7 @@ class RVE(Application):
             # plt.title('$A_{32}$')
 
             plt.subplot(3,3,9)
-            plt.plot(tt, np.transpose(AFT[:,:,8]), t, AA[:,8], '--k', alpha=0.5)
+            plt.plot(tt, np.transpose(AFT[:,:,8]), t, AA[:,8], '-k')
             plt.title('$A_{33}$')
             plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
             plt.ylim((-1,1))
