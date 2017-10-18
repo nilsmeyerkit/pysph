@@ -861,12 +861,6 @@ class BeadChainScheme(Scheme):
                     g5.append(SolidWallNoSlipBC(dest=fiber, sources=self.solids,
                         nu=self.nu))
 
-            # g5.append(Tension(dest=fiber, sources=None, ea=self.E*self.A))
-            # g5.append(Bending(dest=fiber, sources=None, ei=self.E*self.I))
-            # g5.append(Contact(dest=fiber, sources=self.fibers, E=self.E,
-            #             d=self.dx,scale=self.scale_factor))
-            # g5.append(ArtificialDamping(dest=fiber, sources=None, d=self.D))
-
             g5.append(MomentumEquationArtificialStress(dest=fiber,
                 sources=self.fluids+self.fibers))
             g5.append(Friction(dest=fiber, sources=None, J=self.J, A=self.A,
