@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --account=def-hrymak-ab  # account name
 #SBATCH --mem-per-cpu=3G         # memory; default unit is megabytes
-#SBATCH --time=0-20:00           # time (DD-HH:MM)
+#SBATCH --time=0-04:00           # time (DD-HH:MM)
 #SBATCH --output=%x-%j.out       # output log (<filename>-<jobid>.out)
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
