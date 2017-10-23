@@ -186,6 +186,9 @@ class RVE(Application):
             J=self.J, E=self.options.E, D=self.D,
             scale_factor=self.scale_factor, gx=self.options.g,
             k=self.options.k)
+        # in case of very low volume fraction
+        if self.n < 1:
+            self.scheme.configure(fibers=[])
         self.scheme.configure_solver(tf=self.t, vtk = self.options.vtk,
             N=self.options.rot*100)
         #self.scheme.configure_solver(tf=self.t, pfreq=1, vtk = self.options.vtk)
@@ -276,32 +279,36 @@ class RVE(Application):
         fluid = get_particle_array_beadchain(name='fluid',
                     x=fx, y=fy, z=fz, m=mass, rho=self.rho0, h=self.h0, V=V)
         fluid.remove_particles(indices)
-        fibers = get_particle_array_beadchain_fiber(name='fibers',
+        if self.n > 1:
+            fibers = get_particle_array_beadchain_fiber(name='fibers',
                     x=np.concatenate(fibx), y=np.concatenate(fiby),
                     z=np.concatenate(fibz), m=fiber_mass, rho=self.rho0,
                     h=self.h0, lprev=self.dx, lnext=self.dx, phi0=np.pi,
                     phifrac=2.0, fidx=range(self.options.ar*self.n),
                     V=fiber_V)
+            # 'Break' fibers in segments
+            endpoints = [i*self.options.ar-1 for i in range(1,self.n)]
+            fibers.fractag[endpoints] = 1
+
+            # mark some fibers for colors
+            minimum = min(self.n, 3)
+            for i,ep in enumerate(endpoints[0:minimum]):
+                fibers.color[ep-(self.options.ar-1):ep+1] = i+1
 
         # Print number of particles.
         print("Shear flow : nfluid = %d, nchannel = %d"%(
             fluid.get_number_of_particles(),
             channel.get_number_of_particles()))
 
-        # 'Break' fibers in segments
-        endpoints = [i*self.options.ar-1 for i in range(1,self.n)]
-        fibers.fractag[endpoints] = 1
-
-        # mark some fibers for colors
-        minimum = min(self.n, 3)
-        for i,ep in enumerate(endpoints[0:minimum]):
-            fibers.color[ep-(self.options.ar-1):ep+1] = i+1
-
         # Setting the initial velocities for a shear flow.
         fluid.u[:] = self.options.G*(fluid.y[:]-self.L/2)
         channel.u[:] = self.options.G*(channel.y[:]-self.L/2)
 
-        return [fluid, channel, fibers]
+        if self.n > 1:
+            return [fluid, channel, fibers]
+        else:
+            return [fluid, channel]
+
 
     def create_domain(self):
         """The channel has periodic boundary conditions in x-direction."""
@@ -309,8 +316,11 @@ class RVE(Application):
                              periodic_in_x=True, periodic_in_z=True)
 
     def create_tools(self):
-        return [FiberIntegrator(self.particles, self.scheme, self.domain,
-                                parallel=False)]
+        if self.n < 1:
+            return []
+        else:
+            return [FiberIntegrator(self.particles, self.scheme, self.domain,
+                                parallel=True)]
 
 
     def get_meshgrid(self, xx, yy, zz):
@@ -546,6 +556,8 @@ class RVE(Application):
         return DADT.ravel()
 
     def post_process(self, info_fname):
+        if self.options.disable_output:
+            return
 
         # empty list for time
         t = []
@@ -570,27 +582,28 @@ class RVE(Application):
             tau = np.sum(Fw)/(2*surface)
             eta.append(tau/self.options.G)
 
-            # extrating all arrays.
-            directions = []
-            fiber = data['arrays']['fibers']
-            startpoints = [i*self.options.ar for i in range(0,self.n)]
-            endpoints = [i*self.options.ar-1 for i in range(1,self.n+1)]
-            for start,end in zip(startpoints, endpoints):
-                px = np.mean(fiber.rxnext[start:end])
-                py = np.mean(fiber.rynext[start:end])
-                pz = np.mean(fiber.rznext[start:end])
+            if self.n > 1:
+                # extrating all arrays.
+                directions = []
+                fiber = data['arrays']['fibers']
+                startpoints = [i*self.options.ar for i in range(0,self.n)]
+                endpoints = [i*self.options.ar-1 for i in range(1,self.n+1)]
+                for start,end in zip(startpoints, endpoints):
+                    px = np.mean(fiber.rxnext[start:end])
+                    py = np.mean(fiber.rynext[start:end])
+                    pz = np.mean(fiber.rznext[start:end])
 
-                n = np.array([px, py, pz])
-                p = n/np.linalg.norm(n)
-                directions.append(p)
+                    n = np.array([px, py, pz])
+                    p = n/np.linalg.norm(n)
+                    directions.append(p)
 
-            N = len(directions)
-            a = np.zeros([3,3])
-            for p in directions:
-                for i in range(3):
-                    for j in range(3):
-                        a[i, j] += 1.0/N*(p[i]*p[j])
-            A.append(a.ravel())
+                N = len(directions)
+                a = np.zeros([3,3])
+                for p in directions:
+                    for i in range(3):
+                        for j in range(3):
+                            a[i, j] += 1.0/N*(p[i]*p[j])
+                A.append(a.ravel())
 
         tt = np.array(t)
         A0 = np.array([[0.0,0.0,0.0],[0.0,1.0,0.0],[0.0,0.0,0.0]])
@@ -611,7 +624,7 @@ class RVE(Application):
                  t[1:], eta_fluid[1:], '-k')
         plt.legend(['Simulated effective value', 'Fluid only'])
         plt.title('Viscosity with %d fibers'%self.n)
-        plt.ylim([0.8*self.options.mu, 1.2*self.options.mu])
+        plt.ylim([0.8*self.options.mu, 2.0*np.mean(eta)])
         plt.xlabel('t [s]')
         plt.ylabel('$\eta$ [Pa s]')
 
@@ -623,24 +636,7 @@ class RVE(Application):
         # open new plot
         plt.figure()
 
-        # plot Orientation tensor components
-        if self.options.folgartucker:
-            plt.plot(t, np.vstack(A), tt, A_FT[0], '-k')
-        else:
-            plt.plot(t, np.vstack(A))
-
-        plt.legend(['$A_{11}$', '$A_{12}$', '$A_{13}$', '$A_{21}$', '$A_{22}$',
-                    '$A_{23}$','$A_{31}$','$A_{32}$','$A_{33}$'])
-        plt.title('Orientation Tensor')
-        plt.xlabel('t [s]')
-        plt.ylabel('Component value')
-
-        # save figure
-        fig = os.path.join(self.output_dir, 'orientation_tensor.pdf')
-        plt.savefig(fig, dpi=300)
-        print("Orientation tensor plot written to %s."% fig)
-
-        if self.options.folgartucker:
+        if self.options.folgartucker and self.n > 1:
             AA = np.vstack(A)
             AFT = np.array(A_FT)
             legend_list = []
