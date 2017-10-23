@@ -45,6 +45,34 @@ class ComputeDistance(Equation):
                 d_rynext[d_idx] = 0.0
                 d_rznext[d_idx] = 0.0
                 d_rnext[d_idx] = 0.0
+class SolidSpeed(Equation):
+    r"""**Applies fixed speed to solid **
+
+    If this solid is enabled through an extra_stepper, it moves with the
+    predescribed speed.
+    """
+
+    def __init__(self, dest, sources, u=0.0, v=0.0, w=0.0):
+        r"""
+        Parameters
+        ----------
+        u : float
+            speed of solid in x direction
+        v : float
+            speed of solid in y direction
+        w : float
+            speed of solid in w direction
+        """
+        self.u = u
+        self.v = v
+        self.w = w
+
+        super(SolidSpeed, self).__init__(dest, sources)
+
+    def loop(self, d_idx, d_u, d_v, d_w):
+        d_u[d_idx] = self.u
+        d_v[d_idx] = self.v
+        d_w[d_idx] = self.w
 
 class HoldPoints(Equation):
     r"""**Holds flagged points **
