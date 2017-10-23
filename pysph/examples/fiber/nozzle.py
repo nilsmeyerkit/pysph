@@ -95,7 +95,7 @@ class Nozzle(Application):
         )
         group.add_argument(
             "--speed", action="store", type=float, dest="speed",
-            default=0.001, help="Stamp speed."
+            default=0.003, help="Stamp speed."
         )
 
 
@@ -150,7 +150,7 @@ class Nozzle(Application):
         if self.options.postonly:
             self.t = 0
         else:
-            self.t = 10
+            self.t = 30
         print("Simulated time is %g s"%self.t)
 
         # start with no fibers at all
@@ -196,7 +196,7 @@ class Nozzle(Application):
             fz = np.append(fz, z_2d.ravel())
             fx = np.append(fx, x*np.ones_like(y_2d.ravel()))
 
-        x_pos = np.arange(-1.0*self.L, 2.0*self.L, self.h0)
+        x_pos = np.arange(-4*self.h0, 2.0*self.L, self.h0)
 
         cx = np.array([])
         cy = np.array([])
