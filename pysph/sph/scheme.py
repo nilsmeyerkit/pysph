@@ -668,8 +668,7 @@ class TVFScheme(Scheme):
 
 class BeadChainScheme(Scheme):
     def __init__(self, fluids, solids, fibers, dim, k=0.0, lim=0.5,
-                    tag=100, gx=0.0, gy=0.0, gz=0.0, alpha=0.0, tdamp=0.0,
-                    u=0.0, v=0.0, w=0.0):
+                    tag=100, gx=0.0, gy=0.0, gz=0.0, alpha=0.0, tdamp=0.0):
         self.fluids = fluids
         self.solids = solids
         self.fibers = fibers
@@ -696,9 +695,6 @@ class BeadChainScheme(Scheme):
         self.gz = gz
         self.alpha = alpha
         self.tdamp = tdamp
-        self.u = 0.0
-        self.v = 0.0
-        self.w = 0.0
 
     def add_user_options(self, group):
         group.add_argument(
@@ -774,7 +770,6 @@ class BeadChainScheme(Scheme):
         )
 
     def get_equations(self):
-        from math import sqrt
         from pysph.sph.equation import Group
         from pysph.sph.wc.transport_velocity import (
             SummationDensity, StateEquation, MomentumEquationPressureGradient,
@@ -783,7 +778,7 @@ class BeadChainScheme(Scheme):
             SolidWallPressureBC, SolidWallNoSlipBC, SetWallVelocity,
             VolumeFromMassDensity)
         from pysph.sph.fiber.utils import (Damping, HoldPoints, VelocityGradient,
-            Contact, ComputeDistance, SolidSpeed)
+            Contact, ComputeDistance)
         from pysph.sph.fiber.beadchain import (Tension, Bending, EBGVelocityReset,
             Friction, ArtificialDamping)
 
@@ -837,11 +832,6 @@ class BeadChainScheme(Scheme):
         equations.append(Group(equations=g4))
 
         g5 = []
-        for solid in self.solids:
-            if sqrt(self.u**2+self.v**2+self.w**2)>0.0:
-                g5.append(SolidSpeed(dest=solid, sources=None,
-                                 u=self.u, v=self.v, w=self.w))
-
         for fluid in self.fluids:
             g5.append(MomentumEquationPressureGradient(dest=fluid, sources=all,
                 pb=self.pb, gx=self.gx,gy=self.gy,gz=self.gz,tdamp=self.tdamp))
