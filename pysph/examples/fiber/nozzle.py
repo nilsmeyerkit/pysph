@@ -34,11 +34,9 @@ from pysph.sph.scheme import BeadChainScheme
 
 
 class Nozzle(Application):
-    """Generation of a mini RVE and evaluation of its fiber orientation
-    tensor."""
+    """Generation of a Cylinder with a nozzle and a stamp to press fluid through
+    the nozzle."""
     def create_scheme(self):
-        """There is no scheme used in this application and equations are set up
-        manually."""
         return BeadChainScheme(['fluid'], ['channel', 'stamp'], ['fibers'], dim=3)
 
     def add_user_options(self, group):
@@ -64,7 +62,7 @@ class Nozzle(Application):
         )
         group.add_argument(
             "--mu", action="store", type=float, dest="mu",
-            default=1000, help="Absolute viscosity"
+            default=0.1, help="Absolute viscosity"
         )
         group.add_argument(
             "--E", action="store", type=float, dest="E",
@@ -95,10 +93,6 @@ class Nozzle(Application):
             default=False, help="Set time to zero and postprocess only."
         )
         group.add_argument(
-            "--massscale", action="store", type=float, dest="scale_factor",
-            default=None, help="Factor of mass scaling"
-        )
-        group.add_argument(
             "--volfrac", action="store", type=float, dest="vol_frac",
             default=0.05, help="Volume fraction of fibers in suspension."
         )
@@ -127,26 +121,13 @@ class Nozzle(Application):
         # The fiber length is the aspect ratio times fiber diameter
         self.L = self.options.ar*self.h0
 
-        # Computation of a scale factor in a way that dt_cfl exactly matches
-        # dt_viscous.
-        a = self.h0*0.125*11/0.4
-        #nu_needed = a*self.options.G*self.L/2
-        nu_needed = a*(self.options.R/self.options.r)**2*self.options.speed
-
-        # If there is no other scale scale factor provided, use automatically
-        # computed factor.
-        auto_scale_factor = self.options.mu/(nu_needed*self.options.rho0)
-        self.scale_factor = self.options.scale_factor or auto_scale_factor
-
-        # The density can be scaled using the mass scaling factor. To account
-        # for proper external forces, gravity is scaled just the other way.
-        self.rho0 = self.options.rho0*self.scale_factor
-        self.gx = self.options.gx/self.scale_factor
-        self.gy = self.options.gy/self.scale_factor
-        self.gz = self.options.gz/self.scale_factor
+        self.rho0 = self.options.rho0
+        self.gx = self.options.gx
+        self.gy = self.options.gy
+        self.gz = self.options.gz
 
         # The kinematic viscosity is computed from absolute viscosity and
-        # scaled (!) density.
+        # density.
         self.nu = self.options.mu/self.rho0
 
         # empirical determination for the damping, which is just enough
@@ -162,7 +143,7 @@ class Nozzle(Application):
         # SPH uses weakly compressible fluids. Therefore, the speed of sound c0
         # is computed as 10 times the maximum velocity. This should keep the
         # density change within 1%
-        self.Vmax = 0.1*(self.options.R/self.options.r)**2*self.options.speed
+        self.Vmax = 2*(self.options.R/self.options.r)**2*self.options.speed
         self.c0 = 10*self.Vmax
         self.p0 = self.c0**2*self.rho0
 
@@ -182,9 +163,8 @@ class Nozzle(Application):
     def configure_scheme(self):
         self.scheme.configure(rho0=self.rho0, c0=self.c0, nu=self.nu,
             p0=self.p0, pb=self.pb, h0=self.h0, dx=self.h0, A=self.A, I=self.I,
-            J=self.J, E=self.options.E, D=self.D,
-            scale_factor=self.scale_factor, gx=self.gx, gy=self.gy, gz=self.gz,
-            k=self.options.k)
+            J=self.J, E=self.options.E, D=self.D, gx=self.gx, gy=self.gy,
+            gz=self.gz, k=self.options.k)
         # in case of very low volume fraction
         if self.n < 1:
             self.scheme.configure(fibers=[])
