@@ -183,8 +183,7 @@ class RVE(Application):
     def configure_scheme(self):
         self.scheme.configure(rho0=self.rho0, c0=self.c0, nu=self.nu,
             p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=self.A, I=self.I,
-            J=self.J, E=self.options.E, D=self.D,
-            scale_factor=self.scale_factor, gx=self.options.g,
+            J=self.J, E=self.options.E, D=self.D, gx=self.options.g,
             k=self.options.k)
         # in case of very low volume fraction
         if self.n < 1:

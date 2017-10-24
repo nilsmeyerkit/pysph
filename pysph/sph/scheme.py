@@ -686,7 +686,6 @@ class BeadChainScheme(Scheme):
         self.I = None
         self.J = None
         self.D = None
-        self.scale_factor = None
         self.lim = lim
         self.k = k
         self.tag = tag
@@ -865,8 +864,6 @@ class BeadChainScheme(Scheme):
                 sources=self.fluids+self.fibers))
             g5.append(Friction(dest=fiber, sources=None, J=self.J, A=self.A,
                 mu=self.nu*self.rho0, d=self.dx))
-            # g5.append(Contact(dest=fiber, sources=self.fibers, E=self.E,
-            #     d=self.dx, k=self.k, lim=self.lim))#, scale=self.scale_factor))
 
         equations.append(Group(equations=g5))
 

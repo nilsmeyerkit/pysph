@@ -143,7 +143,7 @@ class FiberIntegrator(Tool):
                 g2.append(Tension(dest=fiber, sources=None, ea=scheme.E*scheme.A))
                 g2.append(Bending(dest=fiber, sources=None, ei=scheme.E*scheme.I))
                 g2.append(Contact(dest=fiber, sources=scheme.fibers, E=scheme.E,
-                            d=scheme.dx, k=scheme.k, lim=scheme.lim))#,scale=scheme.scale_factor))
+                            d=scheme.dx, k=scheme.k, lim=scheme.lim))
                 g2.append(ArtificialDamping(dest=fiber, sources=None, d=scheme.D))
             equations.append(Group(equations=g2))
 
