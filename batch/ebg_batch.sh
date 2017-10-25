@@ -35,7 +35,7 @@ plot_list_y=()
 E=1E8
 D=1
 
-for N in 10 20 100
+for N in 10 50
 do
   gx=10
   gy=0
@@ -60,7 +60,7 @@ plot_list_y=()
 E=1E4
 D=1
 
-for N in 10 20 100
+for N in 10 50
 do
   gx=0
   gy=10

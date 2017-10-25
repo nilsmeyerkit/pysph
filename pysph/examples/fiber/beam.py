@@ -165,7 +165,7 @@ class Beam(Application):
         kernel = QuinticSpline(dim=3)
         integrator = EPECIntegrator(fiber=TransportVelocityStep())
         solver = Solver(kernel=kernel, dim=3, integrator=integrator, dt=self.dt,
-                         tf=self.tf, pfreq=int(np.ceil(self.tf/(100*self.dt))),
+                         tf=self.tf, N=100,
                          vtk=True)
         return solver
 
@@ -178,6 +178,8 @@ class Beam(Application):
             self.D,self.omega0_tension, self.omega0_bending, self.dt))
         plt.xlabel('t'); plt.ylabel('Displacement')
         plt.legend(['x-direction', 'y-direction'])
+        plt.grid()
+        plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
         fig = os.path.join(self.output_dir, "oscillation.pdf")
         plt.savefig(fig, dpi=300)
         print("Figure written to %s." % fig)
@@ -190,6 +192,8 @@ class Beam(Application):
         plt.title("Displacement in x")
         plt.legend(['simulation', 'exact'])
         plt.xlabel('x'); plt.ylabel('u')
+        plt.grid()
+        plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
         fig = os.path.join(self.output_dir, "displacement_x.pdf")
         plt.savefig(fig, dpi=300)
         print("Figure written to %s." % fig)
@@ -202,6 +206,8 @@ class Beam(Application):
         plt.title("Displacement in y")
         plt.legend(['simulation', 'exact'])
         plt.xlabel('x'); plt.ylabel('y')
+        plt.grid()
+        plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
         fig = os.path.join(self.output_dir, "displacement_y.pdf")
         plt.savefig(fig, dpi=300)
         print("Figure written to %s." % fig)
