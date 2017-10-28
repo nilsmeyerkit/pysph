@@ -83,7 +83,7 @@ class Channel(Application):
         )
         group.add_argument(
             "--E", action="store", type=float, dest="E",
-            default=1E11, help="Young's modulus"
+            default=1E9, help="Young's modulus"
         )
         group.add_argument(
             "--G", action="store", type=float, dest="G",
@@ -95,7 +95,7 @@ class Channel(Application):
         )
         group.add_argument(
             "--D", action="store", type=float, dest="D",
-            default=10000, help="Damping coefficient for artificial damping"
+            default=None, help="Damping coefficient for artificial damping"
         )
         group.add_argument(
             "--dim", action="store", type=int, dest="dim",
@@ -206,9 +206,9 @@ class Channel(Application):
         # empirical determination for the damping, which is just enough - this
         # should be better computed from stiffness etc.
         if self.options.dim == 3:
-            autodamp = self.options.ar
+            autodamp = 0.2*self.options.ar
         else:
-            autodamp = self.options.ar*500
+            autodamp = 1000*self.options.ar
         self.D = self.options.D or autodamp
 
         # SPH uses weakly compressible fluids. Therefore, the speed of sound c0
