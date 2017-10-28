@@ -189,8 +189,8 @@ class Channel(Application):
         # scaled (!) density.
         self.nu = self.options.mu/self.rho0
 
-        # damping
-        self.D = self.options.D
+        # damping from emoirical guess
+        self.D = self.options.D or self.options.ar*800
 
         # For 2 dimensions surface, mass and moments have a different coputation
         # than for 3 dimensions.
@@ -787,8 +787,11 @@ class Channel(Application):
 
         # empty list for reaction forces
         Fx = []
+        Fwx = []
         Fy = []
+        Fwy = []
         Fz = []
+        Fwz = []
 
         # empty list for roation periods
         T = []
@@ -857,6 +860,9 @@ class Channel(Application):
                 Fx.append(fiber.Fx[idx][0])
                 Fy.append(fiber.Fy[idx][0])
                 Fz.append(fiber.Fz[idx][0])
+                Fwx.append(fiber.Fwx[idx][0])
+                Fwy.append(fiber.Fwy[idx][0])
+                Fwz.append(fiber.Fwz[idx][0])
 
         bar.finish()
 
@@ -1001,12 +1007,16 @@ class Channel(Application):
 
             # plot computed reaction force, total FEM force and viscous FEM
             # force
-            plt.plot(t, Fx, '-k', t_fem, F_fem, '--k', t_fem, Fv_fem, ':k')
+            plt.plot(t, Fx, '-k',
+                     t, Fwx, '.k',
+                     t_fem, F_fem, '--k',
+                     t_fem, Fv_fem, ':k')
 
             # labels
             plt.xlabel('t [ms]')
             plt.ylabel('Force per depth [N/m]')
-            plt.legend(['SPH Simulation', 'FEM total force', 'FEM viscous force'])
+            plt.legend(['SPH total force', 'SPH viscous force',
+                        'FEM total force', 'FEM viscous force'])
             x1,x2,y1,y2 = plt.axis()
             plt.axis((0,x2,0,y2))
             plt.grid()
