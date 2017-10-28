@@ -31,7 +31,7 @@ import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 from matplotlib import rc
-rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
+rc('font', **{'family': 'serif', 'serif': ['Computer Modern'], 'size':18})
 rc('text', usetex=True)
 
 # numpy and scipy
@@ -198,9 +198,6 @@ class Channel(Application):
         # scaled (!) density.
         self.nu = self.options.mu/self.rho0
 
-        # empirical determination for the damping, which is just enough
-        self.D = self.options.D or self.options.ar*500
-
         # For 2 dimensions surface, mass and moments have a different coputation
         # than for 3 dimensions.
         if self.options.dim == 2:
@@ -214,6 +211,14 @@ class Channel(Application):
             self.I = np.pi*R**4/4.0
             mass = 3*self.rho0*self.dx*self.A
             self.J = 1/4*mass*R**2 + 1/12*mass*(3*self.dx)**2
+
+        # empirical determination for the damping, which is just enough - this
+        # should be better computed from stiffness etc.
+        if self.options.dim == 3:
+            autodamp = self.options.ar
+        else:
+            autodamp = self.options.ar*500
+        self.D = self.options.D or autodamp
 
         # SPH uses weakly compressible fluids. Therefore, the speed of sound c0
         # is computed as 10 times the maximum velocity. This should keep the
@@ -479,10 +484,10 @@ class Channel(Application):
         u = interp.interpolate('u')
         v = interp.interpolate('v')
         p = interp.interpolate('p')
-        vmag = factor*np.sqrt(u**2 + v**2 )
+        vmag = factor*np.sqrt(u**2 + v**2)
 
         if self.options.ar == 1:
-            upper = 2.5E-5
+            upper = 0.025
         else:
             upper = np.max(vmag)
 
@@ -492,7 +497,12 @@ class Channel(Application):
         cmap = plt.cm.viridis
         levels = np.linspace(0, upper, 30)
 
-        # velocity contour
+        # velocity contour (ungly solution against white lines:
+        # repeat plots....)
+        plt.contourf(x*factor,y*factor, vmag, levels=levels,
+                 cmap=cmap, vmax=upper, vmin=0)
+        plt.contourf(x*factor,y*factor, vmag, levels=levels,
+                 cmap=cmap, vmax=upper, vmin=0)
         vel = plt.contourf(x*factor,y*factor, vmag, levels=levels,
                  cmap=cmap, vmax=upper, vmin=0)
         # streamlines
@@ -501,15 +511,23 @@ class Channel(Application):
         plt.scatter(fx*factor,fy*factor, color='w')
 
         # set labels
-        cbar = plt.colorbar(vel, format='%.2f')
+        if self.options.ar == 1:
+            cbar = plt.colorbar(vel,
+                        ticks=[0, 0.005, 0.010, 0.015, 0.020, 0.025],
+                        shrink=0.5)
+            plt.axis('scaled')
+        else:
+            cbar = plt.colorbar(vel)
+            plt.axis('equal')
         cbar.set_label('Velocity Magnitude [mm/s]', labelpad=20.0)
-        plt.axis('equal')
+        plt.axis((0,factor*self.Lx,0,factor*self.Ly))
         plt.xlabel('x [mm]')
         plt.ylabel('y [mm]')
+        plt.tight_layout()
 
         # save plot
         fig = os.path.join(self.output_dir, 'streamplot.pdf')
-        plt.savefig(fig, dpi=300)
+        plt.savefig(fig, dpi=300, bbox_inches='tight')
         print("Streamplot written to %s."% fig)
 
         if self.options.ar == 1:
@@ -525,19 +543,36 @@ class Channel(Application):
         cmap = plt.cm.viridis
         levels = np.linspace(lower, upper, 30)
 
-        # pressure contour
+        # pressure contour(ungly solution against white lines:
+        # repeat plots....)
+        plt.contourf(x*factor,y*factor, p, levels=levels,
+                 cmap=cmap,  vmin=lower, vmax=upper)
+        plt.contourf(x*factor,y*factor, p, levels=levels,
+                 cmap=cmap,  vmin=lower, vmax=upper)
         pres = plt.contourf(x*factor,y*factor, p, levels=levels,
                  cmap=cmap,  vmin=lower, vmax=upper)
 
+        # fiber
+        plt.scatter(fx*factor,fy*factor, color='w')
+
         # set labels
-        cbar = plt.colorbar(pres, label='Pressure')
-        plt.axis('equal')
+        if self.options.ar == 1:
+            cbar = plt.colorbar(pres, label='Pressure [Pa]',
+                    ticks= [-100,-80, -60, -40, -20, 0, 20, 40, 60, 80, 100],
+                    shrink=0.5)
+            plt.axis('scaled')
+        else:
+            cbar = plt.colorbar(pres, label='Pressure [Pa]')
+            plt.axis('equal')
+        plt.axis((0,factor*self.Lx,0,factor*self.Ly))
         plt.xlabel('x [mm]')
         plt.ylabel('y [mm]')
+        plt.tight_layout()
+
 
         # save plot
         p_fig = os.path.join(self.output_dir, 'pressure.pdf')
-        plt.savefig(p_fig, dpi=300)
+        plt.savefig(p_fig, dpi=300, bbox_inches='tight')
         print("Pressure written to %s."% p_fig)
 
         return[fig, p_fig]
@@ -593,17 +628,18 @@ class Channel(Application):
         plt.plot(u_exact*factor, y*factor, ':k')
 
         # labels
-        plt.title('Velocity at inlet')
-        plt.xlabel('Velocity [mm/s]')
+        plt.xlabel('Velocity at inlet[mm/s]')
         plt.ylabel('Position [mm]')
+        plt.grid()
         if self.options.ar == 1:
             plt.legend(['SPH Simulation', 'FEM', 'No obstacle'])
         else:
             plt.legend(['SPH Simulation', 'No obstacle'])
+        plt.tight_layout()
 
         # save figure
         fig = os.path.join(self.output_dir, 'inlet_velocity.pdf')
-        plt.savefig(fig, dpi=300)
+        plt.savefig(fig, dpi=300, bbox_inches='tight')
         print("Inlet velocity plot written to %s."% fig)
 
         return (fig)
@@ -663,16 +699,17 @@ class Channel(Application):
             plt.plot(u_fem*factor, y_fem*factor , '--k')
 
         # labels
-        plt.title('Velocity at center')
-        plt.xlabel('Velocity [mm/s]')
+        plt.xlabel('Velocity at center [mm/s]')
         plt.ylabel('Position [mm]')
+        plt.grid()
 
         if self.options.ar == 1:
             plt.legend(['SPH', 'FEM'])
+        plt.tight_layout()
 
         # save figure
         fig = os.path.join(self.output_dir, 'center_velocity.pdf')
-        plt.savefig(fig, dpi=300)
+        plt.savefig(fig, dpi=300, bbox_inches='tight')
         print("Center velocity plot written to %s."% fig)
 
         return (fig)
@@ -721,13 +758,14 @@ class Channel(Application):
 
         # labels
         plt.legend(['SPH Simulation','FEM Result'])
-        plt.title('Pressure along center line')
         plt.xlabel('x [mm]')
         plt.ylabel('p [Pa]')
+        plt.grid()
+        plt.tight_layout()
 
         # save figure
         pcenter_fig = os.path.join(self.output_dir, 'pressure_centerline.pdf')
-        plt.savefig(pcenter_fig, dpi=300)
+        plt.savefig(pcenter_fig, dpi=300, bbox_inches='tight')
         print("Pressure written to %s."% pcenter_fig)
 
         return pcenter_fig
@@ -861,13 +899,14 @@ class Channel(Application):
 
         # set equally scaled axis to not distort the orbit
         plt.axis('equal')
-        plt.title('Orbitplot')
         plt.xlabel('x [mm]')
         plt.ylabel('y [mm]')
+        plt.grid()
+        plt.tight_layout()
 
         # save plot of orbit
         orbfig = os.path.join(self.output_dir, 'orbitplot.pdf')
-        plt.savefig(orbfig, dpi=300)
+        plt.savefig(orbfig, dpi=300, bbox_inches='tight')
         print("Orbitplot written to %s."% orbfig)
 
         # Integrate Jeffery's solution
@@ -895,11 +934,14 @@ class Channel(Application):
         plt.xlabel('t [s]')
         plt.ylabel('Angle [rad]')
         plt.legend(['SPH Simulation', 'Jeffery (equiv.)', 'Jeffery'])
-        plt.title("ar=%g"%self.options.ar)
+        plt.grid()
+        x1,x2,y1,y2 = plt.axis()
+        plt.axis((0,x2,0,y2))
+        plt.tight_layout()
 
         # save figure
         angfig = os.path.join(self.output_dir, 'angleplot.pdf')
-        plt.savefig(angfig, dpi=300)
+        plt.savefig(angfig, dpi=300, bbox_inches='tight')
         print("Angleplot written to %s."% angfig)
 
         # save angles as *.csv file
@@ -916,12 +958,13 @@ class Channel(Application):
         # labels
         plt.xlabel('t [s]')
         plt.ylabel('Energy')
-        plt.title("Energy")
         plt.legend(['Pressure', 'Kinetic Energy'])
+        plt.grid()
+        plt.tight_layout()
 
         # save figure
         engfig = os.path.join(self.output_dir, 'energyplot.pdf')
-        plt.savefig(engfig, dpi=300)
+        plt.savefig(engfig, dpi=300, bbox_inches='tight')
         print("Energyplot written to %s."% engfig)
 
         # open new plot
@@ -936,10 +979,12 @@ class Channel(Application):
         plt.xlabel('t [s]')
         plt.ylabel('Relative value')
         plt.legend(['Mass', 'Volume', 'Density'])
+        plt.grid()
+        plt.tight_layout()
 
         # save figure
         mfig = os.path.join(self.output_dir, 'massplot.pdf')
-        plt.savefig(mfig, dpi=300)
+        plt.savefig(mfig, dpi=300, bbox_inches='tight')
         print("Mass plot written to %s."% mfig)
 
         # hard-coded solutions for total reaction forces and viscous reaction
@@ -974,13 +1019,16 @@ class Channel(Application):
 
             # labels
             plt.xlabel('t [ms]')
-            plt.ylabel('Force [N/m]')
-            plt.title("Reaction Force")
+            plt.ylabel('Force per depth [N/m]')
             plt.legend(['SPH Simulation', 'FEM total force', 'FEM viscous force'])
+            x1,x2,y1,y2 = plt.axis()
+            plt.axis((0,x2,0,y2))
+            plt.grid()
+            plt.tight_layout()
 
             # save figure
             forcefig = os.path.join(self.output_dir, 'forceplot.pdf')
-            plt.savefig(forcefig, dpi=300)
+            plt.savefig(forcefig, dpi=300, bbox_inches='tight')
             print("Reaction Force plot written to %s."% forcefig)
             return [orbfig, angfig, engfig, forcefig]
         else:
@@ -1033,6 +1081,9 @@ class Channel(Application):
 
 
     def post_process(self, info_fname):
+        if len(self.output_files) == 0:
+            return
+
         [streamlines, pressure] = self._plot_streamlines()
         if self.options.ar == 1:
             pressure_centerline = self._plot_pressure_centerline()

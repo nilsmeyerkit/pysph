@@ -48,7 +48,7 @@ class Beam(Application):
         )
         group.add_argument(
             "--gz", action="store", type=float, dest="gz",
-            default=0, help="Body force in z-direction."
+            default=10, help="Body force in z-direction."
         )
 
     def consume_user_options(self):
@@ -181,7 +181,7 @@ class Beam(Application):
         plt.grid()
         plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
         fig = os.path.join(self.output_dir, "oscillation.pdf")
-        plt.savefig(fig, dpi=300)
+        plt.savefig(fig, dpi=300, bbox_inches='tight')
         print("Figure written to %s." % fig)
 
     def _plot_displacement(self, file):
@@ -195,7 +195,7 @@ class Beam(Application):
         plt.grid()
         plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
         fig = os.path.join(self.output_dir, "displacement_x.pdf")
-        plt.savefig(fig, dpi=300)
+        plt.savefig(fig, dpi=300, bbox_inches='tight')
         print("Figure written to %s." % fig)
 
         plt.figure()
@@ -209,7 +209,7 @@ class Beam(Application):
         plt.grid()
         plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
         fig = os.path.join(self.output_dir, "displacement_y.pdf")
-        plt.savefig(fig, dpi=300)
+        plt.savefig(fig, dpi=300, bbox_inches='tight')
         print("Figure written to %s." % fig)
 
     def _save_results(self):
@@ -246,6 +246,9 @@ class Beam(Application):
 
     def post_process(self, info_fname):
         # dump vtk files after run
+        if len(self.output_files) == 0:
+            return
+
         osc, disp = self._save_results()
         self._plot_displacement(disp)
         self._plot_oscillation(osc)

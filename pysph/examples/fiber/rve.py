@@ -555,7 +555,7 @@ class RVE(Application):
         return DADT.ravel()
 
     def post_process(self, info_fname):
-        if self.options.disable_output:
+        if len(self.output_files) == 0:
             return
 
         # empty list for time
@@ -585,8 +585,8 @@ class RVE(Application):
                 # extrating all arrays.
                 directions = []
                 fiber = data['arrays']['fibers']
-                startpoints = [i*self.options.ar for i in range(0,self.n)]
-                endpoints = [i*self.options.ar-1 for i in range(1,self.n+1)]
+                startpoints = [i*(self.options.ar-1) for i in range(0,self.n)]
+                endpoints = [i*(self.options.ar-1)-1 for i in range(1,self.n+1)]
                 for start,end in zip(startpoints, endpoints):
                     px = np.mean(fiber.rxnext[start:end])
                     py = np.mean(fiber.rynext[start:end])
@@ -622,14 +622,16 @@ class RVE(Application):
         plt.plot(t[1:], eta[1:], '--k',
                  t[1:], eta_fluid[1:], '-k')
         plt.legend(['Simulated effective value', 'Fluid only'])
-        plt.title('Viscosity with %d fibers'%self.n)
+        #plt.title('Viscosity with %d fibers'%self.n)
         plt.ylim([0.8*self.options.mu, 2.0*np.mean(eta)])
         plt.xlabel('t [s]')
         plt.ylabel('$\eta$ [Pa s]')
+        plt.grid()
+        plt.tight_layout()
 
         # save figure
         visfig = os.path.join(self.output_dir, 'viscosity.pdf')
-        plt.savefig(visfig, dpi=300)
+        plt.savefig(visfig, dpi=300, bbox_inches='tight')
         print("Viscosity plot written to %s."% visfig)
 
         # open new plot
@@ -697,7 +699,7 @@ class RVE(Application):
             # save figure
             plt.tight_layout()
             ori = os.path.join(self.output_dir, 'orientation.pdf')
-            plt.savefig(ori, dpi=300)
+            plt.savefig(ori, dpi=300, bbox_inches='tight')
             print("Orientation plot written to %s."% ori)
 
 
