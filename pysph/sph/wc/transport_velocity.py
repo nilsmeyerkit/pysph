@@ -616,15 +616,15 @@ class SolidWallNoSlipBC(Equation):
 
         # viscous contribution (third term) from Eq. (8), with VIJ
         # defined appropriately using the ghost values
-        tmp = 1./d_m[d_idx] * (Vi2 + d_m[d_idx]/s_m[s_idx] * Vj2) * (etaij * Fij/(R2IJ + EPS))
+        tmp = (Vi2 + d_m[d_idx]/s_m[s_idx] * Vj2) * (etaij * Fij/(R2IJ + EPS))
 
-        d_au[d_idx] += s_m[s_idx]/d_m[d_idx] * tmp * (d_u[d_idx] - s_ug[s_idx])
-        d_av[d_idx] += s_m[s_idx]/d_m[d_idx] * tmp * (d_v[d_idx] - s_vg[s_idx])
-        d_aw[d_idx] += s_m[s_idx]/d_m[d_idx] * tmp * (d_w[d_idx] - s_wg[s_idx])
+        d_au[d_idx] += tmp/d_m[d_idx] * (d_u[d_idx] - s_ug[s_idx])
+        d_av[d_idx] += tmp/d_m[d_idx] * (d_v[d_idx] - s_vg[s_idx])
+        d_aw[d_idx] += tmp/d_m[d_idx] * (d_w[d_idx] - s_wg[s_idx])
 
-        s_Fwx[s_idx] -= s_m[s_idx]/d_m[d_idx] * s_m[s_idx] * tmp * (d_u[d_idx] - s_ug[s_idx])
-        s_Fwy[s_idx] -= s_m[s_idx]/d_m[d_idx] * s_m[s_idx] * tmp * (d_v[d_idx] - s_vg[s_idx])
-        s_Fwz[s_idx] -= s_m[s_idx]/d_m[d_idx] * s_m[s_idx] * tmp * (d_w[d_idx] - s_wg[s_idx])
+        s_Fwx[s_idx] -= tmp * (d_u[d_idx] - s_ug[s_idx])
+        s_Fwy[s_idx] -= tmp * (d_v[d_idx] - s_vg[s_idx])
+        s_Fwz[s_idx] -= tmp * (d_w[d_idx] - s_wg[s_idx])
 
 
 class SolidWallPressureBC(Equation):
