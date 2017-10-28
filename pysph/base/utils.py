@@ -343,7 +343,7 @@ def get_particle_array_tvf_solid(constants=None, **props):
 
     """
     tv_props = ['u0', 'v0', 'w0', 'V', 'wij', 'ax', 'ay', 'az',
-                'uf', 'vf', 'wf', 'ug', 'vg', 'wg']
+                'uf', 'vf', 'wf', 'ug', 'vg', 'wg', 'Fwx', 'Fwy', 'Fwz']
 
     pa = get_particle_array(
         constants=constants, additional_props=tv_props, **props

@@ -488,7 +488,8 @@ cdef class CPUDomainManager:
             x = pa_wrapper.x; y = pa_wrapper.y; z = pa_wrapper.z
 
             # reset the length of the arrays
-            x_low.reset(); x_high.reset(); y_low.reset(); y_high.reset()
+            x_low.reset(); x_high.reset();
+            y_low.reset(); y_high.reset()
             z_low.reset(); z_high.reset()
 
             np = x.length
