@@ -857,12 +857,12 @@ class Channel(Application):
             # extract reaction forces at hold particles
             idx = np.argwhere(fiber.holdtag==100)
             if len(idx) > 0:
-                Fx.append(fiber.Fx[idx][0])
-                Fy.append(fiber.Fy[idx][0])
-                Fz.append(fiber.Fz[idx][0])
                 Fwx.append(fiber.Fwx[idx][0])
                 Fwy.append(fiber.Fwy[idx][0])
                 Fwz.append(fiber.Fwz[idx][0])
+                Fx.append(fiber.Fx[idx][0]+fiber.Fwx[idx][0])
+                Fy.append(fiber.Fy[idx][0]+fiber.Fwy[idx][0])
+                Fz.append(fiber.Fz[idx][0]+fiber.Fwz[idx][0])
 
         bar.finish()
 

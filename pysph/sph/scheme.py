@@ -838,6 +838,10 @@ class BeadChainScheme(Scheme):
                 if no_slip_flag:
                     g5.append(MomentumEquationViscosity(dest=fluid,
                         sources=self.fluids, nu=self.nu))
+                    # [1] This no slip accelerates the fluid, bus does not
+                    # accelerate the counterpart fiber. Latter is done by
+                    # viscosity [2], maybe it's better implemented right in
+                    # SolidWallNoSlipBC.
                     g5.append(SolidWallNoSlipBC(dest=fluid,
                             sources=self.solids+self.fibers,nu=self.nu))
                 else:
@@ -854,6 +858,9 @@ class BeadChainScheme(Scheme):
             g5.append(MomentumEquationPressureGradient(dest=fiber, sources=all,
                 pb=0.0, gx=self.gx,gy=self.gy, gz=self.gz, tdamp=self.tdamp))
             if self.nu > 0.0:
+                # [2] Maybe it is a better idea to skip this viscosity computation
+                # and include a source acceleration in the no-slip condition
+                # above [1]
                 g5.append(MomentumEquationViscosity(dest=fiber,
                     sources=self.fluids+self.fibers, nu=self.nu))
                 if len(self.solids) > 0:
