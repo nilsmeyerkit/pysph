@@ -41,7 +41,7 @@ class Beam(Application):
         )
         group.add_argument(
             "--gy", action="store", type=float, dest="gy",
-            default=0, help="Body force in y-direction."
+            default=100, help="Body force in y-direction."
         )
         group.add_argument(
             "--k", action="store", type=float, dest="k",
