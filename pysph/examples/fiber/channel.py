@@ -83,7 +83,7 @@ class Channel(Application):
         )
         group.add_argument(
             "--E", action="store", type=float, dest="E",
-            default=1E9, help="Young's modulus"
+            default=1E11, help="Young's modulus"
         )
         group.add_argument(
             "--G", action="store", type=float, dest="G",
@@ -164,11 +164,10 @@ class Channel(Application):
 
         # If there is no other scale scale factor provided, use automatically
         # computed factor.
-        # if self.options.ar < 35:
-        #     auto_scale_factor = self.options.mu/(nu_needed*self.options.rho0)
-        # else:
-        #     auto_scale_factor = 0.7*self.options.mu/nu_needed/self.options.rho0
-        auto_scale_factor = self.options.mu/(nu_needed*self.options.rho0)
+        if self.options.ar < 35:
+            auto_scale_factor = self.options.mu/(nu_needed*self.options.rho0)
+        else:
+            auto_scale_factor = 0.7*self.options.mu/nu_needed/self.options.rho0
         self.scale_factor = self.options.scale_factor or auto_scale_factor
 
         # The density can be scaled using the mass scaling factor. To account
@@ -190,6 +189,9 @@ class Channel(Application):
         # scaled (!) density.
         self.nu = self.options.mu/self.rho0
 
+        # damping
+        self.D = self.options.D
+
         # For 2 dimensions surface, mass and moments have a different coputation
         # than for 3 dimensions.
         if self.options.dim == 2:
@@ -203,14 +205,6 @@ class Channel(Application):
             self.I = np.pi*R**4/4.0
             mass = 3*self.rho0*self.dx*self.A
             self.J = 1/4*mass*R**2 + 1/12*mass*(3*self.dx)**2
-
-        # empirical determination for the damping, which is just enough - this
-        # should be better computed from stiffness etc.
-        if self.options.dim == 3:
-            autodamp = 0.2*self.options.ar
-        else:
-            autodamp = 1000*self.options.ar
-        self.D = self.options.D or autodamp
 
         # SPH uses weakly compressible fluids. Therefore, the speed of sound c0
         # is computed as 10 times the maximum velocity. This should keep the
