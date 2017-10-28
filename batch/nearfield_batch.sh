@@ -1,47 +1,14 @@
 #!/bin/bash
+#SBATCH --account=def-hrymak-ab  # account name
+#SBATCH --mem-per-cpu=2G         # memory; default unit is megabytes
+#SBATCH --time=0-03:00           # time (DD-HH:MM)
+#SBATCH --output=%x-%j.out       # output log (<filename>-<jobid>.out)
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=16
+export OMP_NUM_THREADS=16
 
-# setting up virtual python
-cd /home/nmeyer7/virtual_python
-source fake_venv.sh
-
-# fluidres=1
-# pysph run ebg.nearfield --ar 20 --V 1E-4 --massscale 1E8 --fluidres $fluidres --pb
-# mv nearfield_output/ \
-# ~/Dropbox/Thesis/Documentation/SPH/Nearfield/Res_${fluidres}_pb/
-#
-# pysph run ebg.nearfield --ar 20 --V 1E-4 --massscale 1E8 --fluidres $fluidres
-# mv nearfield_output/ \
-# ~/Dropbox/Thesis/Documentation/SPH/Nearfield/Res_${fluidres}/
-#
-# fluidres=0.5
-# pysph run ebg.nearfield --ar 20 --V 1E-4 --massscale 1E8 --fluidres $fluidres --pb --openmp
-# mv nearfield_output/ \
-# ~/Dropbox/Thesis/Documentation/SPH/Nearfield/Res_${fluidres}_pb/
-#
-# pysph run ebg.nearfield --ar 20 --V 1E-4 --massscale 1E8 --fluidres $fluidres --openmp
-# mv nearfield_output/ \
-# ~/Dropbox/Thesis/Documentation/SPH/Nearfield/Res_${fluidres}/
-#
-# fluidres=0.25
-# pysph run ebg.nearfield --ar 20 --V 1E-4 --massscale 1E8 --fluidres $fluidres --pb --openmp
-# mv nearfield_output/ \
-# ~/Dropbox/Thesis/Documentation/SPH/Nearfield/Res_${fluidres}_pb/
-#
-# pysph run ebg.nearfield --ar 20 --V 1E-4 --massscale 1E8 --fluidres $fluidres --openmp
-# mv nearfield_output/ \
-# ~/Dropbox/Thesis/Documentation/SPH/Nearfield/Res_${fluidres}/
-
-fluidres = 1
-mkdir /scratch/nmeyer7/res${fluidres}
-cd /scratch/nmeyer7/res${fluidres}
-sqsub -q threaded -n 2 -o /home/nmeyer7/res${fluidres}.log -r 3h --mpp 2G pysph run ebg.channel --ar 1 --width 20 --holdcenter --g 10 --G 0 --massscale 1E8 --fluidres $fluidres --openmp
-
-fluidres=0.5
-mkdir /scratch/nmeyer7/res${fluidres}
-cd /scratch/nmeyer7/res${fluidres}
-sqsub -q threaded -n 4 -o /home/nmeyer7/res${fluidres}.log -r 3h --mpp 2G pysph run ebg.channel --ar 1 --width 20 --holdcenter --g 10 --G 0 --massscale 1E8 --fluidres $fluidres --openmp
-
-fluidres=0.25
-mkdir /scratch/nmeyer7/res${fluidres}
-cd /scratch/nmeyer7/res${fluidres}
-sqsub -q threaded -n 16 -o /home/nmeyer7/res${fluidres}.log -r 3h --mpp 2G pysph run ebg.channel --ar 1 --width 20 --holdcenter --g 10 --G 0 --massscale 1E8 --fluidres $fluidres --openmp
+# changing to scratch directory
+mkdir /scratch/nmeyer7/nearfield_res_$1
+cd /scratch/nmeyer7/nearfield_res_$1
+pysph run fiber.channel --ar 1 --width 20 --holdcenter --g 10 --G 0 --massscale 1E8 --fluidres $1 --openmp
