@@ -20,11 +20,6 @@ import json
 import cProfile
 import pstats
 
-# mail for notifications
-from email.mime.image import MIMEImage
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-
 # matplotlib (set up for server use)
 # matplotlib (set up for server use)
 import matplotlib
@@ -105,10 +100,6 @@ class Channel(Application):
         group.add_argument(
             "--dim", action="store", type=int, dest="dim",
             default=2, help="Dimension of problem"
-        )
-        group.add_argument(
-            "--mail", action="store", type=str, dest="mail",
-            default=None, help="Set notification e-mail adress."
         )
         group.add_argument(
             "--width", action="store", type=int, dest="width",
@@ -1034,51 +1025,6 @@ class Channel(Application):
         else:
             return [orbfig, angfig, engfig]
 
-    def _send_notification(self, info_fname, attachments=None):
-        """Send a notification Mail after succesfull run."""
-
-        gmail_user = "nils.batch.notification"
-        gmail_pwd = "batch.notification"
-
-        with open(info_fname, 'r') as f:
-            info = json.load(f)
-        cpu_time = info.get('cpu_time')
-
-        msg = MIMEMultipart()
-        msg['Subject'] = 'Batch results'
-        msg['From'] = 'Batch Notification'
-        msg['To'] = self.options.mail
-        txt = MIMEText(""" Run finished. Parameters were\n
-                            Diameter: %g\n
-                            Aspect Ratio: %g\n
-                            Density: %g\n
-                            Absolute Viscosity: %g\n
-                            Young's modulus: %g\n
-                            Shear Rate: %g\n
-                            Damping factor: %g\n
-                            CPU Time: %g\n
-                        """%(self.options.d, self.options.ar, self.rho0,
-                            self.options.mu, self.options.E,
-                            self.options.G, self.D,
-                            cpu_time)
-                        )
-        msg.attach(txt)
-        for fname in attachments:
-            fp = open(fname, 'rb')
-            img = MIMEImage(fp.read())
-            fp.close()
-            msg.attach(img)
-        try:
-            server = smtplib.SMTP("smtp.gmail.com", 587)
-            server.ehlo()
-            server.starttls()
-            server.login(gmail_user, gmail_pwd)
-            server.sendmail(gmail_user, self.options.mail, msg.as_string())
-            server.close()
-            print ("Successfully sent the mail.")
-        except:
-            print ("Failed to send mail.")
-
 
     def post_process(self, info_fname):
         if len(self.output_files) == 0:
@@ -1090,8 +1036,6 @@ class Channel(Application):
             center_velocity = self._plot_center_velocity()
         history = self._plot_history()
         inlet = self._plot_inlet_velocity()
-        if self.options.mail:
-            self._send_notification(info_fname, [streamlines, history[0], history[1]])
 
 def run_application():
     app = Channel()
