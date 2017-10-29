@@ -775,13 +775,12 @@ class BeadChainScheme(Scheme):
             MomentumEquationArtificialViscosity,
             MomentumEquationViscosity, MomentumEquationArtificialStress,
             SolidWallPressureBC, SolidWallNoSlipBC, SetWallVelocity,
-            VolumeFromMassDensity)
+            VolumeFromMassDensity, FiberViscousTraction)
         from pysph.sph.fiber.utils import (Damping, HoldPoints, VelocityGradient,
             Contact, ComputeDistance)
         from pysph.sph.fiber.beadchain import (Tension, Bending, EBGVelocityReset,
             Friction, ArtificialDamping)
 
-        no_slip_flag = True
         equations = []
         all = self.fluids + self.solids + self.fibers
         g1 = []
@@ -804,15 +803,14 @@ class BeadChainScheme(Scheme):
 
         for solid in self.solids:
             g2.append(SetWallVelocity(dest=solid,
-                sources=self.fluids+self.fibers))
+                sources=self.fluids+self.fibers), dim=self.dim)
 
         for fiber in self.fibers:
             g2.append(StateEquation(dest=fiber, sources=None, p0=self.p0,
                        rho0=self.rho0, b=1.0))
             g2.append(VelocityGradient(dest=fiber, sources=all))
-            if no_slip_flag:
-                g2.append(SetWallVelocity(dest=fiber,
-                    sources=self.fluids+self.fibers))
+            g2.append(SetWallVelocity(dest=fiber,
+                    sources=self.fluids+self.fibers), dim=self.dim)
 
         equations.append(Group(equations=g2, real=False))
 
@@ -835,21 +833,10 @@ class BeadChainScheme(Scheme):
             g5.append(MomentumEquationPressureGradient(dest=fluid, sources=all,
                 pb=self.pb, gx=self.gx,gy=self.gy,gz=self.gz,tdamp=self.tdamp))
             if self.nu > 0.0:
-                if no_slip_flag:
-                    g5.append(MomentumEquationViscosity(dest=fluid,
-                        sources=self.fluids, nu=self.nu))
-                    # [1] This no slip accelerates the fluid, bus does not
-                    # accelerate the counterpart fiber. Latter is done by
-                    # viscosity [2], maybe it's better implemented right in
-                    # SolidWallNoSlipBC.
-                    g5.append(SolidWallNoSlipBC(dest=fluid,
-                            sources=self.solids+self.fibers,nu=self.nu))
-                else:
-                    g5.append(MomentumEquationViscosity(dest=fluid,
-                        sources=self.fluids+self.fibers, nu=self.nu))
-                    if len(self.solids) > 0:
-                        g5.append(SolidWallNoSlipBC(dest=fluid,
-                            sources=self.solids,nu=self.nu))
+                g5.append(MomentumEquationViscosity(dest=fluid,
+                    sources=self.fluids, nu=self.nu))
+                g5.append(SolidWallNoSlipBC(dest=fluid,
+                        sources=self.solids+self.fibers,nu=self.nu))
 
             g5.append(MomentumEquationArtificialStress(dest=fluid,
                 sources=self.fluids+self.fibers))
@@ -858,11 +845,8 @@ class BeadChainScheme(Scheme):
             g5.append(MomentumEquationPressureGradient(dest=fiber, sources=all,
                 pb=0.0, gx=self.gx,gy=self.gy, gz=self.gz, tdamp=self.tdamp))
             if self.nu > 0.0:
-                # [2] Maybe it is a better idea to skip this viscosity computation
-                # and include a source acceleration in the no-slip condition
-                # above [1]
-                g5.append(MomentumEquationViscosity(dest=fiber,
-                    sources=self.fluids+self.fibers, nu=self.nu))
+                g5.append(FiberViscousTraction(dest=fiber,
+                    sources=self.fluids, nu=self.nu))
                 if len(self.solids) > 0:
                     g5.append(SolidWallNoSlipBC(dest=fiber, sources=self.solids,
                         nu=self.nu))
