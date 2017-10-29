@@ -803,14 +803,14 @@ class BeadChainScheme(Scheme):
 
         for solid in self.solids:
             g2.append(SetWallVelocity(dest=solid,
-                sources=self.fluids+self.fibers), dim=self.dim)
+                sources=self.fluids+self.fibers, dim=self.dim))
 
         for fiber in self.fibers:
             g2.append(StateEquation(dest=fiber, sources=None, p0=self.p0,
                        rho0=self.rho0, b=1.0))
             g2.append(VelocityGradient(dest=fiber, sources=all))
             g2.append(SetWallVelocity(dest=fiber,
-                    sources=self.fluids+self.fibers), dim=self.dim)
+                    sources=self.fluids+self.fibers, dim=self.dim))
 
         equations.append(Group(equations=g2, real=False))
 

@@ -128,7 +128,7 @@ class SetWallVelocity(Equation):
         Vi = 1./d_V[d_idx]
         Vj = 1./s_V[s_idx]
 
-        factor = (Vi/Vj)**self.dim
+        factor = (Vi/Vj)**(1.0/self.dim)
 
         # sum in Eq. (22)
         # this will be normalized in post loop
