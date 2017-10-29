@@ -631,9 +631,9 @@ class SolidWallNoSlipBC(Equation):
         d_av[d_idx] += tmp/d_m[d_idx] * (d_v[d_idx] - s_vg[s_idx])
         d_aw[d_idx] += tmp/d_m[d_idx] * (d_w[d_idx] - s_wg[s_idx])
 
-        s_Fwx[s_idx] += tmp * (d_u[d_idx] - s_ug[s_idx])
-        s_Fwy[s_idx] += tmp * (d_v[d_idx] - s_vg[s_idx])
-        s_Fwz[s_idx] += tmp * (d_w[d_idx] - s_wg[s_idx])
+        s_Fwx[s_idx] -= tmp * (d_u[d_idx] - s_ug[s_idx])
+        s_Fwy[s_idx] -= tmp * (d_v[d_idx] - s_vg[s_idx])
+        s_Fwz[s_idx] -= tmp * (d_w[d_idx] - s_wg[s_idx])
 
 class FiberViscousTraction(Equation):
     r"""**Fiber boundary condition**

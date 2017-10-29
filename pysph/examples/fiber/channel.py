@@ -1008,14 +1008,14 @@ class Channel(Application):
             # plot computed reaction force, total FEM force and viscous FEM
             # force
             plt.plot(t, Fx, '-k',
-                     t, Fwx, '.k',
+                     #t, Fwx, '.k',
                      t_fem, F_fem, '--k',
                      t_fem, Fv_fem, ':k')
 
             # labels
             plt.xlabel('t [ms]')
             plt.ylabel('Force per depth [N/m]')
-            plt.legend(['SPH total force', 'SPH viscous force',
+            plt.legend(['SPH total force'
                         'FEM total force', 'FEM viscous force'],
                         loc='lower right')
             x1,x2,y1,y2 = plt.axis()
