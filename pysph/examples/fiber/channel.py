@@ -690,7 +690,7 @@ class Channel(Application):
         plt.grid()
 
         if self.options.ar == 1:
-            plt.legend(['SPH', 'FEM'])
+            plt.legend(['SPH', 'FEM'],loc='upper left')
         plt.tight_layout()
 
         # save figure
@@ -743,7 +743,7 @@ class Channel(Application):
         plt.plot(x[0,:]*factor, p, '-k', x_fem*factor, p_fem, '--k')
 
         # labels
-        plt.legend(['SPH Simulation','FEM Result'])
+        plt.legend(['SPH Simulation','FEM Result'], loc='upper right')
         plt.xlabel('x [mm]')
         plt.ylabel('p [Pa]')
         plt.grid()
@@ -860,9 +860,9 @@ class Channel(Application):
                 Fwx.append(fiber.Fwx[idx][0])
                 Fwy.append(fiber.Fwy[idx][0])
                 Fwz.append(fiber.Fwz[idx][0])
-                Fx.append(fiber.Fx[idx][0]+fiber.Fwx[idx][0])
-                Fy.append(fiber.Fy[idx][0]+fiber.Fwy[idx][0])
-                Fz.append(fiber.Fz[idx][0]+fiber.Fwz[idx][0])
+                Fx.append(fiber.Fx[idx][0])
+                Fy.append(fiber.Fy[idx][0])
+                Fz.append(fiber.Fz[idx][0])
 
         bar.finish()
 
@@ -1016,7 +1016,8 @@ class Channel(Application):
             plt.xlabel('t [ms]')
             plt.ylabel('Force per depth [N/m]')
             plt.legend(['SPH total force', 'SPH viscous force',
-                        'FEM total force', 'FEM viscous force'])
+                        'FEM total force', 'FEM viscous force'],
+                        loc='lower right')
             x1,x2,y1,y2 = plt.axis()
             plt.axis((0,x2,0,y2))
             plt.grid()
