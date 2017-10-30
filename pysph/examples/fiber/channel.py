@@ -1015,7 +1015,7 @@ class Channel(Application):
             # labels
             plt.xlabel('t [ms]')
             plt.ylabel('Force per depth [N/m]')
-            plt.legend(['SPH total force'
+            plt.legend(['SPH total force',
                         'FEM total force', 'FEM viscous force'],
                         loc='lower right')
             x1,x2,y1,y2 = plt.axis()
