@@ -278,7 +278,7 @@ class RVE(Application):
         fluid = get_particle_array_beadchain(name='fluid',
                     x=fx, y=fy, z=fz, m=mass, rho=self.rho0, h=self.h0, V=V)
         fluid.remove_particles(indices)
-        if self.n > 1:
+        if self.n > 0:
             fibers = get_particle_array_beadchain_fiber(name='fibers',
                     x=np.concatenate(fibx), y=np.concatenate(fiby),
                     z=np.concatenate(fibz), m=fiber_mass, rho=self.rho0,
@@ -303,7 +303,7 @@ class RVE(Application):
         fluid.u[:] = self.options.G*(fluid.y[:]-self.L/2)
         channel.u[:] = self.options.G*(channel.y[:]-self.L/2)
 
-        if self.n > 1:
+        if self.n > 0:
             return [fluid, channel, fibers]
         else:
             return [fluid, channel]
@@ -581,7 +581,7 @@ class RVE(Application):
             tau = np.sum(Fw)/(2*surface)
             eta.append(tau/self.options.G)
 
-            if self.n > 1:
+            if self.n > 0:
                 # extrating all arrays.
                 directions = []
                 fiber = data['arrays']['fibers']
@@ -623,7 +623,7 @@ class RVE(Application):
                  t[1:], eta_fluid[1:], '-k')
         plt.legend(['Simulated effective value', 'Fluid only'])
         #plt.title('Viscosity with %d fibers'%self.n)
-        plt.ylim([0.8*self.options.mu, 2.0*np.mean(eta)])
+        plt.ylim([0.8*self.options.mu, 2.0*self.options.mu])
         plt.xlabel('t [s]')
         plt.ylabel('$\eta$ [Pa s]')
         plt.grid()
@@ -637,7 +637,7 @@ class RVE(Application):
         # open new plot
         plt.figure()
 
-        if self.options.folgartucker and self.n > 1:
+        if self.options.folgartucker and self.n > 0:
             AA = np.vstack(A)
             AFT = np.array(A_FT)
             legend_list = []
