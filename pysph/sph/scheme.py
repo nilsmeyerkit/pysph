@@ -781,6 +781,8 @@ class BeadChainScheme(Scheme):
         from pysph.sph.fiber.beadchain import (Tension, Bending, EBGVelocityReset,
             Friction, ArtificialDamping)
 
+        viscous_fiber = False
+
         equations = []
         all = self.fluids + self.solids + self.fibers
         g1 = []
@@ -845,8 +847,12 @@ class BeadChainScheme(Scheme):
             g5.append(MomentumEquationPressureGradient(dest=fiber, sources=all,
                 pb=0.0, gx=self.gx,gy=self.gy, gz=self.gz, tdamp=self.tdamp))
             if self.nu > 0.0:
-                g5.append(FiberViscousTraction(dest=fiber,
-                    sources=self.fluids, nu=self.nu))
+                if viscous_fiber:
+                    g5.append(FiberViscousTraction(dest=fiber,
+                        sources=self.fluids, nu=self.nu))
+                else:
+                    g5.append(MomentumEquationViscosity(dest=fiber,
+                        sources=self.fluids+self.fibers, nu=self.nu))
                 if len(self.solids) > 0:
                     g5.append(SolidWallNoSlipBC(dest=fiber, sources=self.solids,
                         nu=self.nu))
