@@ -42,7 +42,7 @@ class Nozzle(Application):
     def add_user_options(self, group):
         group.add_argument(
             "--N", action="store", type=float, dest="N",
-            default=800, help="Number of particles on circular section plane"
+            default=400, help="Number of particles on circular section plane"
         )
         group.add_argument(
             "--R", action="store", type=float, dest="R",
@@ -51,6 +51,10 @@ class Nozzle(Application):
         group.add_argument(
             "--r", action="store", type=float, dest="r",
             default=0.001, help="Nozzle radius"
+        )
+        group.add_argument(
+            "--l", action="store", type=float, dest="l",
+            default=0.008, help="Length of capillary [2mm, 8mm, 24mm]"
         )
         group.add_argument(
             "--ar", action="store", type=int, dest="ar",
@@ -102,7 +106,7 @@ class Nozzle(Application):
         )
         group.add_argument(
             "--speed", action="store", type=float, dest="speed",
-            default=0.00001, help="Stamp speed."
+            default=0.00002, help="Stamp speed."
         )
 
 
@@ -113,6 +117,7 @@ class Nozzle(Application):
         self.N = self.options.N
         self.R = self.options.R
         self.r = self.options.r
+        self.l = self.options.l
         self.rho0 = self.options.rho0
         self.gx = self.options.gx
         self.gy = self.options.gy
@@ -173,9 +178,7 @@ class Nozzle(Application):
         if self.n < 1:
             self.scheme.configure(fibers=[])
         self.scheme.configure_solver(tf=self.t, vtk = self.options.vtk,
-            N=100, extra_steppers={'stamp':TransportVelocityStep()})
-        # self.scheme.configure_solver(tf=self.t, pfreq=1, vtk = self.options.vtk,
-        #         extra_steppers={'stamp':TransportVelocityStep()})
+            N=500, extra_steppers={'stamp':TransportVelocityStep()})
 
     def create_particles(self):
         """Four particle arrays are created: A fluid, representing the polymer
@@ -192,7 +195,7 @@ class Nozzle(Application):
         # Initial inverse volume (necessary for transport velocity equations)
         V = 1./volume
 
-        # Fluid and fiber particles
+        # fluid and fiber particles in chamber
         x_pos = np.arange(0, self.L, self.h0)
         cx = np.array([])
         cy = np.array([])
@@ -219,8 +222,8 @@ class Nozzle(Application):
             fiber_indices = [i*self.options.ar+j for i in range(0,self.n)]
             fidx = np.append(fidx, np.array(fiber_indices))
 
-        # channel
-        x_pos = np.arange(-9.0*self.h0, self.L+self.r+self.L+4.0*self.h0, self.h0)
+        # outer channel
+        x_pos = np.arange(-9.0*self.h0, 2*self.L+self.l+0.006, self.h0)
         for x in x_pos:
             # channel
             r_min = self.R
@@ -233,7 +236,7 @@ class Nozzle(Application):
 
         # fluid
         x_pos = np.concatenate((np.arange(-4.0*self.h0, 0, self.h0),
-                               np.arange(self.L+self.r, self.L+self.r+self.L+4.0*self.h0, self.h0)))
+                               np.arange(self.L+self.l, 2*self.L+self.l, self.h0)))
         for x in x_pos:
             # fluid
             n = self.generate_parametrized_positions(self.R)
@@ -242,7 +245,7 @@ class Nozzle(Application):
             fz = np.append(fz, z_2d.ravel())
             fx = np.append(fx, x*np.ones_like(y_2d.ravel()))
 
-        x_pos = np.arange(self.L, self.L+self.r, self.h0)
+        x_pos = np.arange(self.L, self.L+self.l, self.h0)
         for x in x_pos:
             # channel
             r_min = self.r
@@ -254,6 +257,26 @@ class Nozzle(Application):
             cx = np.append(cx, x*np.ones_like(y_2d.ravel()))
             # fluid
             n = self.generate_parametrized_positions(self.r)
+            y_2d, z_2d = self.sunflower_seed(n)
+            fy = np.append(fy, y_2d.ravel())
+            fz = np.append(fz, z_2d.ravel())
+            fx = np.append(fx, x*np.ones_like(y_2d.ravel()))
+
+        x_pos = np.arange(2*self.L+self.l, 2*self.L+self.l+0.006, self.h0)
+        for x in x_pos:
+            # channel
+            if x > 2*self.L+self.l+0.004:
+                r_min = self.r
+            else:
+                r_min = self.R-(self.R-self.r)*(x - (2*self.L+self.l))/0.004
+            r_max = self.R
+            n = self.generate_parametrized_positions(r_max, r_min)
+            y_2d, z_2d = self.sunflower_seed(n)
+            cy = np.append(cy, y_2d.ravel())
+            cz = np.append(cz, z_2d.ravel())
+            cx = np.append(cx, x*np.ones_like(y_2d.ravel()))
+            # fluid
+            n = self.generate_parametrized_positions(r_min)
             y_2d, z_2d = self.sunflower_seed(n)
             fy = np.append(fy, y_2d.ravel())
             fz = np.append(fz, z_2d.ravel())
