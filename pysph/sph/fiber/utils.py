@@ -282,8 +282,8 @@ class Contact(Equation):
                 (s_rnext[s_idx] < 1E-14 or s_rprev[s_idx] < 1E-14)):
 
                 d = min(self.lim*self.d, max(self.d-RIJ,0))
-
-                F = self.scale*2*d*self.d*E_star
+                F = 4/3 * self.scale * d**1.5 * sqrt(self.d/2) * E_star
+                #F = self.scale*2*d*self.d*E_star
                 V = sqrt(VIJ[0]**2 + VIJ[1]**2 + VIJ[2]**2)
 
                 d_Fx[d_idx] += (XIJ[0]/RIJ * F - self.k*F*VIJ[0]/V)/d_m[d_idx]
@@ -319,7 +319,8 @@ class Contact(Equation):
                 tr = sqrt(tx**2 + ty**2 + tz**2)
 
                 d = min(self.lim*self.d, max(self.d-tr,0))
-                F = self.scale*2*d*self.d*E_star
+                F = 4/3 * self.scale * d**1.5 * sqrt(self.d/2) * E_star
+                #F = self.scale*2*d*self.d*E_star
 
                 d_Fx[d_idx] += (F*tx/tr - self.k*F*v_rel_x/v_rel)/d_m[d_idx]
                 d_Fy[d_idx] += (F*ty/tr - self.k*F*v_rel_y/v_rel)/d_m[d_idx]
@@ -355,7 +356,8 @@ class Contact(Equation):
                 tr = sqrt(tx**2 + ty**2 + tz**2)
 
                 d = min(self.lim*self.d, max(self.d-tr,0))
-                F = self.scale*2*d*self.d*E_star
+                F = 4/3 * self.scale * d**1.5 * sqrt(self.d/2) * E_star
+                #F = self.scale*2*d*self.d*E_star
 
                 d_Fx[d_idx] += (F*tx/tr - self.k*F*v_rel_x/v_rel)/d_m[d_idx]
                 d_Fy[d_idx] += (F*ty/tr - self.k*F*v_rel_y/v_rel)/d_m[d_idx]
@@ -409,7 +411,8 @@ class Contact(Equation):
                     y = nx*XIJ[0]+ny*XIJ[1]+nz*XIJ[2]
 
                     d = min(self.lim*self.d, max(self.d-y,0))
-                    F = self.scale*2*d*self.d*E_star
+                    F = 4/3 * self.scale * d**1.5 * sqrt(self.d/2) * E_star
+                    #F = self.scale*2*d*self.d*E_star
 
                     d_Fx[d_idx] += (F*nx - self.k*F*v_rel_x/v_rel)/d_m[d_idx]
                     d_Fy[d_idx] += (F*ny - self.k*F*v_rel_y/v_rel)/d_m[d_idx]
@@ -441,7 +444,8 @@ class Contact(Equation):
                     tr = sqrt(tx**2 + ty**2 + tz**2)
 
                     d = min(self.lim*self.d, max(self.d-tr,0))
-                    F = self.scale*2*d*self.d*E_star
+                    F = 4/3 * self.scale * d**1.5 * sqrt(self.d/2) * E_star
+                    #F = self.scale*2*d*self.d*E_star
 
                     d_Fx[d_idx] += (F*tx/tr - self.k*F*v_rel_x/v_rel)/d_m[d_idx]
                     d_Fy[d_idx] += (F*ty/tr - self.k*F*v_rel_y/v_rel)/d_m[d_idx]

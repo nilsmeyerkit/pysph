@@ -158,7 +158,7 @@ class Nozzle(Application):
         if self.options.postonly:
             self.t = 0
         else:
-            self.t = (self.L+4*self.h0)/self.options.speed
+            self.t = self.L/self.options.speed
 
         # compute number of fibers
         self.n = int(self.options.vol_frac*self.N)
