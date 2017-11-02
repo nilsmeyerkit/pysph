@@ -1,30 +1,18 @@
 #!/bin/bash
-
-echo "########################################"
-echo "#Running batch mode for DSM Parameters.#"
-echo "########################################"
-
+#SBATCH --account=def-hrymak-ab  # account name
+#SBATCH --mem-per-cpu=2G         # memory; default unit is megabytes
+#SBATCH --time=0-02:00           # time (DD-HH:MM)
+#SBATCH --output=%x-%j.out       # output log (<filename>-<jobid>.out)
+#SBATCH --ntasks=16               # number of MPI processes
 E=2.5E9
 w=150
 d=0.0001
 G=3.3
 mu=63
-# ensuring that viscosity is still smallest step
 massscale=0.5E5
 
-echo "#### Aspect ratios ####"
+# pysph run fiber.channel --rot 2 --ar 17 --d $d --E $E --G $G --mu $mu --holdcenter --openmp --vtk
 
-echo "Running aspect ratio: 17 ..."
-pysph run ebg.channel --ar 17 --d $d --E $E --G $G --mu $mu --massscale $massscale --holdcenter --openmp
-mv channel_output/ \
-~/Dropbox/Thesis/Documentation/SPH/Shearflow_DSM/17particles/
+pysph run fiber.channel --rot 1.5 --ar 41 --d $d --E $E --G $G --mu $mu --holdcenter --openmp --vtk
 
-echo "Running aspect ratio: 35 ..."
-pysph run ebg.channel --ar 35 --d $d --E $E --G $G --mu $mu --massscale $massscale --holdcenter --openmp
-mv channel_output/ \
-~/Dropbox/Thesis/Documentation/SPH/Shearflow_DSM/35particles/
-
-echo "Running aspect ratio: 61 ..."
-pysph run ebg.channel --ar 61 --d $d --E $E --G $G --mu $mu --massscale $massscale --holdcenter --openmp
-mv channel_output/ \
-~/Dropbox/Thesis/Documentation/SPH/Shearflow_DSM/61particles/
+pysph run fiber.channel --rot 1.5 --ar 61 --d $d --E $E --G $G --mu $mu --holdcenter --openmp --vtk
