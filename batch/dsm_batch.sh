@@ -13,6 +13,6 @@ massscale=0.5E5
 
 # pysph run fiber.channel --rot 2 --ar 17 --d $d --E $E --G $G --mu $mu --holdcenter --openmp --vtk
 
-pysph run fiber.channel --rot 1.5 --ar 41 --d $d --E $E --G $G --mu $mu --holdcenter --openmp --vtk
+pysph run fiber.channel --rot 2 --ar $1 --d $d --E $E --G $G --mu $mu --holdcenter --openmp --vtk
 
-pysph run fiber.channel --rot 1.5 --ar 61 --d $d --E $E --G $G --mu $mu --holdcenter --openmp --vtk
+#pysph run fiber.channel --rot 1.5 --ar 61 --d $d --E $E --G $G --mu $mu --holdcenter --openmp --vtk
