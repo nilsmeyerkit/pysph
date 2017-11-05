@@ -668,7 +668,8 @@ class TVFScheme(Scheme):
 
 class BeadChainScheme(Scheme):
     def __init__(self, fluids, solids, fibers, dim, k=0.0, lim=0.5,
-                    tag=100, gx=0.0, gy=0.0, gz=0.0, alpha=0.0, tdamp=0.0):
+                    tag=100, gx=0.0, gy=0.0, gz=0.0, alpha=0.0, tdamp=0.0,
+                    vc=False):
         self.fluids = fluids
         self.solids = solids
         self.fibers = fibers
@@ -686,6 +687,7 @@ class BeadChainScheme(Scheme):
         self.I = None
         self.J = None
         self.D = None
+        self.vc = vc
         self.lim = lim
         self.k = k
         self.tag = tag
@@ -789,7 +791,8 @@ class BeadChainScheme(Scheme):
         for fluid in self.fluids:
             g1.append(SummationDensity(dest=fluid, sources=all))
         for fiber in self.fibers:
-            g1.append(EBGVelocityReset(dest=fiber, sources=None))
+            g1.append(EBGVelocityReset(dest=fiber, sources=None,
+                                        velocity_correction=self.vc))
             g1.append(SummationDensity(dest=fiber, sources=all))
             #g1.append(ComputeDistance(dest=fiber, sources=[fiber]))
         for solid in self.solids:
@@ -811,8 +814,9 @@ class BeadChainScheme(Scheme):
             g2.append(StateEquation(dest=fiber, sources=None, p0=self.p0,
                        rho0=self.rho0, b=1.0))
             g2.append(VelocityGradient(dest=fiber, sources=all))
-            g2.append(SetWallVelocity(dest=fiber,
-                    sources=self.fluids+self.fibers, dim=self.dim))
+            if viscous_fiber:
+                g2.append(SetWallVelocity(dest=fiber,
+                    sources=self.fluids, dim=self.dim))
 
         equations.append(Group(equations=g2, real=False))
 
@@ -835,10 +839,16 @@ class BeadChainScheme(Scheme):
             g5.append(MomentumEquationPressureGradient(dest=fluid, sources=all,
                 pb=self.pb, gx=self.gx,gy=self.gy,gz=self.gz,tdamp=self.tdamp))
             if self.nu > 0.0:
-                g5.append(MomentumEquationViscosity(dest=fluid,
-                    sources=self.fluids, nu=self.nu))
-                g5.append(SolidWallNoSlipBC(dest=fluid,
-                        sources=self.solids+self.fibers,nu=self.nu))
+                if viscous_fiber:
+                    g5.append(MomentumEquationViscosity(dest=fluid,
+                        sources=self.fluids, nu=self.nu))
+                    g5.append(SolidWallNoSlipBC(dest=fluid,
+                            sources=self.solids+self.fibers,nu=self.nu))
+                else:
+                    g5.append(MomentumEquationViscosity(dest=fluid,
+                            sources=self.fluids+self.fibers, nu=self.nu))
+                    g5.append(SolidWallNoSlipBC(dest=fluid,
+                             sources=self.solids, nu=self.nu))
 
             g5.append(MomentumEquationArtificialStress(dest=fluid,
                 sources=self.fluids+self.fibers))
