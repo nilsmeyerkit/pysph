@@ -164,10 +164,7 @@ class Channel(Application):
 
         # If there is no other scale scale factor provided, use automatically
         # computed factor.
-        if self.options.ar < 35:
-            auto_scale_factor = self.options.mu/(nu_needed*self.options.rho0)
-        else:
-            auto_scale_factor = 0.7*self.options.mu/nu_needed/self.options.rho0
+        auto_scale_factor = self.options.mu/(nu_needed*self.options.rho0)
         self.scale_factor = self.options.scale_factor or auto_scale_factor
 
         # The density can be scaled using the mass scaling factor. To account
@@ -190,7 +187,7 @@ class Channel(Application):
         self.nu = self.options.mu/self.rho0
 
         # damping from empirical guess
-        self.D = self.options.D or self.options.ar*500
+        self.D = self.options.D or self.options.ar*800
 
         # For 2 dimensions surface, mass and moments have a different coputation
         # than for 3 dimensions.
