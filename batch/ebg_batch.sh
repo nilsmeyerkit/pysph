@@ -12,7 +12,8 @@ for D in 0 0.5 1 2
 do
   gx=10
   gy=0
-  pysph run fiber.beam --gx $gx --gy $gy --D $D --N $N --E $E
+  gz=0
+  pysph run fiber.beam --gx $gx --gy $gy --gz $gz --D $D --N $N --E $E
   dirx=~/Dropbox/Thesis/Documentation/EBG/Batch/X-Oscillation/N=${N}gx=${gx}_gy=${gy}_D=${D}_E=${E}
   mkdir $dirx
   mv beam_output/* $dirx
@@ -39,7 +40,8 @@ for N in 10 50
 do
   gx=10
   gy=0
-  pysph run fiber.beam --gx $gx --gy $gy --D $D --N $N --E $E
+  gz=0
+  pysph run fiber.beam --gx $gx --gy $gy --gz $gz --D $D --N $N --E $E
   dirx=~/Dropbox/Thesis/Documentation/EBG/Batch/X-Displacement/N=${N}gx=${gx}_gy=${gy}_D=${D}_E=${E}
   mkdir $dirx
   mv beam_output/* $dirx
@@ -64,7 +66,8 @@ for N in 10 50
 do
   gx=0
   gy=10
-  pysph run fiber.beam --gx $gx --gy $gy --D $D --N $N --E $E
+  gz=0
+  pysph run fiber.beam --gx $gx --gy $gy --gz $gz --D $D --N $N --E $E
   diry=~/Dropbox/Thesis/Documentation/EBG/Batch/Y-Displacement/N=${N}gx=${gx}_gy=${gy}_D=${D}_E=${E}
   mkdir $diry
   mv beam_output/* $diry
