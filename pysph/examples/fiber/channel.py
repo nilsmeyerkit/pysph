@@ -502,10 +502,10 @@ class Channel(Application):
         else:
             cbar = plt.colorbar(vel)
             plt.axis('equal')
-        cbar.set_label('Velocity Magnitude [mm/s]', labelpad=20.0)
+        cbar.set_label('Velocity [mm/s]', labelpad=20.0)
         plt.axis((0,factor*self.Lx,0,factor*self.Ly))
-        plt.xlabel('x [mm]')
-        plt.ylabel('y [mm]')
+        plt.xlabel('$x_1$ [mm]')
+        plt.ylabel('$x_2$ [mm]')
         plt.tight_layout()
 
         # save plot
@@ -548,8 +548,8 @@ class Channel(Application):
             cbar = plt.colorbar(pres, label='Pressure [Pa]')
             plt.axis('equal')
         plt.axis((0,factor*self.Lx,0,factor*self.Ly))
-        plt.xlabel('x [mm]')
-        plt.ylabel('y [mm]')
+        plt.xlabel('$x_1$ [mm]')
+        plt.ylabel('$x_2$ [mm]')
         plt.tight_layout()
 
 
@@ -611,8 +611,8 @@ class Channel(Application):
         plt.plot(u_exact*factor, y*factor, ':k')
 
         # labels
-        plt.xlabel('Velocity at inlet[mm/s]')
-        plt.ylabel('Position [mm]')
+        plt.xlabel('$v_1$ [mm/s]')
+        plt.ylabel('$x_2$ [mm]')
         plt.grid()
         if self.options.ar == 1:
             plt.legend(['SPH Simulation', 'FEM', 'No obstacle'])
@@ -682,8 +682,8 @@ class Channel(Application):
             plt.plot(u_fem*factor, y_fem*factor , '--k')
 
         # labels
-        plt.xlabel('Velocity at center [mm/s]')
-        plt.ylabel('Position [mm]')
+        plt.xlabel('$v_1$ [mm/s]')
+        plt.ylabel('$x_2$ [mm]')
         plt.grid()
 
         if self.options.ar == 1:
@@ -741,7 +741,7 @@ class Channel(Application):
 
         # labels
         plt.legend(['SPH Simulation','FEM Result'], loc='upper right')
-        plt.xlabel('x [mm]')
+        plt.xlabel('$x_1$ [mm]')
         plt.ylabel('p [Pa]')
         plt.grid()
         plt.tight_layout()
@@ -853,7 +853,7 @@ class Channel(Application):
 
             # extract reaction forces at hold particles
             idx = np.argwhere(fiber.holdtag==100)
-            if len(idx) > 0:
+            if len(idx) > 0 and self.options.ar == 1:
                 Fwx.append(fiber.Fwx[idx][0])
                 Fwy.append(fiber.Fwy[idx][0])
                 Fwz.append(fiber.Fwz[idx][0])
@@ -888,8 +888,8 @@ class Channel(Application):
 
         # set equally scaled axis to not distort the orbit
         plt.axis('equal')
-        plt.xlabel('x [mm]')
-        plt.ylabel('y [mm]')
+        plt.xlabel('$x_1$ [mm]')
+        plt.ylabel('$x_2$ [mm]')
         plt.grid()
         plt.tight_layout()
 
@@ -921,7 +921,7 @@ class Channel(Application):
 
         # labels
         plt.xlabel('t [s]')
-        plt.ylabel('Angle [rad]')
+        plt.ylabel('$\phi$ [rad]')
         plt.legend(['SPH Simulation', 'Jeffery (equiv.)', 'Jeffery'])
         plt.grid()
         x1,x2,y1,y2 = plt.axis()
@@ -1011,9 +1011,10 @@ class Channel(Application):
 
             # labels
             plt.xlabel('t [ms]')
-            plt.ylabel('Force per depth [N/m]')
+            plt.ylabel('$F/L$ [N/m]')
             plt.legend(['SPH total force',
-                        'FEM total force', 'FEM viscous force'],
+                        'FEM total force',
+                        'FEM viscous force'],
                         loc='lower right')
             x1,x2,y1,y2 = plt.axis()
             plt.axis((0,x2,0,y2))
