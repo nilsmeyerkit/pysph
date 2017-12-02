@@ -55,7 +55,6 @@ cdef class GPUNeighborCache:
         self._copied_to_cpu = False
 
         self._nbr_lengths_gpu = DeviceArray(np.uint32, n=n_p)
-        self._nbr_lengths_gpu.fill(0)
 
         self._neighbors_gpu = DeviceArray(np.uint32)
 
@@ -115,7 +114,6 @@ cdef class GPUNeighborCache:
         self._copied_to_cpu = False
         cdef long n_p = self._particles[self._dst_index].get_number_of_particles()
         self._nbr_lengths_gpu.resize(n_p)
-        self._nbr_lengths_gpu.fill(0)
 
     cpdef get_neighbors(self, int src_index, size_t d_idx, UIntArray nbrs):
         self.get_neighbors_raw(d_idx, nbrs)
@@ -274,13 +272,13 @@ cdef class GPUNNPS(NNPSBase):
             z = pa_wrapper.pa.gpu.z
 
             # find min and max of variables
-            xmax = np.maximum(cl.array.max(x), xmax)
-            ymax = np.maximum(cl.array.max(y), ymax)
-            zmax = np.maximum(cl.array.max(z), zmax)
+            xmax = np.maximum(cl.array.max(x).get(), xmax)
+            ymax = np.maximum(cl.array.max(y).get(), ymax)
+            zmax = np.maximum(cl.array.max(z).get(), zmax)
 
-            xmin = np.minimum(cl.array.min(x), xmin)
-            ymin = np.minimum(cl.array.min(y), ymin)
-            zmin = np.minimum(cl.array.min(z), zmin)
+            xmin = np.minimum(cl.array.min(x).get(), xmin)
+            ymin = np.minimum(cl.array.min(y).get(), ymin)
+            zmin = np.minimum(cl.array.min(z).get(), zmin)
 
         # Add a small offset to the limits.
         lx, ly, lz = xmax - xmin, ymax - ymin, zmax - zmin
@@ -296,8 +294,8 @@ cdef class GPUNNPS(NNPSBase):
             zmin -= 0.5; zmax += 0.5
 
         # store the minimum and maximum of physical coordinates
-        self.xmin = np.asarray([xmin.get(), ymin.get(), zmin.get()])
-        self.xmax = np.asarray([xmax.get(), ymax.get(), zmax.get()])
+        self.xmin = np.asarray([xmin, ymin, zmin])
+        self.xmax = np.asarray([xmax, ymax, zmax])
 
     cpdef _bin(self, int pa_index):
         raise NotImplementedError("NNPS :: _bin called")
@@ -354,6 +352,7 @@ cdef class BruteForceNNPS(GPUNNPS):
 
         src = """
                 unsigned int j;
+                unsigned int length = 0;
                 %(data_t)s dist;
                 %(data_t)s h_i = radius_scale2*d_h[i]*d_h[i];
                 %(data_t)s h_j;
@@ -362,8 +361,9 @@ cdef class BruteForceNNPS(GPUNNPS):
                     h_j = radius_scale2*s_h[j]*s_h[j];
                     dist = NORM2(d_x[i] - s_x[j], d_y[i] - s_y[j], d_z[i] - s_z[j]);
                     if(dist < h_i || dist < h_j)
-                        nbr_lengths[i] += 1;
+                        length += 1;
                 }
+                nbr_lengths[i] = length;
                 """ % {"data_t" : ("double" if self.use_double else "float")}
 
         brute_force_nbr_lengths = ElementwiseKernel(
