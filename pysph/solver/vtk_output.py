@@ -28,7 +28,7 @@ class VTKOutput(Output):
 
         vectors:
             Vectors to dump
-            Example V=['u', 'v', 'z']
+            Example velocity=['u', 'v', 'z']
         """
 
         self.vectors = {}
@@ -50,10 +50,10 @@ class VTKOutput(Output):
     def _get_scalars(self, arrays):
 
         if self.scalars is None:
-            self.scalars = list(arrays.keys())
+            properties = list(arrays.keys())
 
         scalars = []
-        for prop_name in self.scalars:
+        for prop_name in properties:
             scalars.append((prop_name, arrays[prop_name]))
         return scalars
 
