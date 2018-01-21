@@ -90,7 +90,7 @@ class SimpleRemesher(Tool):
 
 class FiberIntegrator(Tool):
     def __init__(self, all_particles, scheme, domain=None, innerloop=True, updates=True,
-            parallel=False):
+            parallel=False, steps=None):
         """The second integrator is a simple Euler-Integrator (accurate
         enough due to very small time steps; very fast) using EBGSteps.
         EBGSteps are basically the same as EulerSteps, exept for the fact
@@ -119,6 +119,7 @@ class FiberIntegrator(Tool):
         self.dt = scheme.dt
         self.fiber_dt = scheme.fiber_dt
         self.domain_updates = updates
+        self.steps = steps
 
         # if there are more than 1 particles involved, elastic equations are
         # iterated in an inner loop.
@@ -215,7 +216,7 @@ class FiberIntegrator(Tool):
             # 1) predictor
             # 2) post stage 1:
             if stage == 1:
-                N = int(ceil(self.dt/self.fiber_dt))
+                N = self.steps or int(ceil(self.dt/self.fiber_dt))
                 for n in range(0,N):
                     self.fiber_integrator.step(current_time,dt/N)
                     current_time += dt/N

@@ -83,7 +83,7 @@ class Channel(Application):
         )
         group.add_argument(
             "--E", action="store", type=float, dest="E",
-            default=1E11, help="Young's modulus"
+            default=1E10, help="Young's modulus"
         )
         group.add_argument(
             "--G", action="store", type=float, dest="G",
@@ -133,6 +133,10 @@ class Channel(Application):
             "--rot", action="store", type=float, dest="rot",
             default=1.0, help="Number of half rotations."
         )
+        group.add_argument(
+            "--steps", action="store", type=int, dest="steps",
+            default=None, help="Number of steps in inner loop."
+        )
 
     def consume_user_options(self):
         """Initialization of geometry, properties and time stepping."""
@@ -165,6 +169,7 @@ class Channel(Application):
         # If there is no other scale scale factor provided, use automatically
         # computed factor.
         auto_scale_factor = self.options.mu/(nu_needed*self.options.rho0)
+        print("Automatic scale factor is %d"%auto_scale_factor)
         self.scale_factor = self.options.scale_factor or auto_scale_factor
 
         # The density can be scaled using the mass scaling factor. To account
@@ -187,7 +192,7 @@ class Channel(Application):
         self.nu = self.options.mu/self.rho0
 
         # damping from empirical guess
-        self.D = self.options.D or self.options.ar*800
+        self.D = self.options.D or 0.03*self.scale_factor
 
         # For 2 dimensions surface, mass and moments have a different coputation
         # than for 3 dimensions.
@@ -424,8 +429,11 @@ class Channel(Application):
 
     def create_tools(self):
         ud = not self.options.holdcenter
+        if self.options.steps:
+            print("Using %d inner steps."%self.options.steps)
         return [FiberIntegrator(self.particles, self.scheme, self.domain,
-                                innerloop=self.options.ar>1, updates=ud)]
+                                innerloop=self.options.ar>1, updates=ud,
+                                steps=self.options.steps)]
 
     def get_meshgrid(self, xx, yy, zz):
         """This function is just a shorthand for the generation of meshgrids."""
