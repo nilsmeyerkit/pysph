@@ -10,7 +10,7 @@
 #export OMP_NUM_THREADS=16
 
 # changing to scratch directory
-mkdir /scratch/nmeyer7/AR$1
-cd /scratch/nmeyer7/AR$1
+mkdir /scratch/nmeyer7/shearflow/AR$1
+cd /scratch/nmeyer7/shearflow/AR$1
 
-pysph run fiber.channel --ar $1 --E 1E11 --holdcenter --openmp
+pysph run fiber.shearflow --ar $1 --holdcenter --openmp
