@@ -52,7 +52,8 @@ from pysph.sph.scheme import BeadChainScheme
 #   CHAPTER 2 - THE MICRORHEOLOGY OF DISPERSIONS A2 - EIRICH, pp. 85–250.
 #   Academic Press, 1967.
 def get_equivalent_aspect_ratio(aspect_ratio):
-    return -0.0017*aspect_ratio**2+0.742*aspect_ratio
+    return [1.24*aspect_ratio/np.sqrt(np.log(aspect_ratio)),
+            -0.0017*aspect_ratio**2+0.742*aspect_ratio]
 
 # Jeffery's Equation for planar rotation of a rigid (theta=0)
 def jeffery_ode(phi, t, ar, G):
@@ -67,7 +68,7 @@ class Channel(Application):
     def add_user_options(self, group):
         group.add_argument(
             "--d", action="store", type=float, dest="d",
-            default=0.0002, help="Fiber diameter"
+            default=0.0001, help="Fiber diameter"
         )
         group.add_argument(
             "--ar", action="store", type=int, dest="ar",
@@ -79,15 +80,15 @@ class Channel(Application):
         )
         group.add_argument(
             "--mu", action="store", type=float, dest="mu",
-            default=1000, help="Absolute viscosity"
+            default=63, help="Absolute viscosity"
         )
         group.add_argument(
             "--E", action="store", type=float, dest="E",
-            default=1E10, help="Young's modulus"
+            default=2.5E9, help="Young's modulus"
         )
         group.add_argument(
             "--G", action="store", type=float, dest="G",
-            default=4, help="Shear rate"
+            default=3.3, help="Shear rate"
         )
         group.add_argument(
             "--g", action="store", type=float, dest="g",
@@ -188,11 +189,11 @@ class Channel(Application):
         self.z_fiber = 0.5*self.Ly
 
         # The kinematic viscosity is computed from absolute viscosity and
-        # scaled (!) density.
+        # scaled density.
         self.nu = self.options.mu/self.rho0
 
         # damping from empirical guess
-        self.D = self.options.D or 0.03*self.scale_factor
+        self.D = self.options.D or 0.001*self.scale_factor
 
         # For 2 dimensions surface, mass and moments have a different coputation
         # than for 3 dimensions.
@@ -877,15 +878,18 @@ class Channel(Application):
             T_mean = np.mean(T)
             T_std  = np.std(T)
             are = get_equivalent_aspect_ratio(self.options.ar)
-            l = (are+1.0/are)
-            T_equiv = np.pi*l/self.options.G
+            l_cox = (are[0]+1.0/are[0])
+            l_gmason = (are[1]+1.0/are[1])
+            T_cox = np.pi*l_cox/self.options.G
+            T_gmason = np.pi*l_gmason/self.options.G
             l = (self.options.ar+1.0/self.options.ar)
             T_jef = np.pi*l/self.options.G
             print("Rotational statistics for %d half rotations:"%self.options.rot)
             print("*Mean: %f"%T_mean)
             print("*Standard Deviation: %f"%T_std)
             print("*Jeffery: %f"%T_jef)
-            print("*Jeffery(equivalent): %f"%T_equiv)
+            print("*Jeffery(Cox equivalent): %f"%T_cox)
+            print("*Jeffery(Goldsmith/Mason equivalent): %f"%T_gmason)
 
         # open new plot
         plt.figure()
@@ -913,8 +917,10 @@ class Channel(Application):
         are = get_equivalent_aspect_ratio(self.options.ar)
         angle_jeffery = odeint(jeffery_ode,phi0,t, atol=1E-15,
                                 args=(self.options.ar,self.options.G))
-        angle_jeffery_equiv = odeint(jeffery_ode,phi0,t, atol=1E-15,
-                                args=(are,self.options.G))
+        angle_jeffery_cox = odeint(jeffery_ode,phi0,t, atol=1E-15,
+                                args=(are[0],self.options.G))
+        angle_jeffery_gmason = odeint(jeffery_ode,phi0,t, atol=1E-15,
+                                args=(are[1],self.options.G))
 
         # constraint between -pi/2 and pi/2
         #angle_jeffery = (angle_jeffery+np.pi/2.0)%np.pi-np.pi/2.0
@@ -924,7 +930,8 @@ class Channel(Application):
 
         # plot computed angle and Jeffery's solution
         plt.plot(t, angle, 'ok', markersize=3)
-        plt.plot(t, angle_jeffery_equiv, '--k')
+        #plt.plot(t, angle_jeffery_cox, '-.k')
+        plt.plot(t, angle_jeffery_gmason, '--k')
         plt.plot(t, angle_jeffery, '-k')
 
         # labels
