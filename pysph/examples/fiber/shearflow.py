@@ -636,15 +636,16 @@ class Channel(Application):
         plt.figure()
 
         # plot computed angle and Jeffery's solution
-        plt.plot(t, angle, 'ok', markersize=3)
-        #plt.plot(t, angle_jeffery_cox, '-.k')
-        plt.plot(t, angle_jeffery_gmason, '--k')
-        plt.plot(t, angle_jeffery, '-k')
+        plt.plot(t, angle_jeffery_cox, 'sk', markersize=2, color='grey')
+        plt.plot(t, angle_jeffery_gmason, 'ok', markersize=2, color='grey')
+        plt.plot(t, angle, '-k')
+        plt.plot(t, angle_jeffery, '--k')
 
         # labels
         plt.xlabel('t [s]')
         plt.ylabel('$\phi$ [rad]')
-        plt.legend(['SPH Simulation', 'Jeffery (equiv.)', 'Jeffery'])
+        plt.legend(['SPH Simulation', 'Cox equiv.', 'Goldsmith/Mason equiv.',
+                    'Jeffery'])
         plt.grid()
         x1,x2,y1,y2 = plt.axis()
         plt.axis((0,x2,0,y2))
