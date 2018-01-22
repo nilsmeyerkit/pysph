@@ -95,8 +95,8 @@ class Channel(Application):
             default=False, help="Set time to zero and postprocess only."
         )
         group.add_argument(
-            "--massscale", action="store", type=float, dest="scale_factor",
-            default=None, help="Factor of mass scaling"
+            "--Re", action="store", type=float, dest="Re",
+            default=1.0, help="Desired Reynolds number for scaling.-"
         )
         group.add_argument(
             "--fluidres", action="store", type=float, dest="fluid_res",
@@ -129,20 +129,13 @@ class Channel(Application):
         # Use fiber aspect ratio to determine the channel width.
         self.Ly = self.Lf + 2*int(0.1*self.options.ar)*self.dx
 
-        # Computation of a scale factor in a way that dt_cfl exactly matches
-        # dt_viscous.
-        a = self.h0*0.125*11/0.4
-        nu_needed = a*self.options.G*self.Ly/2
-
-        # If there is no other scale scale factor provided, use automatically
-        # computed factor.
-        auto_scale_factor = self.options.mu/(nu_needed*self.options.rho0)
-        print("Automatic scale factor is %d"%auto_scale_factor)
-        self.scale_factor = self.options.scale_factor or auto_scale_factor
-
-        # The density can be scaled using the mass scaling factor. To account
-        # for proper external forces, gravity is scaled just the other way.
-        self.rho0 = self.options.rho0*self.scale_factor
+        # Reynolds number
+        self.Vmax = self.options.G*self.Ly/2
+        Re = self.options.rho0*self.Vmax*self.Lf/self.options.mu
+        print("Original Reynolds number: %g"%Re)
+        self.rho0 = (self.options.mu*self.options.Re)/(self.Vmax*self.Lf)
+        Re_scaled = self.rho0*self.Vmax*self.Lf/self.options.mu
+        print("Scaled Reynolds number: %g"%Re_scaled)
 
         # The channel length is twice the width + dx to make it symmetric.
         self.Lx = 2.0*self.Ly + self.dx
@@ -159,9 +152,9 @@ class Channel(Application):
 
         # damping from empirical guess
         if self.options.dim == 2:
-            self.D = 0.001*self.scale_factor
+            self.D = 0.00001*self.rho0
         else:
-            self.D = 0.00001*self.scale_factor
+            self.D = 0.0000001*self.rho0
 
         # For 2 dimensions surface, mass and moments have a different coputation
         # than for 3 dimensions.
@@ -180,7 +173,6 @@ class Channel(Application):
         # SPH uses weakly compressible fluids. Therefore, the speed of sound c0
         # is computed as 10 times the maximum velocity. This should keep the
         # density change within 1%
-        self.Vmax = self.options.G*self.Ly/2
         self.c0 = 10*self.Vmax
         self.p0 = self.c0**2*self.rho0
 
