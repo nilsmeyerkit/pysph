@@ -152,9 +152,9 @@ class Channel(Application):
 
         # damping from empirical guess
         if self.options.dim == 2:
-            self.D = 0.00005*self.rho0
+            self.D = 0.0000005*self.rho0*self.options.ar
         else:
-            self.D = 0.0000001*self.rho0
+            self.D = 0.000000005*self.rho0*self.options.ar
 
         # For 2 dimensions surface, mass and moments have a different coputation
         # than for 3 dimensions.
