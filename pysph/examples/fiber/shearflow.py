@@ -152,7 +152,7 @@ class Channel(Application):
 
         # damping from empirical guess
         if self.options.dim == 2:
-            self.D = 0.00001*self.rho0
+            self.D = 0.00005*self.rho0
         else:
             self.D = 0.0000001*self.rho0
 
