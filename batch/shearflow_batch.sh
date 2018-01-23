@@ -4,13 +4,13 @@
 #SBATCH --output=%x-%j.out       # output log (<filename>-<jobid>.out)
 #SBATCH --ntasks=32               # number of MPI processes
 
-##SBATCH --nodes=1
-##SBATCH --ntasks-per-node=1
-##SBATCH --cpus-per-task=16
-#export OMP_NUM_THREADS=16
-
 # changing to scratch directory
 mkdir /scratch/nmeyer7/shearflow/AR$1
 cd /scratch/nmeyer7/shearflow/AR$1
 
-pysph run fiber.shearflow --ar $1 --holdcenter --openmp
+if [$1 < 35]
+then
+  pysph run fiber.shearflow --ar $1 --holdcenter --openmp
+else
+  pysph run fiber.shearflow --ar $1 --rot 2 --openmp
+fi
