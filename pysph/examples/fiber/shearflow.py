@@ -644,7 +644,7 @@ class Channel(Application):
         # labels
         plt.xlabel('t [s]')
         plt.ylabel('$\phi$ [rad]')
-        plt.legend(['SPH Simulation', 'Cox equiv.', 'Goldsmith/Mason equiv.',
+        plt.legend(['Cox equiv.', 'Goldsmith/Mason equiv.', 'SPH Simulation',
                     'Jeffery'])
         plt.grid()
         x1,x2,y1,y2 = plt.axis()
