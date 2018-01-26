@@ -99,6 +99,10 @@ class Channel(Application):
             default=1.0, help="Desired Reynolds number for scaling.-"
         )
         group.add_argument(
+            "--frac", action="store", type=float, dest="phifrac",
+            default=2.0, help="Critical bending angle for fracture."
+        )
+        group.add_argument(
             "--fluidres", action="store", type=float, dest="fluid_res",
             default=1, help="Resolution of fluid particles relative to fiber."
         )
@@ -289,8 +293,8 @@ class Channel(Application):
             fluid.remove_particles(indices)
             fiber = get_particle_array_beadchain_fiber(name='fiber',
                         x=fibx, y=fiby, m=fiber_mass, rho=self.rho0, h=self.h0,
-                        lprev=self.dx, lnext=self.dx, phi0=np.pi, phifrac=2.0,
-                        fidx=fidx, V=fiber_V)
+                        lprev=self.dx, lnext=self.dx, phi0=np.pi,
+                        phifrac=self.options.phifrac, fidx=fidx, V=fiber_V)
         else:
             channel = get_particle_array_beadchain(name='channel',
                         x=cx, y=cy, z=cz, m=mass, rho=self.rho0, h=self.h0, V=V)
@@ -300,7 +304,7 @@ class Channel(Application):
             fiber = get_particle_array_beadchain_fiber(name='fiber',
                         x=fibx, y=fiby, z=fibz, m=fiber_mass, rho=self.rho0,
                         h=self.h0, lprev=self.dx, lnext=self.dx, phi0=np.pi,
-                        phifrac=2.0, fidx=fidx, V=fiber_V)
+                        phifrac=self.options.phifrac, fidx=fidx, V=fiber_V)
 
         # Print number of particles.
         print("Shear flow : nfluid = %d, nchannel = %d, nfiber = %d"%(
