@@ -229,7 +229,7 @@ class Contact(Equation):
     computes the force between two spheres based on Hertz pressure between two
     cylinders. This Equation requires a computation of ditances by the Bending
     equation."""
-    def __init__(self, dest, sources, E, d, pois=0.3, k=0.0, scale=1, lim=0.5):
+    def __init__(self, dest, sources, E, d, dim, pois=0.3, k=0.0, lim=0.5):
         r"""
         Parameters
         ----------
@@ -237,18 +237,18 @@ class Contact(Equation):
             Young's modulus
         d : float
             fiber diameter
+        dim : int
+            dimensionaltiy of the problem
         pois : float
             poisson number
         k : float
             friction coefficient between fibers
-        scale : float
-            scale factor countering mass scaling
         """
         self.E = E
         self.d = d
         self.pois = pois
         self.k = k
-        self.scale = scale
+        self.dim = dim
         self.lim = lim
         super(Contact, self).__init__(dest, sources)
 
@@ -282,13 +282,13 @@ class Contact(Equation):
                 (s_rnext[s_idx] < 1E-14 or s_rprev[s_idx] < 1E-14)):
 
                 d = min(self.lim*self.d, max(self.d-RIJ,0))
-                F = 4/3 * self.scale * d**1.5 * sqrt(self.d/2) * E_star
-                #F = self.scale*2*d*self.d*E_star
+                F = 4/3 * d**1.5 * sqrt(self.d/2) * E_star
+                #F = 2*d*self.d*E_star
                 V = sqrt(VIJ[0]**2 + VIJ[1]**2 + VIJ[2]**2)
 
-                d_Fx[d_idx] += (XIJ[0]/RIJ * F - self.k*F*VIJ[0]/V)/d_m[d_idx]
-                d_Fy[d_idx] += (XIJ[1]/RIJ * F - self.k*F*VIJ[1]/V)/d_m[d_idx]
-                d_Fz[d_idx] += (XIJ[2]/RIJ * F - self.k*F*VIJ[2]/V)/d_m[d_idx]
+                d_Fx[d_idx] += (XIJ[0]/RIJ * F - self.k*F*VIJ[0]/V)
+                d_Fy[d_idx] += (XIJ[1]/RIJ * F - self.k*F*VIJ[1]/V)
+                d_Fz[d_idx] += (XIJ[2]/RIJ * F - self.k*F*VIJ[2]/V)
 
                 d_au[d_idx] += (XIJ[0]/RIJ * F - self.k*F*VIJ[0]/V)/d_m[d_idx]
                 d_av[d_idx] += (XIJ[1]/RIJ * F - self.k*F*VIJ[1]/V)/d_m[d_idx]
@@ -319,12 +319,12 @@ class Contact(Equation):
                 tr = sqrt(tx**2 + ty**2 + tz**2)
 
                 d = min(self.lim*self.d, max(self.d-tr,0))
-                F = 4/3 * self.scale * d**1.5 * sqrt(self.d/2) * E_star
-                #F = self.scale*2*d*self.d*E_star
+                F = 4/3 * d**1.5 * sqrt(self.d/2) * E_star
+                #F = 2*d*self.d*E_star
 
-                d_Fx[d_idx] += (F*tx/tr - self.k*F*v_rel_x/v_rel)/d_m[d_idx]
-                d_Fy[d_idx] += (F*ty/tr - self.k*F*v_rel_y/v_rel)/d_m[d_idx]
-                d_Fz[d_idx] += (F*tz/tr - self.k*F*v_rel_z/v_rel)/d_m[d_idx]
+                d_Fx[d_idx] += (F*tx/tr - self.k*F*v_rel_x/v_rel)
+                d_Fy[d_idx] += (F*ty/tr - self.k*F*v_rel_y/v_rel)
+                d_Fz[d_idx] += (F*tz/tr - self.k*F*v_rel_z/v_rel)
 
                 d_au[d_idx] += (F*tx/tr - self.k*F*v_rel_x/v_rel)/d_m[d_idx]
                 d_av[d_idx] += (F*ty/tr - self.k*F*v_rel_y/v_rel)/d_m[d_idx]
@@ -356,12 +356,12 @@ class Contact(Equation):
                 tr = sqrt(tx**2 + ty**2 + tz**2)
 
                 d = min(self.lim*self.d, max(self.d-tr,0))
-                F = 4/3 * self.scale * d**1.5 * sqrt(self.d/2) * E_star
-                #F = self.scale*2*d*self.d*E_star
+                F = 4/3 * d**1.5 * sqrt(self.d/2) * E_star
+                #F = 2*d*self.d*E_star
 
-                d_Fx[d_idx] += (F*tx/tr - self.k*F*v_rel_x/v_rel)/d_m[d_idx]
-                d_Fy[d_idx] += (F*ty/tr - self.k*F*v_rel_y/v_rel)/d_m[d_idx]
-                d_Fz[d_idx] += (F*tz/tr - self.k*F*v_rel_z/v_rel)/d_m[d_idx]
+                d_Fx[d_idx] += (F*tx/tr - self.k*F*v_rel_x/v_rel)
+                d_Fy[d_idx] += (F*ty/tr - self.k*F*v_rel_y/v_rel)
+                d_Fz[d_idx] += (F*tz/tr - self.k*F*v_rel_z/v_rel)
 
                 d_au[d_idx] += (F*tx/tr - self.k*F*v_rel_x/v_rel)/d_m[d_idx]
                 d_av[d_idx] += (F*ty/tr - self.k*F*v_rel_y/v_rel)/d_m[d_idx]
@@ -411,12 +411,12 @@ class Contact(Equation):
                     y = nx*XIJ[0]+ny*XIJ[1]+nz*XIJ[2]
 
                     d = min(self.lim*self.d, max(self.d-y,0))
-                    F = 4/3 * self.scale * d**1.5 * sqrt(self.d/2) * E_star
-                    #F = self.scale*2*d*self.d*E_star
+                    F = 4/3 * d**1.5 * sqrt(self.d/2) * E_star
+                    #F = 2*d*self.d*E_star
 
-                    d_Fx[d_idx] += (F*nx - self.k*F*v_rel_x/v_rel)/d_m[d_idx]
-                    d_Fy[d_idx] += (F*ny - self.k*F*v_rel_y/v_rel)/d_m[d_idx]
-                    d_Fz[d_idx] += (F*nz - self.k*F*v_rel_z/v_rel)/d_m[d_idx]
+                    d_Fx[d_idx] += (F*nx - self.k*F*v_rel_x/v_rel)
+                    d_Fy[d_idx] += (F*ny - self.k*F*v_rel_y/v_rel)
+                    d_Fz[d_idx] += (F*nz - self.k*F*v_rel_z/v_rel)
 
                     d_au[d_idx] += (F*nx - self.k*F*v_rel_x/v_rel)/d_m[d_idx]
                     d_av[d_idx] += (F*ny - self.k*F*v_rel_y/v_rel)/d_m[d_idx]
@@ -444,12 +444,12 @@ class Contact(Equation):
                     tr = sqrt(tx**2 + ty**2 + tz**2)
 
                     d = min(self.lim*self.d, max(self.d-tr,0))
-                    F = 4/3 * self.scale * d**1.5 * sqrt(self.d/2) * E_star
-                    #F = self.scale*2*d*self.d*E_star
+                    F = 4/3 * d**1.5 * sqrt(self.d/2) * E_star
+                    #F = 2*d*self.d*E_star
 
-                    d_Fx[d_idx] += (F*tx/tr - self.k*F*v_rel_x/v_rel)/d_m[d_idx]
-                    d_Fy[d_idx] += (F*ty/tr - self.k*F*v_rel_y/v_rel)/d_m[d_idx]
-                    d_Fz[d_idx] += (F*tz/tr - self.k*F*v_rel_z/v_rel)/d_m[d_idx]
+                    d_Fx[d_idx] += (F*tx/tr - self.k*F*v_rel_x/v_rel)
+                    d_Fy[d_idx] += (F*ty/tr - self.k*F*v_rel_y/v_rel)
+                    d_Fz[d_idx] += (F*tz/tr - self.k*F*v_rel_z/v_rel)
 
                     d_au[d_idx] += (F*tx/tr - self.k*F*v_rel_x/v_rel)/d_m[d_idx]
                     d_av[d_idx] += (F*ty/tr - self.k*F*v_rel_y/v_rel)/d_m[d_idx]
