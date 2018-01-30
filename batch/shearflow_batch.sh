@@ -12,5 +12,5 @@ if [$1 < 35]
 then
   pysph run fiber.shearflow --ar $1 --holdcenter --openmp
 else
-  pysph run fiber.shearflow --ar $1 --rot 2 --openmp
+  pysph run fiber.shearflow --ar $1 --openmp
 fi
