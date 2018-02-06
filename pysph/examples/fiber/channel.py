@@ -8,7 +8,7 @@ Flow with fibers in a channel. There are different setups:
     dim=3 and g>0:      3D Poiseuille flow with moving fiber and obstacle fiber
                         (use smaller artificial damping, e.g. 100!)
                         e.g: pysph run fiber.channel --ar 11 --dim 3 --g 10
-                                --G 0 --D 0.01 --vtk --massscale 1E8 --E 1E5
+                                --G 0 --D 0.1 --vtk --massscale 1E8 --E 1E6
 ################################################################################
 """
 # general imports
@@ -235,7 +235,10 @@ class Channel(Application):
                 l = (self.options.ar+1.0/self.options.ar)
                 self.t = self.options.rot*np.pi*l/self.options.G
             else:
-                self.t = 1.5E-5*self.scale_factor
+                if self.options.dim == 3:
+                    self.t = 0.2E-5*self.scale_factor
+                else:
+                    self.t = 1.5E-5*self.scale_factor
         print("Simulated time is %g s"%self.t)
 
     def configure_scheme(self):
@@ -246,9 +249,9 @@ class Channel(Application):
         if self.options.dim == 3 and self.options.g > 0:
             self.scheme.configure(fibers=['fiber', 'obstacle'])
         # Return the particle list.
-        #self.scheme.configure_solver(tf=self.t, vtk = self.options.vtk,
-        #    N=self.options.rot*200)
-        self.scheme.configure_solver(tf=self.t, pfreq=1, vtk = self.options.vtk)
+        self.scheme.configure_solver(tf=self.t, vtk = self.options.vtk,
+            N=self.options.rot*200)
+        #self.scheme.configure_solver(tf=self.t, pfreq=1, vtk = self.options.vtk)
 
     def create_particles(self):
         """Three particle arrays are created: A fluid, representing the polymer
