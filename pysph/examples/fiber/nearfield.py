@@ -637,18 +637,10 @@ class Channel(Application):
 
         # hard-coded solutions for total reaction forces and viscous reaction
         # forces from FEM. (ar=1, g=10, G=0, width=20)
-        t_fem = np.array([0,5.00E-07,1.00E-06,1.50E-06,2.00E-06,2.50E-06,
-                          3.00E-06,3.50E-06,4.00E-06,4.50E-06,5.00E-06,
-                          5.50E-06,6.00E-06,6.50E-06,7.00E-06,7.50E-06,
-                          8.00E-06,8.50E-06,9.00E-06,9.50E-06,1.00E-05,
-                          1.05E-05,1.10E-05,1.15E-05,1.20E-05,1.25E-05,
-                          1.30E-05,1.35E-05,1.40E-05,1.45E-05,1.50E-05])
-        F_fem = np.array([-8.51E-05,0.0027891,0.004684,0.0063805,0.0079349,
-                          0.0093724,0.010703,0.011935,0.013071,0.014116,
-                          0.015087,0.015982,0.0168,0.017562,0.01826,0.018893,
-                          0.019484,0.020026,0.020517,0.020975,0.021395,0.021775,
-                          0.02213,0.022456,0.02275,0.023025,0.023277,0.023504,
-                          0.023717,0.023912,0.024088])
+        t_fem = np.array([0,5.00E-06,1.00E-05,1.50E-05,2.00E-05,2.50E-05,
+                            3.00E-05,3.50E-05,4.00E-05,4.50E-05,5.00E-05])
+        F_fem = np.array([0,0.015085,0.021444,0.024142,0.025327,0.025828,
+                            0.026010,0.026075,0.026094,0.026096,0.026093])
 
         # applying appropriate scale factors
         t = np.array(t)/self.scale_factor
@@ -684,7 +676,6 @@ class Channel(Application):
             return
 
         [streamlines, pressure] = self._plot_streamlines()
-        pressure_centerline = self._plot_pressure_centerline()
         center_velocity = self._plot_center_velocity()
         history = self._plot_history()
         inlet = self._plot_inlet_velocity()
