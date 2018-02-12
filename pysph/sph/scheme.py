@@ -670,7 +670,7 @@ class TVFScheme(Scheme):
 class BeadChainScheme(Scheme):
     def __init__(self, fluids, solids, fibers, dim, k=0.0, lim=0.5,
                     tag=100, gx=0.0, gy=0.0, gz=0.0, alpha=0.0, tdamp=0.0,
-                    vc=False):
+                    vc=False, viscous_fiber=False):
         self.fluids = fluids
         self.solids = solids
         self.fibers = fibers
@@ -689,6 +689,7 @@ class BeadChainScheme(Scheme):
         self.J = None
         self.D = None
         self.vc = vc
+        self.viscous_fiber = viscous_fiber
         self.lim = lim
         self.k = k
         self.tag = tag
@@ -784,8 +785,6 @@ class BeadChainScheme(Scheme):
         from pysph.sph.fiber.beadchain import (Tension, Bending, EBGVelocityReset,
             Friction, ArtificialDamping)
 
-        viscous_fiber = False
-
         equations = []
         all = self.fluids + self.solids + self.fibers
         g1 = []
@@ -815,7 +814,7 @@ class BeadChainScheme(Scheme):
             g2.append(StateEquation(dest=fiber, sources=None, p0=self.p0,
                        rho0=self.rho0, b=1.0))
             g2.append(VelocityGradient(dest=fiber, sources=all))
-            if viscous_fiber:
+            if self.viscous_fiber:
                 g2.append(SetWallVelocity(dest=fiber,
                     sources=self.fluids, dim=self.dim))
 
@@ -840,7 +839,7 @@ class BeadChainScheme(Scheme):
             g5.append(MomentumEquationPressureGradient(dest=fluid, sources=all,
                 pb=self.pb, gx=self.gx,gy=self.gy,gz=self.gz,tdamp=self.tdamp))
             if self.nu > 0.0:
-                if viscous_fiber:
+                if self.viscous_fiber:
                     g5.append(MomentumEquationViscosity(dest=fluid,
                         sources=self.fluids, nu=self.nu))
                     g5.append(SolidWallNoSlipBC(dest=fluid,
@@ -858,7 +857,7 @@ class BeadChainScheme(Scheme):
             g5.append(MomentumEquationPressureGradient(dest=fiber, sources=all,
                 pb=0.0, gx=self.gx,gy=self.gy, gz=self.gz, tdamp=self.tdamp))
             if self.nu > 0.0:
-                if viscous_fiber:
+                if self.viscous_fiber:
                     g5.append(FiberViscousTraction(dest=fiber,
                         sources=self.fluids, nu=self.nu))
                 else:
