@@ -649,13 +649,16 @@ class Channel(Application):
         plt.plot(t, angle_jeffery, '--k')
 
         # labels
-        plt.xlabel('t [s]')
-        plt.ylabel('$\phi$ [rad]')
+        plt.xlabel('Time $t$ in s')
+        plt.ylabel('Rotation angle $\phi$')
         plt.legend(['Cox equiv.', 'Goldsmith/Mason equiv.', 'SPH Simulation',
                     'Jeffery'])
         plt.grid()
         x1,x2,y1,y2 = plt.axis()
         plt.axis((0,x2,0,y2))
+        ax = plt.gca()
+        ax.set_yticks([0, 0.5*np.pi, np.pi, 1.5*np.pi])
+        ax.set_yticklabels(['0', '$\pi/2$', '$\pi$', '$3/2\pi$'])
         plt.tight_layout()
 
         # save figure

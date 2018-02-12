@@ -5,6 +5,8 @@ Flow with fibers in a channel. There are different setups:
                         aspect ratio
     Nearfield (ar=1):   2D fluid field around fiber (fiber is interpreted to be
                         perpendicular to 2D field.)
+                        e.g: pysph run fiber.channel --ar 1 --width 20
+                        --massscale 1E8 --G 0 --g 10 --openmp --holdcenter
     dim=3 and g>0:      3D Poiseuille flow with moving fiber and obstacle fiber
                         (use smaller artificial damping, e.g. 100!)
                         e.g: pysph run fiber.channel --ar 11 --dim 3 --g 10
@@ -482,7 +484,7 @@ class Channel(Application):
         vmag = factor*np.sqrt(u**2 + v**2)
 
         if self.options.ar == 1:
-            upper = 0.025
+            upper = 0.07
         else:
             upper = np.max(vmag)
 
@@ -508,16 +510,16 @@ class Channel(Application):
         # set labels
         if self.options.ar == 1:
             cbar = plt.colorbar(vel,
-                        ticks=[0, 0.005, 0.010, 0.015, 0.020, 0.025],
+                        ticks=[0.0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07],
                         shrink=0.5)
             plt.axis('scaled')
         else:
             cbar = plt.colorbar(vel)
             plt.axis('equal')
-        cbar.set_label('Velocity [mm/s]', labelpad=20.0)
+        cbar.set_label('Velocity in mm/s', labelpad=20.0)
         plt.axis((0,factor*self.Lx,0,factor*self.Ly))
-        plt.xlabel('$x_1$ [mm]')
-        plt.ylabel('$x_2$ [mm]')
+        plt.xlabel('$x_1$ in mm')
+        plt.ylabel('$x_2$ in mm ')
         plt.tight_layout()
 
         # save plot
@@ -525,12 +527,9 @@ class Channel(Application):
         plt.savefig(fig, dpi=300, bbox_inches='tight')
         print("Streamplot written to %s."% fig)
 
-        if self.options.ar == 1:
-            upper = 100
-            lower = -100
-        else:
-            upper = np.max(p)
-            lower = np.min(p)
+
+        upper = np.max(p)
+        lower = np.min(p)
 
         # open new plot
         plt.figure()
@@ -551,17 +550,11 @@ class Channel(Application):
         plt.scatter(fx*factor,fy*factor, color='w')
 
         # set labels
-        if self.options.ar == 1:
-            cbar = plt.colorbar(pres, label='Pressure [Pa]',
-                    ticks= [-100,-80, -60, -40, -20, 0, 20, 40, 60, 80, 100],
-                    shrink=0.5)
-            plt.axis('scaled')
-        else:
-            cbar = plt.colorbar(pres, label='Pressure [Pa]')
-            plt.axis('equal')
+        cbar = plt.colorbar(pres, label='Pressure in Pa')
+        plt.axis('equal')
         plt.axis((0,factor*self.Lx,0,factor*self.Ly))
-        plt.xlabel('$x_1$ [mm]')
-        plt.ylabel('$x_2$ [mm]')
+        plt.xlabel('$x_1$ in mm')
+        plt.ylabel('$x_2$ in mm')
         plt.tight_layout()
 
 
@@ -599,37 +592,20 @@ class Channel(Application):
                     - 1/2*self.options.g/self.nu*(
                             (y-self.Ly/2)**2-(self.Ly/2)**2))
 
-        # FEM solution for disturbed velocity field (ar=1, g=10, G=0, width=20)
-        y_fem = np.array([1.20E-04,3.60E-04,6.00E-04,8.40E-04,0.00108,0.00132,
-                        0.00156,0.0018,0.00204,0.00228,0.00252,0.00276,0.003,
-                        0.00324,0.00348,0.00372,0.00396,0.0042,0.00444,0.00468])
-
-        u_fem = np.array([1.85E-06,5.23E-06,8.17E-06,1.08E-05,1.31E-05,1.50E-05,
-                        1.66E-05,1.77E-05,1.85E-05,1.89E-05,1.89E-05,1.85E-05,
-                        1.77E-05,1.66E-05,1.50E-05,1.31E-05,1.08E-05,8.18E-06,
-                        5.22E-06,1.85E-06])
-
         # open new plot
         plt.figure()
 
         # SPH solution
         plt.plot(u*factor, y*factor , '-k')
 
-        # FEM solution (if applicable)
-        if self.options.ar == 1:
-            plt.plot(u_fem*factor, y_fem*factor , '--k')
-
         # undisturbed solution
         plt.plot(u_exact*factor, y*factor, ':k')
 
         # labels
-        plt.xlabel('$v_1$ [mm/s]')
-        plt.ylabel('$x_2$ [mm]')
+        plt.xlabel('Velocity $v_1$ in mm/s')
+        plt.ylabel('$x_2$ in mm')
         plt.grid()
-        if self.options.ar == 1:
-            plt.legend(['SPH Simulation', 'FEM', 'No obstacle'])
-        else:
-            plt.legend(['SPH Simulation', 'No obstacle'])
+        plt.legend(['SPH Simulation', 'No obstacle'])
         plt.tight_layout()
 
         # save figure
@@ -662,44 +638,16 @@ class Channel(Application):
         interp.update_particle_arrays(list(data['arrays'].values()))
         u = interp.interpolate('u')
 
-        # FEM solution for disturbed velocity field (ar=1, g=10, G=0, width=20)
-        y_fem = np.array([4.80E-05,1.44E-04,2.40E-04,3.36E-04,4.32E-04,5.28E-04,
-                          6.24E-04,7.20E-04,8.16E-04,9.12E-04,1.01E-03,1.10E-03,
-                          1.20E-03,1.30E-03,1.39E-03,1.49E-03,1.58E-03,1.68E-03,
-                          1.78E-03,1.87E-03,1.97E-03,2.06E-03,2.16E-03,2.26E-03,
-                          2.35E-03,2.45E-03,2.54E-03,2.64E-03,2.74E-03,2.83E-03,
-                          2.93E-03,3.02E-03,3.12E-03,3.22E-03,3.31E-03,3.41E-03,
-                          3.50E-03,3.60E-03,3.70E-03,3.79E-03,3.89E-03,3.98E-03,
-                          4.08E-03,4.18E-03,4.27E-03,4.37E-03,4.46E-03,4.56E-03,
-                          4.66E-03,4.75E-03])
-
-        u_fem = np.array([1.21E-06,3.50E-06,5.59E-06,7.51E-06,9.26E-06,1.09E-05,
-                          1.23E-05,1.36E-05,1.47E-05,1.57E-05,1.66E-05,1.73E-05,
-                          1.78E-05,1.83E-05,1.85E-05,1.86E-05,1.84E-05,1.81E-05,
-                          1.75E-05,1.66E-05,1.53E-05,1.34E-05,1.05E-05,5.16E-06,
-                          0,0,5.13E-06,1.05E-05,1.34E-05,1.53E-05,1.66E-05,
-                          1.75E-05,1.81E-05,1.84E-05,1.86E-05,1.85E-05,1.83E-05,
-                          1.78E-05,1.73E-05,1.66E-05,1.57E-05,1.47E-05,1.36E-05,
-                          1.23E-05,1.09E-05,9.26E-06,7.51E-06,5.59E-06,3.50E-06,
-                          1.22E-06])
-
         # open new plot
         plt.figure()
 
         # SPH solution
         plt.plot(u*factor, y*factor , '-k')
 
-        # FEM solution (if applicable)
-        if self.options.ar == 1:
-            plt.plot(u_fem*factor, y_fem*factor , '--k')
-
         # labels
-        plt.xlabel('$v_1$ [mm/s]')
-        plt.ylabel('$x_2$ [mm]')
+        plt.xlabel('Velocity $v_1$ in mm/s')
+        plt.ylabel('$x_2$ in mm')
         plt.grid()
-
-        if self.options.ar == 1:
-            plt.legend(['SPH', 'FEM'],loc='upper left')
         plt.tight_layout()
 
         # save figure
@@ -753,8 +701,8 @@ class Channel(Application):
 
         # labels
         plt.legend(['SPH Simulation','FEM Result'], loc='upper right')
-        plt.xlabel('$x_1$ [mm]')
-        plt.ylabel('p [Pa]')
+        plt.xlabel('$x_1$ in mm')
+        plt.ylabel('Pressure in Pa')
         plt.grid()
         plt.tight_layout()
 
@@ -903,8 +851,8 @@ class Channel(Application):
 
         # set equally scaled axis to not distort the orbit
         plt.axis('equal')
-        plt.xlabel('$x_1$ [mm]')
-        plt.ylabel('$x_2$ [mm]')
+        plt.xlabel('$x_1$ in mm')
+        plt.ylabel('$x_2$ in mm')
         plt.grid()
         plt.tight_layout()
 
@@ -938,8 +886,8 @@ class Channel(Application):
         plt.plot(t, angle_jeffery, '-k')
 
         # labels
-        plt.xlabel('t [s]')
-        plt.ylabel('$\phi$ [rad]')
+        plt.xlabel('Time $t$ in s')
+        plt.ylabel('Angle $\phi$')
         plt.legend(['SPH Simulation', 'Jeffery (equiv.)', 'Jeffery'])
         plt.grid()
         x1,x2,y1,y2 = plt.axis()
@@ -963,7 +911,7 @@ class Channel(Application):
         plt.plot(t, E_p, '-k', t, E_kin, ':k')
 
         # labels
-        plt.xlabel('t [s]')
+        plt.xlabel('Time $t$ in seconds')
         plt.ylabel('Energy')
         plt.legend(['Pressure', 'Kinetic Energy'])
         plt.grid()
@@ -983,7 +931,7 @@ class Channel(Application):
                  t, np.array(rho)/rho[0], ':k')
 
         # labels
-        plt.xlabel('t [s]')
+        plt.xlabel('Time $t$ in s')
         plt.ylabel('Relative value')
         plt.legend(['Mass', 'Volume', 'Density'])
         plt.grid()
@@ -996,22 +944,26 @@ class Channel(Application):
 
         # hard-coded solutions for total reaction forces and viscous reaction
         # forces from FEM. (ar=1, g=10, G=0, width=20)
-        t_fem = np.array([0,50,100,150,200,250,300,350,400,450,500,550,600,650,
-                    700,750,800,850,900,950,1000,1050,1100,1150,1200,1250,1300,
-                    1350,1400,1450,1500])
-        Fv_fem = np.array([0.00003,0.01577,0.02616,0.03370,0.03918,0.04309,
-                    0.04586,0.04783,0.04931,0.05036,0.05113,0.05163,0.05198,
-                    0.05221,0.05236,0.05247,0.05254,0.05260,0.05263,0.05265,
-                    0.05265,0.05265,0.05265,0.05265,0.05265,0.05265,0.05265,
-                    0.05265,0.05265,0.05265,0.05265])
-        F_fem = np.array([0.00037,0.03139,0.05188,0.06674,0.07754,0.08524,
-                    0.09071,0.09460,0.09752,0.09959,0.10109,0.10208,0.10277,
-                    0.10324,0.10353,0.10375,0.10388,0.10399,0.10406,0.10409,
-                    0.10409,0.10409,0.10409,0.10409,0.10410,0.10410,0.10410,
-                    0.10410,0.10410,0.10410,0.10410])
+        t_fem = np.array([0,5.00E-07,1.00E-06,1.50E-06,2.00E-06,2.50E-06,
+                          3.00E-06,350E-06,4.00E-06,4.50E-06,5.00E-06,
+                          5.50E-06,6.00E-06,6.50E-06,7.00E-06,7.50E-06,
+                          8.00E-06,8.50E-06,9.00E-06,9.50E-06,1.00E-05,
+                          1.05E-05,1.10E-05,1.15E-05,1.20E-05,1.25E-05,
+                          1.30E-05,1.35E-05,1.40E-05,1.45E-05,1.50E-05])
+        Fv_fem = np.array([2.62E-06,0.0013741,0.0023354,0.0031959,0.0039842,
+                          0.0047131,0.005388,0.0060123,0.0065885,0.0071183,
+                          0.0076104,0.0080643,0.0084792,0.0088653,0.0092193,
+                          0.0095403,0.0098401,0.010115,0.010364,0.010596,0.010809,
+                          0.011002,0.011182,0.011347,0.011496,0.011635,0.011763,
+                          0.011878,0.011986,0.012085,0.012174])
+        F_fem = np.array([-8.51E-05,0.0027891,0.004684,0.0063805,0.0079349,
+                          0.0093724,0.010703,0.011935,0.013071,0.014116,
+                          0.015087,0.015982,0.0168,0.017562,0.01826,0.018893,
+                          0.019484,0.020026,0.020517,0.020975,0.021395,0.021775,
+                          0.02213,0.022456,0.02275,0.023025,0.023277,0.023504,
+                          0.023717,0.023912,0.024088])
 
         # applying appropriate scale factors
-        t_fem = t_fem/1E5
         t = np.array(t)/self.scale_factor*1000
 
         # Reaction force is plotted only for flow around single cylindrical
@@ -1028,8 +980,8 @@ class Channel(Application):
                      t_fem, Fv_fem, ':k')
 
             # labels
-            plt.xlabel('t [ms]')
-            plt.ylabel('$F/L$ [N/m]')
+            plt.xlabel('Time $t$ in s')
+            plt.ylabel('Force per fiber length in N/m')
             plt.legend(['SPH total force',
                         'FEM total force',
                         'FEM viscous force'],
