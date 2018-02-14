@@ -1,6 +1,6 @@
 """
 ################################################################################
-2D shearflow with a single fiber - use --ar to set aspect ratio
+2D shearflow with a single fiber
 ################################################################################
 """
 # general imports
@@ -643,15 +643,15 @@ class Channel(Application):
         plt.figure()
 
         # plot computed angle and Jeffery's solution
-        plt.plot(t, angle_jeffery_cox, 'sk', markersize=2, color='grey')
-        plt.plot(t, angle_jeffery_gmason, 'ok', markersize=2, color='grey')
+        plt.plot(t, angle_jeffery_cox, '.k', color='grey')
+        plt.plot(t, angle_jeffery_gmason, '+k', color='grey')
         plt.plot(t, angle, '-k')
         plt.plot(t, angle_jeffery, '--k')
 
         # labels
         plt.xlabel('Time $t$ in s')
         plt.ylabel('Rotation angle $\phi$')
-        plt.legend(['Cox equiv.', 'Goldsmith/Mason equiv.', 'SPH Simulation',
+        plt.legend(['Cox', 'Goldsmith/Mason', 'SPH Simulation',
                     'Jeffery'])
         plt.grid()
         x1,x2,y1,y2 = plt.axis()
@@ -663,7 +663,9 @@ class Channel(Application):
 
         # save figure
         angfig = os.path.join(self.output_dir, 'angleplot.pdf')
+        angfigpng = os.path.join(self.output_dir, 'angleplot.png')
         plt.savefig(angfig, dpi=300, bbox_inches='tight')
+        plt.savefig(angfigpng, dpi=300, bbox_inches='tight')
         print("Angleplot written to %s."% angfig)
 
         # save angles as *.csv file
