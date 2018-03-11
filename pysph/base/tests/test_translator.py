@@ -139,6 +139,26 @@ def test_conditionals():
     assert code.strip() == expect.strip()
 
 
+def test_ternary_operator():
+    # Given
+    src = dedent('''
+    y = 2.0
+    x = 1.0 if y >= 2.0 else 0.0
+    ''')
+
+    # When
+    code = py2c(src)
+
+    # Then
+    expect = dedent('''
+    double x;
+    double y;
+    y = 2.0;
+    x = (y >= 2.0) ? 1.0 : 0.0;
+    ''')
+    assert code.strip() == expect.strip()
+
+
 def test_multiple_boolops():
     # Given
     src = dedent('''
@@ -348,6 +368,56 @@ def test_known_types_in_funcargs():
     void f(float32 x, foo* xx, int cond)
     {
         ;
+    }
+    ''')
+    assert code.strip() == expect.strip()
+
+
+def test_calling_method_of_known_type():
+    # Given
+    src = dedent('''
+    obj.method(1, 2)
+    obj.meth()
+    ''')
+    known = {'obj': KnownType('SomeClass*', base_type='SomeClass')}
+
+    # When
+    code = py2c(src, known_types=known)
+
+    # Then
+    expect = dedent('''
+    SomeClass_method(obj, 1, 2);
+    SomeClass_meth(obj);
+    ''')
+    assert code.strip() == expect.strip()
+
+
+def test_calling_method_of_known_type_in_method():
+    # Given
+    src = dedent('''
+    class Foo(object):
+        def g(self):
+            pass
+        def f(self, obj):
+            obj.method(1, 2)
+            self.g()
+    ''')
+
+    # When
+    known = {'obj': KnownType('SomeClass*', base_type='SomeClass')}
+    code = py2c(src, known_types=known)
+
+    # Then
+    expect = dedent('''
+    void Foo_g(Foo* self)
+    {
+        ;
+    }
+
+    void Foo_f(Foo* self, SomeClass* obj)
+    {
+        SomeClass_method(obj, 1, 2);
+        Foo_g(self);
     }
     ''')
     assert code.strip() == expect.strip()
@@ -698,6 +768,24 @@ def test_declare_matrix():
     expect = dedent('''
     double x[2][3];
     do(x[0][1]);
+    ''')
+    assert code.strip() == expect.strip()
+
+
+def test_declare_call_declares_multiple_variables():
+    # Given
+    src = dedent('''
+    x, y = declare('int', 2)
+    u, v = declare('matrix(3)', 2)
+    ''')
+
+    # When
+    code = py2c(src)
+
+    # Then
+    expect = dedent('''
+    int x, y;
+    double u[3], v[3];
     ''')
     assert code.strip() == expect.strip()
 

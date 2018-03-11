@@ -5,22 +5,25 @@ Note that this is not a general purpose code generator but one highly tailored
 for use in PySPH for general use cases, Cython itself does a terrific job.
 """
 
+import ast
 try:
     from collections import OrderedDict
 except ImportError:
     from ordereddict import OrderedDict
 import inspect
 import logging
-from mako.template import Template
 from textwrap import dedent
 import types
 
+from mako.template import Template
+import numpy
 
 from pysph.base.ast_utils import get_assigned, has_return
 from pysph.base.config import get_config
 
 
 logger = logging.getLogger(__name__)
+
 
 class CythonClassHelper(object):
     def __init__(self, name='', public_vars=None, methods=None):
@@ -51,6 +54,7 @@ ${line}
                         public_vars=self.public_vars,
                         methods=self.methods)
 
+
 def get_func_definition(sourcelines):
     """Given a block of source lines for a method or function,
     get the lines for the function block.
@@ -73,11 +77,67 @@ def all_numeric(seq):
         types = [int, float]
     return all(type(x) in types for x in seq)
 
+
+def _declare(type):
+    if type.startswith('matrix'):
+        return numpy.zeros(eval(type[7:-1]))
+    elif type in ['double', 'float']:
+        return 0.0
+    else:
+        return 0
+
+
+def declare(type, num=1):
+    """Declare the variable to be of the given type.
+
+    The additional optional argument num is the number of items to return.
+
+    Normally, the declare function only defines a variable when compiled,
+    however, this function here is a pure Python implementation so that the
+    same code can be executed in Python.
+
+    Parameters
+    ----------
+
+    type: str: String representing the type.
+    num: int: the number of values to return
+
+    Examples
+    --------
+
+    >>> declare('int')
+    0
+    >>> declare('int', 3)
+    0, 0, 0
+    """
+    if num == 1:
+        return _declare(type)
+    else:
+        return tuple(_declare(type) for i in range(num))
+
+
 class CodeGenerationError(Exception):
     pass
 
+
 class Undefined(object):
     pass
+
+
+def parse_declare(code):
+    """Given a string with the source for the declare method,
+    return the type.
+    """
+    m = ast.parse(code)
+    call = m.body[0].value
+    if call.func.id != 'declare':
+        raise CodeGenerationError('Unknown declare statement: %s' % code)
+    arg0 = call.args[0]
+    if not isinstance(arg0, ast.Str):
+        err = 'Type should be a string, given :%r' % arg0.s
+        raise CodeGenerationError(err)
+    return arg0.s
+
 
 class KnownType(object):
     """Simple object to specify a known type as a string.
@@ -85,11 +145,24 @@ class KnownType(object):
     Smells but is convenient as the type may be one available only inside
     Cython without a corresponding Python type.
     """
-    def __init__(self, type_str):
+    def __init__(self, type_str, base_type=''):
+        """Constructor
+
+        The ``base_type`` argument is optional and used to represent the base
+        type, i.e. the type_str may be 'Foo*' but the base type will be 'Foo'
+        if specified.
+
+        Parameters
+        ----------
+        type_str: str: A string representation of how the type is declared.
+        base_type: str: The base type of this entity. (optional)
+
+        """
         self.type = type_str
+        self.base_type = base_type
 
     def __repr__(self):
-        return 'KnownType("%s")'%self.type
+        return 'KnownType("%s")' % self.type
 
 
 class CythonGenerator(object):
@@ -113,7 +186,7 @@ class CythonGenerator(object):
         self.known_types = known_types if known_types is not None else {}
         self._config = get_config()
 
-    ##### Public protocol #####################################################
+    # ### Public protocol #####################################################
 
     def ctype_to_python(self, type_str):
         """Given a c-style type declaration obtained from the `detect_type`
@@ -131,7 +204,7 @@ class CythonGenerator(object):
         if name in ['s_idx', 'd_idx']:
             return 'long'
         if value is Undefined or isinstance(value, Undefined):
-            raise CodeGenerationError('Unknown type, for %s'%name)
+            raise CodeGenerationError('Unknown type, for %s' % name)
 
         if isinstance(value, bool):
             return 'int'
@@ -155,14 +228,14 @@ class CythonGenerator(object):
 
     def parse(self, obj):
         obj_type = type(obj)
-        if obj_type is types.FunctionType:
+        if isinstance(obj, types.FunctionType):
             self._parse_function(obj)
         elif hasattr(obj, '__class__'):
             self._parse_instance(obj)
         else:
-            raise TypeError('Unsupport type to wrap: %s'%obj_type)
+            raise TypeError('Unsupport type to wrap: %s' % obj_type)
 
-    ###### Private protocol ###################################################
+    # #### Private protocol ###################################################
 
     def _analyze_method(self, meth, lines):
         """Returns information about the method.
@@ -247,13 +320,16 @@ class CythonGenerator(object):
     def _get_method_body(self, meth, lines, indent=' '*8):
         args = set(inspect.getargspec(meth).args)
         src = [self._process_body_line(line) for line in lines]
-        declared = [x[0] for x in src if len(x[0]) > 0]
+        declared = []
+        for names, defn in src:
+            if names:
+                declared.extend(x.strip() for x in names.split(','))
         cython_body = ''.join([x[1] for x in src])
         body = ''.join(lines)
         dedented_body = dedent(body)
         symbols = get_assigned(dedented_body)
         undefined = symbols - set(declared) - args
-        declare = [indent +'cdef double %s\n'%x for x in sorted(undefined)]
+        declare = [indent + 'cdef double %s\n' % x for x in sorted(undefined)]
         code = ''.join(declare) + cython_body
         return code
 
@@ -275,7 +351,7 @@ class CythonGenerator(object):
         # For now get it all from the dict.
         data = obj.__dict__
         vars = OrderedDict((name, self.detect_type(name, data[name]))
-                            for name in sorted(data.keys()))
+                           for name in sorted(data.keys()))
         return vars
 
     def _get_py_method_spec(self, name, returns, args, indent=' '*8):
@@ -301,26 +377,31 @@ class CythonGenerator(object):
 
         py_ret = ' double' if returns else ''
         py_arg_def = ', '.join(py_args)
-        pydefn = 'cpdef{ret} py_{name}({arg_def}):'\
-                     .format(ret=py_ret, name=name, arg_def=py_arg_def)
+        pydefn = 'cpdef{ret} py_{name}({arg_def}):'.format(
+            ret=py_ret, name=name, arg_def=py_arg_def
+        )
         call = ', '.join(call_sig)
         py_ret = 'return ' if returns else ''
         py_self = 'self.' if is_method else ''
-        body = indent + '{ret}{self}{name}({call})'\
-                    .format(name=name, call=call, ret=py_ret, self=py_self)
+        body = indent + '{ret}{self}{name}({call})'.format(
+            name=name, call=call, ret=py_ret, self=py_self
+        )
 
         return pydefn, body
 
     def _handle_declare_statement(self, name, declare):
         def matrix(size):
-            sz = ''.join(['[%d]'%n for n in size])
+            if not isinstance(size, tuple):
+                size = (size,)
+            sz = ''.join(['[%d]' % n for n in size])
             return sz
 
         # Remove the "declare('" and the trailing "')".
-        code = declare[9:-2]
+        code = parse_declare(declare)
         if code.startswith('matrix'):
             sz = matrix(eval(code[7:-1]))
-            defn = 'cdef double %s%s'%(name, sz)
+            vars = ['%s%s' % (x.strip(), sz) for x in name.split(',')]
+            defn = 'cdef double %s' % ', '.join(vars)
             return defn
         else:
             defn = 'cdef {type} {name}'.format(type=code, name=name)
@@ -351,7 +432,8 @@ class CythonGenerator(object):
         """
         if '=' in line:
             words = [x.strip() for x in line.split('=')]
-            if words[1].startswith('declare'):
+            if words[1].startswith('declare') and \
+               not line.strip().startswith('#'):
                 name = words[0]
                 declare = words[1]
                 defn = self._handle_declare_statement(name, declare)

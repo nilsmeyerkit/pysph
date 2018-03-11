@@ -1,9 +1,6 @@
 """
 ################################################################################
-Flow with fibers in a channel.
-    Nearfield: 2D fluid field around fiber (fiber is interpreted to be
-                        perpendicular to 2D field.)
-                        e.g: pysph run fiber.channel
+2D fluid field around fiber - fiber is interpreted to be perpendicular to field.
 ################################################################################
 """
 # general imports
