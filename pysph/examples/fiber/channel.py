@@ -7,6 +7,7 @@ Flow with fibers in a channel. There are different setups:
                         perpendicular to 2D field.)
                         e.g: pysph run fiber.channel --ar 1 --width 20
                         --massscale 1E8 --G 0 --g 10 --openmp --holdcenter
+                        --d 0.0002 --mu 1000
     dim=3 and g>0:      3D Poiseuille flow with moving fiber and obstacle fiber
                         (use smaller artificial damping, e.g. 100!)
                         e.g: pysph run fiber.channel --ar 11 --dim 3 --g 10
@@ -463,9 +464,9 @@ class Channel(Application):
         factor = 1000
 
         # Interpolation grid
-        x = np.linspace(0,self.Lx,400)
-        y = np.linspace(0,self.Ly,100)
-        x,y = np.meshgrid(x,y)
+        X = np.linspace(0,self.Lx,400)
+        Y = np.linspace(0,self.Ly,100)
+        x,y = np.meshgrid(X,Y)
 
         # Extract positions of fiber particles from last step to plot them
         # on top of velocities.
@@ -484,7 +485,7 @@ class Channel(Application):
         vmag = factor*np.sqrt(u**2 + v**2)
 
         if self.options.ar == 1:
-            upper = 0.07
+            upper = 0.025
         else:
             upper = np.max(vmag)
 
@@ -494,7 +495,7 @@ class Channel(Application):
         cmap = plt.cm.viridis
         levels = np.linspace(0, upper, 30)
 
-        # velocity contour (ungly solution against white lines:
+        # velocity contour (ugly solution against white lines:
         # repeat plots....)
         plt.contourf(x*factor,y*factor, vmag, levels=levels,
                  cmap=cmap, vmax=upper, vmin=0)
@@ -503,7 +504,13 @@ class Channel(Application):
         vel = plt.contourf(x*factor,y*factor, vmag, levels=levels,
                  cmap=cmap, vmax=upper, vmin=0)
         # streamlines
-        stream = plt.streamplot(x*factor,y*factor,u,v, color='k', density=0.5)
+        y_start = np.linspace(0.0, self.Ly*factor, 20)
+        x_start = np.zeros_like(y_start)
+        start_points = np.array(list(zip(x_start, y_start)))
+        stream = plt.streamplot(X*factor,Y*factor,u,v,
+                                start_points=start_points,
+                                color='k',
+                                density=35)
         # fiber
         plt.scatter(fx*factor,fy*factor, color='w')
 
