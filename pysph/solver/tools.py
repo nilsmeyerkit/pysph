@@ -101,7 +101,7 @@ class FiberIntegrator(Tool):
         inner loop again and reset in the outer loop."""
         from pysph.base.kernels import QuinticSpline
         from pysph.sph.integrator_step import EBGStep
-        from pysph.base.config import get_config
+        from pysph.cpy.config import get_config
         from pysph.sph.integrator import EulerIntegrator
         from pysph.sph.scheme import BeadChainScheme
         from pysph.sph.equation import Group

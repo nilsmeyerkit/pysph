@@ -32,6 +32,8 @@ from pysph.solver.tools import FiberIntegrator
 
 from pysph.sph.scheme import BeadChainScheme
 
+from pysph.base.kernels import QuinticSpline, CubicSpline
+
 
 class Channel(Application):
     """2D fluid field around fiber."""
@@ -164,10 +166,12 @@ class Channel(Application):
             E=self.options.E, D=self.D, dim=2, gx=self.options.g,
             viscous_fiber=True)
         # Return the particle list.
+        kernel = QuinticSpline(dim=2)
+        # kernel = CubicSpline(dim=2)
         self.scheme.configure_solver(
-            tf=self.t, vtk=self.options.vtk, N=200)
-        # self.scheme.configure_solver(tf=self.t, pfreq=1,
-        #                             vtk=self.options.vtk)
+            kernel=kernel, tf=self.t, vtk=self.options.vtk, N=200)
+        # self.scheme.configure_solver(
+        #   tf=self.t, pfreq=1, vtk=self.options.vtk)
 
     def create_particles(self):
         """Three particle arrays are created.
@@ -183,12 +187,17 @@ class Channel(Application):
         # Creating grid points for particles
         _x = np.arange(dx2, self.Lx, fdx)
         _y = np.arange(dx2, self.Ly, fdx)
-        _z = np.arange(dx2, self.Ly, fdx)
-        fx, fy, fz = self.get_meshgrid(_x, _y, _z)
+        fx, fy, fz = self.get_meshgrid(_x, _y)
+
+        # add some random noise
+        # noise = dx2
+        # fx = fx + np.random.normal(0,noise, fx.shape)
+        # fy = fy + np.random.normal(0,noise, fy.shape)
 
         # Remove particles at fiber position. Uncomment proper section for
         # horizontal or vertical alignment respectivley.
         indices = []
+        dist = 100000
         for i in range(len(fx)):
             xx = self.x_fiber
             yy = self.y_fiber
@@ -198,24 +207,27 @@ class Channel(Application):
                 fy[i] < yy + self.dx / 2 and fy[i] > yy - self.dx / 2 and
                     fz[i] < zz + self.dx / 2 and fz[i] > zz - self.dx / 2):
                 indices.append(i)
+            if ((fx[i] - xx)**2 + (fy[i] - yy)**2 + (fz[i] - zz)**2) < dist:
+                min_dist_idx = i
+
+        if len(indices) == 0:
+            indices.append(min_dist_idx)
 
         # fiber
         _fibx = np.array([xx])
         _fiby = np.array([yy])
-
-        _fibz = np.array([zz])
-        fibx, fiby, fibz = self.get_meshgrid(_fibx, _fiby, _fibz)
+        fibx, fiby, fibz = self.get_meshgrid(_fibx, _fiby)
 
         # Determine the size of dummy region
         ghost_extent = 3 * fdx / self.options.fluid_res
 
         # Create the channel particles at the top
         _y = np.arange(self.Ly + dx2, self.Ly + dx2 + ghost_extent, fdx)
-        tx, ty, tz = self.get_meshgrid(_x, _y, _z)
+        tx, ty, tz = self.get_meshgrid(_x, _y)
 
         # Create the channel particles at the bottom
         _y = np.arange(-dx2, -dx2 - ghost_extent, -fdx)
-        bx, by, bz = self.get_meshgrid(_x, _y, _z)
+        bx, by, bz = self.get_meshgrid(_x, _y)
 
         # Concatenate the top and bottom arrays (and for 3D cas also right and
         # left arrays)
@@ -279,7 +291,7 @@ class Channel(Application):
         return [FiberIntegrator(self.particles, self.scheme, self.domain,
                                 innerloop=False, updates=False)]
 
-    def get_meshgrid(self, xx, yy, zz):
+    def get_meshgrid(self, xx, yy):
         """This function is just a shorthand for the generation of grids."""
         x, y = np.meshgrid(xx, yy)
         x = x.ravel()
@@ -296,9 +308,9 @@ class Channel(Application):
         factor = 1000
 
         # Interpolation grid
-        x = np.linspace(0, self.Lx, 400)
-        y = np.linspace(0, self.Ly, 100)
-        x, y = np.meshgrid(x, y)
+        X = np.linspace(0, self.Lx, 400)
+        Y = np.linspace(0, self.Ly, 100)
+        x, y = np.meshgrid(X, Y)
 
         # Extract positions of fiber particles from last step to plot them
         # on top of velocities.
@@ -333,8 +345,15 @@ class Channel(Application):
         vel = plt.contourf(x * factor, y * factor, vmag, levels=levels,
                            cmap=cmap, vmax=upper, vmin=0)
         # streamlines
-        plt.streamplot(x * factor, y * factor, u, v, color='k',
-                       density=0.6, arrowstyle='-', linewidth=1.0)
+        y_start = np.linspace(0.0, self.Ly * factor, 20)
+        x_start = np.zeros_like(y_start)
+        start_points = np.array(list(zip(x_start, y_start)))
+        plt.streamplot(X * factor, Y * factor, u, v,
+                       start_points=start_points,
+                       color='k',
+                       density=100,
+                       arrowstyle='-',
+                       linewidth=1.0)
         # fiber
         plt.scatter(fx * factor, fy * factor, color='w')
 
@@ -418,6 +437,8 @@ class Channel(Application):
         u_exact = (self.options.G * (y - self.Ly / 2) -
                    0.5 * self.options.g / self.nu * (
                    (y - self.Ly / 2)**2 - (self.Ly / 2)**2))
+        u_bulk = (1 / 12 * self.options.g / self.nu * self.Ly**2 *
+                  np.ones_like(y))
 
         # open new plot
         plt.figure()
@@ -427,12 +448,14 @@ class Channel(Application):
 
         # undisturbed solution
         plt.plot(u_exact * factor, y * factor, ':k')
+        # bulk solution
+        plt.plot(u_bulk * factor, y * factor, '--k')
 
         # labels
         plt.xlabel('Velocity $v_1$ in mm/s')
         plt.ylabel('$x_2$ in mm')
         plt.grid()
-        plt.legend(['SPH Simulation', 'Pure Poiseuille'])
+        plt.legend(['SPH Simulation', 'Pure Poiseuille', 'Poiseuille bulk'])
         plt.tight_layout()
 
         # save figure
@@ -484,6 +507,49 @@ class Channel(Application):
         print("Center velocity plot written to %s." % fig)
 
         return (fig)
+
+    def _plot_pressure_centerline(self):
+        """This function plots the pressure profile along a centerline for a
+        single particle.
+        """
+
+        # length factor m --> mm
+        factor = 1000
+
+        # Generate meshgrid for interpolation.
+        x = np.linspace(0, self.Lx, 200)
+        y = np.array([self.Ly / 2])
+        x, y = np.meshgrid(x, y)
+
+        # Set a number of last solutions to average from.
+        N = 10
+
+        # averaging the pressure interpolation for N last solutions.
+        p = np.zeros((200,))
+        for output in self.output_files[-(1 + N):-1]:
+            data = load(output)
+            interp = Interpolator(list(data['arrays'].values()), x=x, y=y)
+            interp.update_particle_arrays(list(data['arrays'].values()))
+            p += interp.interpolate('p') / N
+
+        # open new plot
+        plt.figure()
+
+        # plot SPH solution and FEM solution
+        plt.plot(x[0, :] * factor, p, '-k')
+
+        # labels
+        plt.xlabel('$x_1$ in mm')
+        plt.ylabel('Pressure in Pa')
+        plt.grid()
+        plt.tight_layout()
+
+        # save figure
+        pcenter_fig = os.path.join(self.output_dir, 'pressure_centerline.pdf')
+        plt.savefig(pcenter_fig, dpi=300, bbox_inches='tight')
+        print("Pressure written to %s." % pcenter_fig)
+
+        return pcenter_fig
 
     def _plot_history(self):
         """This function create all plots.
@@ -642,6 +708,10 @@ class Channel(Application):
         F_fem = np.array([0, 0.015085, 0.021444, 0.024142, 0.025327, 0.025828,
                           0.026010, 0.026075, 0.026094, 0.026096, 0.026093])
 
+        # Stokes flow force
+        u_bulk = 1.0 / 12.0 * self.options.g / self.nu * self.Ly**2
+        F_stokes = 3.0 * np.pi * self.options.mu * u_bulk * np.ones_like(F_fem)
+
         # applying appropriate scale factors
         t = np.array(t) / self.scale_factor
 
@@ -651,12 +721,13 @@ class Channel(Application):
         # plot computed reaction force, total FEM force and viscous FEM
         # force
         plt.plot(t * 1000, Fx, '-k',
-                 t_fem * 1000, F_fem, '--k')
+                 t_fem * 1000, F_fem, '--k',
+                 t_fem * 1000, F_stokes, ':k')
 
         # labels
         plt.xlabel('Time $t$ in ms')
         plt.ylabel('Force per fiber length in N/m')
-        plt.legend(['SPH', 'FEM'],
+        plt.legend(['SPH', 'FEM', 'Stokes'],
                    loc='lower right')
         x1, x2, y1, y2 = plt.axis()
         plt.axis((0, x2, 0, y2))
@@ -675,6 +746,7 @@ class Channel(Application):
 
         [streamlines, pressure] = self._plot_streamlines()
         self._plot_center_velocity()
+        self._plot_pressure_centerline()
         self._plot_history()
         self._plot_inlet_velocity()
 
