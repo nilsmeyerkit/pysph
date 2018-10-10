@@ -1,16 +1,11 @@
-"""
+"""Example for two-way interaction with fiber.
+
 ################################################################################
-2D fluid field around fiber - fiber is interpreted to be perpendicular to field.
+2D fluid field around fiber - fiber is interpreted to be perpendicular to field
 ################################################################################
 """
 # general imports
 import os
-import smtplib
-import json
-
-# profiling
-import cProfile
-import pstats
 
 # matplotlib (set up for server use)
 # matplotlib (set up for server use)
@@ -18,12 +13,11 @@ import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 from matplotlib import rc
-rc('font', **{'family': 'serif', 'serif': ['Computer Modern'], 'size':18})
+rc('font', **{'family': 'serif', 'serif': ['Computer Modern'], 'size': 18})
 rc('text', usetex=True)
 
 # numpy and scipy
 import numpy as np
-from scipy.integrate import odeint
 
 # PySPH imports
 from pysph.base.nnps import DomainManager
@@ -40,6 +34,8 @@ from pysph.sph.scheme import BeadChainScheme
 
 
 class Channel(Application):
+    """2D fluid field around fiber."""
+
     def create_scheme(self):
         """The BeadChainScheme is used for this application."""
         return BeadChainScheme(['fluid'], ['channel'], ['fiber'], dim=2)
@@ -96,7 +92,6 @@ class Channel(Application):
 
     def consume_user_options(self):
         """Initialization of geometry, properties and time stepping."""
-
         # Initial spacing of particles is set to the same value as fiber
         # diameter.
         self.dx = self.options.d
@@ -109,45 +104,44 @@ class Channel(Application):
         # If a specific width is set, use this as multiple of dx to determine
         # the channel width. Otherwise use the fiber aspect ratio.
         multiples = self.options.width
-        self.Ly = multiples*self.dx + 2*int(0.1*multiples)*self.dx
+        self.Ly = multiples * self.dx + 2 * int(0.1 * multiples) * self.dx
 
         # The density can be scaled using the mass scaling factor. To account
         # for proper external forces, gravity is scaled just the other way.
         self.scale_factor = self.options.scale_factor
-        self.rho0 = self.options.rho0*self.scale_factor
-        self.options.g = self.options.g/self.scale_factor
-
+        self.rho0 = self.options.rho0 * self.scale_factor
+        self.options.g = self.options.g / self.scale_factor
 
         # The channel length is twice the width + dx to make it symmetric.
-        self.Lx = 2.0*self.Ly + self.dx
+        self.Lx = 2.0 * self.Ly + self.dx
 
         # The position of the fiber's center is set to the center of the
         # channel.
-        self.x_fiber = 0.5*self.Lx
-        self.y_fiber = 0.5*self.Ly
-        self.z_fiber = 0.5*self.Ly
+        self.x_fiber = 0.5 * self.Lx
+        self.y_fiber = 0.5 * self.Ly
+        self.z_fiber = 0.5 * self.Ly
 
         # The kinematic viscosity is computed from absolute viscosity and
         # scaled density.
-        self.nu = self.options.mu/self.rho0
+        self.nu = self.options.mu / self.rho0
 
         # damping from empirical guess
-        self.D = self.options.D or 0.001*self.scale_factor
+        self.D = self.options.D or 0.001 * self.scale_factor
 
-        # For 2 dimensions surface, mass and moments have a different coputation
-        # than for 3 dimensions.
+        # For 2 dimensions surface, mass and moments have a different
+        # coputation than for 3 dimensions.
         self.A = self.dx
-        self.I = self.dx**3/12
-        mass = 3*self.rho0*self.dx*self.A
-        self.J = 1/12*mass*(self.dx**2 + (3*self.dx)**2)
+        self.I = self.dx**3 / 12
+        mass = 3 * self.rho0 * self.dx * self.A
+        self.J = 1 / 12 * mass * (self.dx**2 + (3 * self.dx)**2)
 
         # SPH uses weakly compressible fluids. Therefore, the speed of sound c0
         # is computed as 10 times the maximum velocity. This should keep the
         # density change within 1%
-        self.Vmax = (self.options.G*self.Ly/2
-                    + self.options.g/(2*self.nu)*self.Ly**2/4)
-        self.c0 = 10*self.Vmax
-        self.p0 = self.c0**2*self.rho0
+        self.Vmax = (self.options.G * self.Ly / 2 +
+                     self.options.g / (2 * self.nu) * self.Ly**2 / 4)
+        self.c0 = 10 * self.Vmax
+        self.p0 = self.c0**2 * self.rho0
 
         # Background pressure in Adami's transport velocity formulation
         self.pb = self.p0
@@ -160,34 +154,37 @@ class Channel(Application):
         if self.options.postonly:
             self.t = 0
         else:
-            self.t = 5E-5*self.scale_factor
-        print("Simulated time is %g s"%self.t)
+            self.t = 5E-5 * self.scale_factor
+        print("Simulated time is %g s" % self.t)
 
     def configure_scheme(self):
-        self.scheme.configure(rho0=self.rho0, c0=self.c0, nu=self.nu,
-            p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=self.A, I=self.I,
-            J=self.J, E=self.options.E, D=self.D, dim=2,
-            gx=self.options.g, viscous_fiber=True)
+        self.scheme.configure(
+            rho0=self.rho0, c0=self.c0, nu=self.nu, p0=self.p0, pb=self.pb,
+            h0=self.h0, dx=self.dx, A=self.A, I=self.I, J=self.J,
+            E=self.options.E, D=self.D, dim=2, gx=self.options.g,
+            viscous_fiber=True)
         # Return the particle list.
-        self.scheme.configure_solver(tf=self.t, vtk = self.options.vtk,
-            N=200)
-        #self.scheme.configure_solver(tf=self.t, pfreq=1, vtk = self.options.vtk)
+        self.scheme.configure_solver(
+            tf=self.t, vtk=self.options.vtk, N=200)
+        # self.scheme.configure_solver(tf=self.t, pfreq=1,
+        #                             vtk=self.options.vtk)
 
     def create_particles(self):
-        """Three particle arrays are created: A fluid, representing the polymer
-        matrix, a fiber with additional properties and a channel of dummy
-        particles."""
+        """Three particle arrays are created.
 
+        A fluid, representing the polymer matrix, a fiber with additional
+        properties and a channel of dummyparticles.
+        """
         # The fluid might be scaled compared to the fiber. fdx is a shorthand
         # for the fluid spacing and dx2 is a shorthand for the half of it.
-        fdx = self.options.fluid_res*self.dx
-        dx2 = fdx/2
+        fdx = self.options.fluid_res * self.dx
+        dx2 = fdx / 2
 
         # Creating grid points for particles
         _x = np.arange(dx2, self.Lx, fdx)
         _y = np.arange(dx2, self.Ly, fdx)
         _z = np.arange(dx2, self.Ly, fdx)
-        fx,fy,fz = self.get_meshgrid(_x, _y, _z)
+        fx, fy, fz = self.get_meshgrid(_x, _y, _z)
 
         # Remove particles at fiber position. Uncomment proper section for
         # horizontal or vertical alignment respectivley.
@@ -197,9 +194,9 @@ class Channel(Application):
             yy = self.y_fiber
             zz = self.z_fiber
 
-            if (fx[i] < xx+self.dx/2 and fx[i] > xx-self.dx/2 and
-                fy[i] < yy+self.dx/2 and fy[i] > yy-self.dx/2 and
-                fz[i] < zz+self.dx/2 and fz[i] > zz-self.dx/2):
+            if (fx[i] < xx + self.dx / 2 and fx[i] > xx - self.dx / 2 and
+                fy[i] < yy + self.dx / 2 and fy[i] > yy - self.dx / 2 and
+                    fz[i] < zz + self.dx / 2 and fz[i] > zz - self.dx / 2):
                 indices.append(i)
 
         # fiber
@@ -207,18 +204,18 @@ class Channel(Application):
         _fiby = np.array([yy])
 
         _fibz = np.array([zz])
-        fibx,fiby,fibz = self.get_meshgrid(_fibx, _fiby, _fibz)
+        fibx, fiby, fibz = self.get_meshgrid(_fibx, _fiby, _fibz)
 
         # Determine the size of dummy region
-        ghost_extent = 3*fdx/self.options.fluid_res
+        ghost_extent = 3 * fdx / self.options.fluid_res
 
         # Create the channel particles at the top
-        _y = np.arange(self.Ly+dx2, self.Ly+dx2+ghost_extent, fdx)
-        tx,ty,tz = self.get_meshgrid(_x, _y, _z)
+        _y = np.arange(self.Ly + dx2, self.Ly + dx2 + ghost_extent, fdx)
+        tx, ty, tz = self.get_meshgrid(_x, _y, _z)
 
         # Create the channel particles at the bottom
-        _y = np.arange(-dx2, -dx2-ghost_extent, -fdx)
-        bx,by,bz = self.get_meshgrid(_x, _y, _z)
+        _y = np.arange(-dx2, -dx2 - ghost_extent, -fdx)
+        bx, by, bz = self.get_meshgrid(_x, _y, _z)
 
         # Concatenate the top and bottom arrays (and for 3D cas also right and
         # left arrays)
@@ -237,40 +234,39 @@ class Channel(Application):
         fidx = np.array([0])
 
         # Initial inverse volume (necessary for transport velocity equations)
-        V = 1./volume
-        fiber_V = 1./fiber_volume
-
+        V = 1. / volume
+        fiber_V = 1. / fiber_volume
 
         # Finally create all particle arrays. Note that fluid particles are
         # removed in the area, where the fiber is placed.
-        channel = get_particle_array_beadchain(name='channel',
-                    x=cx, y=cy, m=mass, rho=self.rho0, h=self.h0, V=V)
-        fluid = get_particle_array_beadchain(name='fluid',
-                    x=fx, y=fy, m=mass, rho=self.rho0, h=self.h0, V=V)
+        channel = get_particle_array_beadchain(
+            name='channel', x=cx, y=cy, m=mass, rho=self.rho0, h=self.h0, V=V)
+        fluid = get_particle_array_beadchain(
+            name='fluid', x=fx, y=fy, m=mass, rho=self.rho0, h=self.h0, V=V)
         fluid.remove_particles(indices)
-        fiber = get_particle_array_beadchain_fiber(name='fiber',
-                    x=fibx, y=fiby, m=fiber_mass, rho=self.rho0, h=self.h0,
-                    lprev=self.dx, lnext=self.dx, phi0=np.pi, phifrac=2.0,
-                    fidx=fidx, V=fiber_V)
+        fiber = get_particle_array_beadchain_fiber(
+            name='fiber', x=fibx, y=fiby, m=fiber_mass, rho=self.rho0,
+            h=self.h0, lprev=self.dx, lnext=self.dx, phi0=np.pi, phifrac=2.0,
+            fidx=fidx, V=fiber_V)
 
         # Print number of particles.
-        print("Shear flow : nfluid = %d, nchannel = %d, nfiber = %d"%(
+        print("Shear flow : nfluid = %d, nchannel = %d, nfiber = %d" % (
             fluid.get_number_of_particles(),
             channel.get_number_of_particles(),
             fiber.get_number_of_particles()))
 
         # The number of fiber particles should match the aspect ratio. This
         # assertation fails, if something was wrong in the fiber generation.
-        assert(fiber.get_number_of_particles()==1)
+        assert(fiber.get_number_of_particles() == 1)
 
         # Tag particles to be hold, if requested.
         fiber.holdtag[:] = 0
         fiber.holdtag[0] = 100
 
         # Setting the initial velocities for a shear flow.
-        fluid.u[:] = self.options.G*(fluid.y[:]-self.Ly/2)
-        fiber.u[:] = self.options.G*(fiber.y[:]-self.Ly/2)
-        channel.u[:] = self.options.G*(channel.y[:]-self.Ly/2)
+        fluid.u[:] = self.options.G * (fluid.y[:] - self.Ly / 2)
+        fiber.u[:] = self.options.G * (fiber.y[:] - self.Ly / 2)
+        channel.u[:] = self.options.G * (channel.y[:] - self.Ly / 2)
 
         # Return the particle list.
         return [fluid, channel, fiber]
@@ -284,24 +280,25 @@ class Channel(Application):
                                 innerloop=False, updates=False)]
 
     def get_meshgrid(self, xx, yy, zz):
-        """This function is just a shorthand for the generation of meshgrids."""
+        """This function is just a shorthand for the generation of grids."""
         x, y = np.meshgrid(xx, yy)
         x = x.ravel()
         y = y.ravel()
-        z = self.z_fiber*np.ones(np.shape(y))
-        return [x,y,z]
+        z = self.z_fiber * np.ones(np.shape(y))
+        return [x, y, z]
 
     def _plot_streamlines(self):
-        """This function plots streamlines and the pressure field. It
-         interpolates the properties from particles using the kernel."""
+        """This function plots streamlines and the pressure field.
 
+        It interpolates the properties from particles using the kernel.
+        """
         # lenght factor m --> mm
         factor = 1000
 
         # Interpolation grid
-        x = np.linspace(0,self.Lx,400)
-        y = np.linspace(0,self.Ly,100)
-        x,y = np.meshgrid(x,y)
+        x = np.linspace(0, self.Lx, 400)
+        y = np.linspace(0, self.Ly, 100)
+        x, y = np.meshgrid(x, y)
 
         # Extract positions of fiber particles from last step to plot them
         # on top of velocities.
@@ -317,7 +314,7 @@ class Channel(Application):
         u = interp.interpolate('u')
         v = interp.interpolate('v')
         p = interp.interpolate('p')
-        vmag = factor*np.sqrt(u**2 + v**2)
+        vmag = factor * np.sqrt(u**2 + v**2)
 
         upper = 0.1
 
@@ -329,25 +326,25 @@ class Channel(Application):
 
         # velocity contour (ungly solution against white lines:
         # repeat plots....)
-        plt.contourf(x*factor,y*factor, vmag, levels=levels,
-                 cmap=cmap, vmax=upper, vmin=0)
-        plt.contourf(x*factor,y*factor, vmag, levels=levels,
-                 cmap=cmap, vmax=upper, vmin=0)
-        vel = plt.contourf(x*factor,y*factor, vmag, levels=levels,
-                 cmap=cmap, vmax=upper, vmin=0)
+        plt.contourf(x * factor, y * factor, vmag, levels=levels,
+                     cmap=cmap, vmax=upper, vmin=0)
+        plt.contourf(x * factor, y * factor, vmag, levels=levels,
+                     cmap=cmap, vmax=upper, vmin=0)
+        vel = plt.contourf(x * factor, y * factor, vmag, levels=levels,
+                           cmap=cmap, vmax=upper, vmin=0)
         # streamlines
-        stream = plt.streamplot(x*factor,y*factor,u,v, color='k',
-                density=0.6, arrowstyle='-', linewidth=1.0)
+        plt.streamplot(x * factor, y * factor, u, v, color='k',
+                       density=0.6, arrowstyle='-', linewidth=1.0)
         # fiber
-        plt.scatter(fx*factor,fy*factor, color='w')
+        plt.scatter(fx * factor, fy * factor, color='w')
 
         # set labels
         cbar = plt.colorbar(vel,
-                    ticks=[0.0, 0.02, 0.04, 0.06, 0.08, 0.10],
-                    shrink=0.5)
+                            ticks=[0.0, 0.02, 0.04, 0.06, 0.08, 0.10],
+                            shrink=0.5)
         plt.axis('scaled')
         cbar.set_label('Velocity in mm/s', labelpad=20.0)
-        plt.axis((0,factor*self.Lx,0,factor*self.Ly))
+        plt.axis((0, factor * self.Lx, 0, factor * self.Ly))
         plt.xlabel('$x_1$ in mm')
         plt.ylabel('$x_2$ in mm ')
         plt.tight_layout()
@@ -355,50 +352,50 @@ class Channel(Application):
         # save plot
         fig = os.path.join(self.output_dir, 'streamplot.pdf')
         plt.savefig(fig, dpi=300, bbox_inches='tight')
-        print("Streamplot written to %s."% fig)
-
+        print("Streamplot written to %s." % fig)
 
         upper = np.max(p)
         lower = np.min(p)
 
         # open new plot
         plt.figure()
-        #configuring new color map
+        # configuring new color map
         cmap = plt.cm.viridis
         levels = np.linspace(lower, upper, 30)
 
-        # pressure contour(ungly solution against white lines:
+        # pressure contour(ugly solution against white lines:
         # repeat plots....)
-        plt.contourf(x*factor,y*factor, p, levels=levels,
-                 cmap=cmap,  vmin=lower, vmax=upper)
-        plt.contourf(x*factor,y*factor, p, levels=levels,
-                 cmap=cmap,  vmin=lower, vmax=upper)
-        pres = plt.contourf(x*factor,y*factor, p, levels=levels,
-                 cmap=cmap,  vmin=lower, vmax=upper)
+        plt.contourf(x * factor, y * factor, p, levels=levels,
+                     cmap=cmap, vmin=lower, vmax=upper)
+        plt.contourf(x * factor, y * factor, p, levels=levels,
+                     cmap=cmap, vmin=lower, vmax=upper)
+        pres = plt.contourf(x * factor, y * factor, p, levels=levels,
+                            cmap=cmap, vmin=lower, vmax=upper)
 
         # fiber
-        plt.scatter(fx*factor,fy*factor, color='w')
+        plt.scatter(fx * factor, fy * factor, color='w')
 
         # set labels
         cbar = plt.colorbar(pres, label='Pressure in Pa')
         plt.axis('equal')
-        plt.axis((0,factor*self.Lx,0,factor*self.Ly))
+        plt.axis((0, factor * self.Lx, 0, factor * self.Ly))
         plt.xlabel('$x_1$ in mm')
         plt.ylabel('$x_2$ in mm')
         plt.tight_layout()
 
-
         # save plot
         p_fig = os.path.join(self.output_dir, 'pressure.pdf')
         plt.savefig(p_fig, dpi=300, bbox_inches='tight')
-        print("Pressure written to %s."% p_fig)
+        print("Pressure written to %s." % p_fig)
 
         return[fig, p_fig]
 
     def _plot_inlet_velocity(self, step_idx=-1):
-        """This function plots the velocity profile at the periodic boundary. If
-        the fiber has only a single particle, this is interpreted as flow around
-        a fiber cylinder and the coresponding FEM solution is plotted as well.
+        """This function plots the velocity profile at the periodic boundary.
+
+        If the fiber has only a single particle, this is interpreted as flow
+        around a fiber cylinder and the coresponding FEM solution is plotted
+        as well.
         """
         # length factor m --> mm
         factor = 1000
@@ -409,8 +406,8 @@ class Channel(Application):
 
         # Generate meshgrid for interpolation.
         x = np.array([0])
-        y = np.linspace(0,self.Ly,100)
-        x,y = np.meshgrid(x,y)
+        y = np.linspace(0, self.Ly, 100)
+        x, y = np.meshgrid(x, y)
 
         # interpolation of velocity field.
         interp = Interpolator(list(data['arrays'].values()), x=x, y=y)
@@ -418,18 +415,18 @@ class Channel(Application):
         u = interp.interpolate('u')
 
         # solution for undisturbed velocity field.
-        u_exact = (self.options.G * (y - self.Ly/2)
-                    - 1/2*self.options.g/self.nu*(
-                            (y-self.Ly/2)**2-(self.Ly/2)**2))
+        u_exact = (self.options.G * (y - self.Ly / 2) -
+                   0.5 * self.options.g / self.nu * (
+                   (y - self.Ly / 2)**2 - (self.Ly / 2)**2))
 
         # open new plot
         plt.figure()
 
         # SPH solution
-        plt.plot(u*factor, y*factor , '-k')
+        plt.plot(u * factor, y * factor, '-k')
 
         # undisturbed solution
-        plt.plot(u_exact*factor, y*factor, ':k')
+        plt.plot(u_exact * factor, y * factor, ':k')
 
         # labels
         plt.xlabel('Velocity $v_1$ in mm/s')
@@ -441,13 +438,14 @@ class Channel(Application):
         # save figure
         fig = os.path.join(self.output_dir, 'inlet_velocity.pdf')
         plt.savefig(fig, dpi=300, bbox_inches='tight')
-        print("Inlet velocity plot written to %s."% fig)
+        print("Inlet velocity plot written to %s." % fig)
 
         return (fig)
 
     def _plot_center_velocity(self, step_idx=-1):
-        """This function plots the velocity profile at the center across the
-        particle. If the fiber has only a single particle, this is interpreted
+        """This function plots the velocity profile at the center.
+
+        If the fiber has only a single particle, this is interpreted
         as flow arounda fiber cylinder and the coresponding FEM solution is
         plotted as well.
         """
@@ -460,8 +458,8 @@ class Channel(Application):
 
         # Generate meshgrid for interpolation.
         x = np.array([self.x_fiber])
-        y = np.linspace(0,self.Ly,100)
-        x,y = np.meshgrid(x,y)
+        y = np.linspace(0, self.Ly, 100)
+        x, y = np.meshgrid(x, y)
 
         # interpolation of velocity field.
         interp = Interpolator(list(data['arrays'].values()), x=x, y=y)
@@ -472,7 +470,7 @@ class Channel(Application):
         plt.figure()
 
         # SPH solution
-        plt.plot(u*factor, y*factor , '-k')
+        plt.plot(u * factor, y * factor, '-k')
 
         # labels
         plt.xlabel('Velocity $v_1$ in mm/s')
@@ -483,17 +481,15 @@ class Channel(Application):
         # save figure
         fig = os.path.join(self.output_dir, 'center_velocity.pdf')
         plt.savefig(fig, dpi=300, bbox_inches='tight')
-        print("Center velocity plot written to %s."% fig)
+        print("Center velocity plot written to %s." % fig)
 
         return (fig)
 
     def _plot_history(self):
-        """This function create all plots employing a iteration over all time
-        steps. """
+        """This function create all plots.
 
-        # length factor m --> mm
-        factor = 1000
-
+        It is employing an iteration over all timesteps.
+        """
         # empty list for time
         t = []
 
@@ -532,7 +528,7 @@ class Channel(Application):
         output_files = remove_irrelevant_files(self.output_files)
         print("Evaluating Results.")
         bar = FloatPBar(0, len(output_files), show=True)
-        for i,fname in enumerate(output_files):
+        for i, fname in enumerate(output_files):
             data = load(fname)
             bar.update(i)
 
@@ -551,39 +547,46 @@ class Channel(Application):
             y_end.append(fiber.y[-1])
 
             # computation of orientation angle
-            dxx = fiber.x[0]-fiber.x[-1]
-            dyy = fiber.y[0]-fiber.y[-1]
-            a = np.arctan(dxx/(dyy+0.01*self.h0)) + N*np.pi
+            dxx = fiber.x[0] - fiber.x[-1]
+            dyy = fiber.y[0] - fiber.y[-1]
+            a = np.arctan(dxx / (dyy + 0.01 * self.h0)) + N * np.pi
             if len(angle) > 0 and a - angle[-1] > 3:
                 N -= 1
                 a -= np.pi
-            elif len(angle) > 0 and a-angle[-1] < -3:
+            elif len(angle) > 0 and a - angle[-1] < -3:
                 N += 1
                 a += np.pi
 
             # count rotations
-            if a-M*np.pi > np.pi:
-                T.append(t[-1]-t0)
+            if a - M * np.pi > np.pi:
+                T.append(t[-1] - t0)
                 t0 = t[-1]
                 M += 1
             angle.append(a)
 
-            # computation of squared velocity and masses from density and volume
+            # computation of squared velocity and masses from density and
+            # volume
             v_fiber = fiber.u**2 + fiber.v**2 + fiber.w**2
             v_fluid = fluid.u**2 + fluid.v**2 + fluid.w**2
-            m_fiber = fiber.rho/fiber.V
-            m_fluid = fluid.rho/fluid.V
-            m_channel = channel.rho/channel.V
+            m_fiber = fiber.rho / fiber.V
+            m_fluid = fluid.rho / fluid.V
+            m_channel = channel.rho / channel.V
 
             # appending volume, density, mass, pressure and kinetic energy
-            volume.append(np.sum(1/fiber.V)+np.sum(1/fluid.V)+np.sum(1/channel.V))
-            rho.append(np.sum(fiber.rho)+np.sum(fluid.rho)+np.sum(channel.rho))
-            m.append(np.sum(m_fiber)+np.sum(m_fluid)+np.sum(m_channel))
-            E_p.append(np.sum(fiber.p/fiber.V)
-                        +np.sum(fluid.p/fluid.V)
-                        +np.sum(channel.p/channel.V))
-            E_kin.append(0.5*np.dot(m_fiber,v_fiber)
-                        +0.5*np.dot(m_fluid,v_fluid))
+            volume.append(np.sum(1 / fiber.V) +
+                          np.sum(1 / fluid.V) +
+                          np.sum(1 / channel.V))
+            rho.append(np.sum(fiber.rho) +
+                       np.sum(fluid.rho) +
+                       np.sum(channel.rho))
+            m.append(np.sum(m_fiber) +
+                     np.sum(m_fluid) +
+                     np.sum(m_channel))
+            E_p.append(np.sum(fiber.p / fiber.V) +
+                       np.sum(fluid.p / fluid.V) +
+                       np.sum(channel.p / channel.V))
+            E_kin.append(0.5 * np.dot(m_fiber, v_fiber) +
+                         0.5 * np.dot(m_fluid, v_fluid))
 
             # extract reaction forces at hold particles
             Fwx.append(fiber.Fwx[0])
@@ -610,15 +613,15 @@ class Channel(Application):
         # save figure
         engfig = os.path.join(self.output_dir, 'energyplot.pdf')
         plt.savefig(engfig, dpi=300, bbox_inches='tight')
-        print("Energyplot written to %s."% engfig)
+        print("Energyplot written to %s." % engfig)
 
         # open new plot
         plt.figure()
 
         # plot relative mass, volume and density
-        plt.plot(t, np.array(m)/m[0], '-k',
-                 t, np.array(volume)/volume[0], '--k',
-                 t, np.array(rho)/rho[0], ':k')
+        plt.plot(t, np.array(m) / m[0], '-k',
+                 t, np.array(volume) / volume[0], '--k',
+                 t, np.array(rho) / rho[0], ':k')
 
         # labels
         plt.xlabel('Time $t$ in s')
@@ -630,61 +633,53 @@ class Channel(Application):
         # save figure
         mfig = os.path.join(self.output_dir, 'massplot.pdf')
         plt.savefig(mfig, dpi=300, bbox_inches='tight')
-        print("Mass plot written to %s."% mfig)
+        print("Mass plot written to %s." % mfig)
 
         # hard-coded solutions for total reaction forces and viscous reaction
         # forces from FEM. (ar=1, g=10, G=0, width=20)
-        t_fem = np.array([0,5.00E-06,1.00E-05,1.50E-05,2.00E-05,2.50E-05,
-                            3.00E-05,3.50E-05,4.00E-05,4.50E-05,5.00E-05])
-        F_fem = np.array([0,0.015085,0.021444,0.024142,0.025327,0.025828,
-                            0.026010,0.026075,0.026094,0.026096,0.026093])
+        t_fem = np.array([0, 5.00E-06, 1.00E-05, 1.50E-05, 2.00E-05, 2.50E-05,
+                          3.00E-05, 3.50E-05, 4.00E-05, 4.50E-05, 5.00E-05])
+        F_fem = np.array([0, 0.015085, 0.021444, 0.024142, 0.025327, 0.025828,
+                          0.026010, 0.026075, 0.026094, 0.026096, 0.026093])
 
         # applying appropriate scale factors
-        t = np.array(t)/self.scale_factor
+        t = np.array(t) / self.scale_factor
 
         # open new plot
         plt.figure()
 
         # plot computed reaction force, total FEM force and viscous FEM
         # force
-        plt.plot(t*1000, Fx, '-k',
-                 t_fem*1000, F_fem, '--k')
+        plt.plot(t * 1000, Fx, '-k',
+                 t_fem * 1000, F_fem, '--k')
 
         # labels
         plt.xlabel('Time $t$ in ms')
         plt.ylabel('Force per fiber length in N/m')
-        plt.legend(['SPH',
-                    'FEM'],
-                    loc='lower right')
-        x1,x2,y1,y2 = plt.axis()
-        plt.axis((0,x2,0,y2))
+        plt.legend(['SPH', 'FEM'],
+                   loc='lower right')
+        x1, x2, y1, y2 = plt.axis()
+        plt.axis((0, x2, 0, y2))
         plt.grid()
         plt.tight_layout()
 
         # save figure
         forcefig = os.path.join(self.output_dir, 'forceplot.pdf')
         plt.savefig(forcefig, dpi=300, bbox_inches='tight')
-        print("Reaction Force plot written to %s."% forcefig)
+        print("Reaction Force plot written to %s." % forcefig)
         return [engfig, forcefig]
-
 
     def post_process(self, info_fname):
         if len(self.output_files) == 0:
             return
 
         [streamlines, pressure] = self._plot_streamlines()
-        center_velocity = self._plot_center_velocity()
-        history = self._plot_history()
-        inlet = self._plot_inlet_velocity()
+        self._plot_center_velocity()
+        self._plot_history()
+        self._plot_inlet_velocity()
 
-def run_application():
+
+if __name__ == '__main__':
     app = Channel()
     app.run()
     app.post_process(app.info_filename)
-
-if __name__ == '__main__':
-    run_application()
-    # cProfile.runctx('run_application()', None, locals(), 'stats')
-    # p = pstats.Stats('stats')
-    # p.sort_stats('tottime').print_stats(10)
-    # p.sort_stats('cumtime').print_stats(10)
