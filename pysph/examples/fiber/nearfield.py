@@ -18,6 +18,7 @@ rc('text', usetex=True)
 
 # numpy and scipy
 import numpy as np
+from scipy.interpolate import griddata
 
 # PySPH imports
 from pysph.base.nnps import DomainManager
@@ -143,6 +144,7 @@ class Channel(Application):
         self.Vmax = (self.options.G * self.Ly / 2 +
                      self.options.g / (2 * self.nu) * self.Ly**2 / 4)
         self.c0 = 10 * self.Vmax
+        print("Sound speed is %g s" % self.c0)
         self.p0 = self.c0**2 * self.rho0
 
         # Background pressure in Adami's transport velocity formulation
@@ -408,6 +410,77 @@ class Channel(Application):
         print("Pressure written to %s." % p_fig)
 
         return[fig, p_fig]
+
+    def _plot_reference_streamlines(self):
+        """This function plots streamlines and the pressure field.
+
+        It interpolates the properties from particles using the kernel.
+        """
+        # lenght factor m --> mm
+        factor = 1000
+
+        # Interpolation grid
+        X = np.linspace(0, self.Lx, 400)
+        Y = np.linspace(0, self.Ly, 100)
+        x, y = np.meshgrid(X, Y)
+
+        fx = self.Lx / 2
+        fy = self.Ly / 2
+
+        # Interpolation of velocitie
+        data = np.loadtxt('dsm_poiseuille_comsol.txt')
+        grid = griddata(data[:, 0:2], data[:, 2:4],
+                        (factor * x, factor * y), method='linear')
+        u, v = np.transpose(grid)
+        u = np.transpose(u)
+        v = np.transpose(v)
+        vmag = factor * np.sqrt(u**2 + v**2)
+
+        upper = 0.1
+
+        # open new figure
+        plt.figure()
+        # configuring color map
+        cmap = plt.cm.viridis
+        levels = np.linspace(0, upper, 30)
+
+        # velocity contour (ungly solution against white lines:
+        # repeat plots....)
+        plt.contourf(x * factor, y * factor, vmag, levels=levels,
+                     cmap=cmap, vmax=upper, vmin=0)
+        plt.contourf(x * factor, y * factor, vmag, levels=levels,
+                     cmap=cmap, vmax=upper, vmin=0)
+        vel = plt.contourf(x * factor, y * factor, vmag, levels=levels,
+                           cmap=cmap, vmax=upper, vmin=0)
+        # streamlines
+        y_start = np.linspace(0.0, self.Ly * factor, 20)
+        x_start = np.zeros_like(y_start)
+        start_points = np.array(list(zip(x_start, y_start)))
+        plt.streamplot(X * factor, Y * factor, u, v,
+                       start_points=start_points,
+                       color='k',
+                       density=100,
+                       arrowstyle='-',
+                       linewidth=1.0)
+        # fiber
+        plt.scatter(fx * factor, fy * factor, color='w')
+
+        # set labels
+        cbar = plt.colorbar(vel,
+                            ticks=[0.0, 0.02, 0.04, 0.06, 0.08, 0.10],
+                            shrink=0.5)
+        plt.axis('scaled')
+        cbar.set_label('Velocity in mm/s', labelpad=20.0)
+        plt.axis((0, factor * self.Lx, 0, factor * self.Ly))
+        plt.xlabel('$x_1$ in mm')
+        plt.ylabel('$x_2$ in mm ')
+        plt.tight_layout()
+
+        # save plot
+        fig = os.path.join(self.output_dir, 'streamplot_fem.pdf')
+        plt.savefig(fig, dpi=300, bbox_inches='tight')
+        print("ReferenceStreamplot written to %s." % fig)
+
 
     def _plot_inlet_velocity(self, step_idx=-1):
         """This function plots the velocity profile at the periodic boundary.
@@ -737,6 +810,12 @@ class Channel(Application):
         # save figure
         forcefig = os.path.join(self.output_dir, 'forceplot.pdf')
         plt.savefig(forcefig, dpi=300, bbox_inches='tight')
+        try:
+            tex_fig = os.path.join(self.output_dir, "forceplot.tex")
+            from matplotlib2tikz import save as tikz_save
+            tikz_save(tex_fig)
+        except ImportError:
+            print("Did not write tikz figure.")
         print("Reaction Force plot written to %s." % forcefig)
         return [engfig, forcefig]
 
@@ -744,6 +823,7 @@ class Channel(Application):
         if len(self.output_files) == 0:
             return
 
+        self._plot_reference_streamlines()
         [streamlines, pressure] = self._plot_streamlines()
         self._plot_center_velocity()
         self._plot_pressure_centerline()

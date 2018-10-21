@@ -43,11 +43,11 @@ class RVE(Application):
     def add_user_options(self, group):
         group.add_argument(
             "--d", action="store", type=float, dest="d",
-            default=0.0002, help="Fiber diameter"
+            default=0.0001, help="Fiber diameter"
         )
         group.add_argument(
             "--ar", action="store", type=int, dest="ar",
-            default=11, help="Aspect ratio of fiber"
+            default=10, help="Aspect ratio of fiber"
         )
         group.add_argument(
             "--rho", action="store", type=float, dest="rho0",
@@ -55,15 +55,15 @@ class RVE(Application):
         )
         group.add_argument(
             "--mu", action="store", type=float, dest="mu",
-            default=1000, help="Absolute viscosity"
+            default=63, help="Absolute viscosity"
         )
         group.add_argument(
             "--E", action="store", type=float, dest="E",
-            default=1E9, help="Young's modulus"
+            default=2.5E9, help="Young's modulus"
         )
         group.add_argument(
             "--G", action="store", type=float, dest="G",
-            default=4, help="Shear rate"
+            default=3.3, help="Shear rate"
         )
         group.add_argument(
             "--g", action="store", type=float, dest="g",
@@ -87,11 +87,11 @@ class RVE(Application):
         )
         group.add_argument(
             "--volfrac", action="store", type=float, dest="vol_frac",
-            default=0.05, help="Volume fraction of fibers in suspension."
+            default=0.01, help="Volume fraction of fibers in suspension."
         )
         group.add_argument(
             "--folgartucker", action="store_true", dest="folgartucker",
-            default=False, help="Decides wether to plot Folgar Tucker solution."
+            default=False, help="Decides if Folgar Tucker solution is plotted."
         )
         group.add_argument(
             "--k", action="store", type=float, dest="k",
@@ -101,7 +101,6 @@ class RVE(Application):
             "--rot", action="store", type=float, dest="rot",
             default=2.0, help="Number of half rotations."
         )
-
 
     def consume_user_options(self):
         """Initialization of geometry, properties and time stepping."""
@@ -301,6 +300,7 @@ class RVE(Application):
 
         # Setting the initial velocities for a shear flow.
         fluid.u[:] = self.options.G*(fluid.y[:]-self.L/2)
+        fibers.u[:] = self.options.G*(fibers.y[:]-self.L/2)
         channel.u[:] = self.options.G*(channel.y[:]-self.L/2)
 
         if self.n > 0:
@@ -332,12 +332,9 @@ class RVE(Application):
 
     def get_equivalent_aspect_ratio(self, aspect_ratio):
         """Jeffrey's equivalent aspect ratio (coarse approximation)
-            H. L. Goldsmith and S. G. Mason
-            CHAPTER 2 - THE MICRORHEOLOGY OF DISPERSIONS A2 - EIRICH, pp. 85–250.
-            Academic Press, 1967.
-
+            Cox et al.
         """
-        return -0.0017*aspect_ratio**2+0.742*aspect_ratio
+        return 1.24 * aspect_ratio / np.sqrt(np.log(aspect_ratio))
 
 
     def symm(self, A):
@@ -542,7 +539,7 @@ class RVE(Application):
         omega = np.array([[0.0, G/2, 0.0],[-G/2, 0.0, 0.0],[0.0, 0.0, 0.0]])
         D = np.array([[0.0, G/2, 0.0],[G/2, 0.0, 0.0],[0.0, 0.0, 0.0]])
         AA = self.generate_fourth_order_tensor(A)
-        closure = AA+(1.0-kappa)*(L-np.einsum('ijmn,mnkl->ijkl',M,AA))
+        closure = AA + (1.0-kappa)*(L-np.einsum('ijmn,mnkl->ijkl',M,AA))
         #print(np.linalg.norm(RSC-AA))
         delta = np.eye(3)
 
@@ -632,7 +629,13 @@ class RVE(Application):
         # save figure
         visfig = os.path.join(self.output_dir, 'viscosity.pdf')
         plt.savefig(visfig, dpi=300, bbox_inches='tight')
-        print("Viscosity plot written to %s."% visfig)
+        try:
+            tex_fig = os.path.join(self.output_dir, "viscosity.tex")
+            from matplotlib2tikz import save as tikz_save
+            tikz_save(tex_fig)
+        except ImportError:
+            print("Did not write tikz figure.")
+        print("Viscosity plot written to %s." % visfig)
 
         # open new plot
         plt.figure()
@@ -700,6 +703,12 @@ class RVE(Application):
             plt.tight_layout()
             ori = os.path.join(self.output_dir, 'orientation.pdf')
             plt.savefig(ori, dpi=300, bbox_inches='tight')
+            try:
+                tex_fig = os.path.join(self.output_dir, "orientation.tex")
+                from matplotlib2tikz import save as tikz_save
+                tikz_save(tex_fig)
+            except ImportError:
+                print("Did not write tikz figure.")
             print("Orientation plot written to %s."% ori)
 
 

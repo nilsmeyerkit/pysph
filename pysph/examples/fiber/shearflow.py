@@ -37,14 +37,9 @@ def get_equivalent_aspect_ratio(aspect_ratio):
     u"""Jeffrey's equivalent aspect ratio.
 
     Approximation from
-    H. L. Goldsmith and S. G. Mason
-    CHAPTER 2 - THE MICRORHEOLOGY OF DISPERSIONS A2 - EIRICH, pp. 85–250.
-    Academic Press, 1967.
-    and
     Cox et al.
     """
-    return [1.24 * aspect_ratio / np.sqrt(np.log(aspect_ratio)),
-            -0.0017 * aspect_ratio**2 + 0.742 * aspect_ratio]
+    return 1.24 * aspect_ratio / np.sqrt(np.log(aspect_ratio))
 
 
 def jeffery_ode(phi, t, ar, G):
@@ -617,10 +612,8 @@ class Channel(Application):
             T_mean = np.mean(T)
             T_std = np.std(T)
             are = get_equivalent_aspect_ratio(self.options.ar)
-            l_cox = (are[0] + 1.0 / are[0])
-            l_gmason = (are[1] + 1.0 / are[1])
+            l_cox = (are + 1.0 / are)
             T_cox = np.pi * l_cox / self.options.G
-            T_gmason = np.pi * l_gmason / self.options.G
             l = (self.options.ar + 1.0 / self.options.ar)
             T_jef = np.pi * l / self.options.G
             print("Rotational statistics for %d half rotations:" %
@@ -629,7 +622,6 @@ class Channel(Application):
             print("*Standard Deviation: %f" % T_std)
             print("*Jeffery: %f" % T_jef)
             print("*Jeffery(Cox equivalent): %f" % T_cox)
-            print("*Jeffery(Goldsmith/Mason equivalent): %f" % T_gmason)
 
         # open new plot
         plt.figure()
@@ -662,9 +654,7 @@ class Channel(Application):
         angle_jeffery = odeint(jeffery_ode, phi0, t, atol=1E-15,
                                args=(self.options.ar, self.options.G))
         angle_jeffery_cox = odeint(jeffery_ode, phi0, t, atol=1E-15,
-                                   args=(are[0], self.options.G))
-        angle_jeffery_gmason = odeint(jeffery_ode, phi0, t, atol=1E-15,
-                                      args=(are[1], self.options.G))
+                                   args=(are, self.options.G))
 
         # constraint between -pi/2 and pi/2
         # angle_jeffery = (angle_jeffery+np.pi/2.0)%np.pi-np.pi/2.0
@@ -673,16 +663,14 @@ class Channel(Application):
         plt.figure()
 
         # plot computed angle and Jeffery's solution
-        plt.plot(t, angle_jeffery_cox, '.k', color='grey')
-        plt.plot(t, angle_jeffery_gmason, '+k', color='grey')
         plt.plot(t, angle, '-k')
         plt.plot(t, angle_jeffery, '--k')
+        plt.plot(t, angle_jeffery_cox, '.k', color='grey')
 
         # labels
         plt.xlabel('Time $t$ in s')
         plt.ylabel('Rotation angle $\phi$')
-        plt.legend(['Cox', 'Goldsmith/Mason', 'SPH Simulation',
-                    'Jeffery'])
+        plt.legend(['SPH Simulation', 'Jeffery', 'Jeffery (equiv.)'])
         plt.grid()
         x1, x2, y1, y2 = plt.axis()
         plt.axis((0, x2, 0, y2))
@@ -696,6 +684,12 @@ class Channel(Application):
         angfigpng = os.path.join(self.output_dir, 'angleplot.png')
         plt.savefig(angfig, dpi=300, bbox_inches='tight')
         plt.savefig(angfigpng, dpi=300, bbox_inches='tight')
+        try:
+            tex_fig = os.path.join(self.output_dir, "angleplot.tex")
+            from matplotlib2tikz import save as tikz_save
+            tikz_save(tex_fig)
+        except ImportError:
+            print("Did not write tikz figure.")
         print("Angleplot written to %s." % angfig)
 
         # save angles as *.csv file
