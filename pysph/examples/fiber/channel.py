@@ -16,12 +16,6 @@ Flow with fibers in a channel. There are different setups:
 """
 # general imports
 import os
-import smtplib
-import json
-
-# profiling
-import cProfile
-import pstats
 
 # matplotlib (set up for server use)
 # matplotlib (set up for server use)
@@ -1018,14 +1012,8 @@ class Channel(Application):
         history = self._plot_history()
         inlet = self._plot_inlet_velocity()
 
-def run_application():
-    app = Channel()
-    app.run()
-    app.post_process(app.info_filename)
 
 if __name__ == '__main__':
-    run_application()
-    # cProfile.runctx('run_application()', None, locals(), 'stats')
-    # p = pstats.Stats('stats')
-    # p.sort_stats('tottime').print_stats(10)
-    # p.sort_stats('cumtime').print_stats(10)
+        app = Channel()
+        app.run()
+        app.post_process(app.info_filename)
