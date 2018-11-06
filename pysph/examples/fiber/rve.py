@@ -605,8 +605,8 @@ class RVE(Application):
         A0 = np.array([[0.0,0.0,0.0],[0.0,1.0,0.0],[0.0,0.0,0.0]])
         are = self.get_equivalent_aspect_ratio(self.options.ar)
         A_FT = []
-        cis =       [0.00, 0.001, 0.001]
-        kappas =    [1.00, 1.00, 0.50]
+        cis = [0.00, 0.001, 0.001]
+        kappas = [1.00, 1.00, 0.50]
         for Ci, kappa in zip(cis, kappas):
             print("Solving RSC equation with Ci=%.3f and kappa = %.2f"
                   %(Ci,kappa))
