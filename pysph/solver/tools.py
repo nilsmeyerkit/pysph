@@ -105,9 +105,10 @@ class FiberIntegrator(Tool):
         from pysph.sph.integrator import EulerIntegrator
         from pysph.sph.scheme import BeadChainScheme
         from pysph.sph.equation import Group
-        from pysph.sph.fiber.utils import (HoldPoints, Contact, ComputeDistance)
+        from pysph.sph.fiber.utils import (HoldPoints, Contact,
+                                           ComputeDistance)
         from pysph.sph.fiber.beadchain import (Tension, Bending,
-            ArtificialDamping)
+                                               ArtificialDamping)
         from pysph.base.nnps import DomainManager, LinkedListNNPS
         from pysph.sph.acceleration_eval import AccelerationEval
         from pysph.sph.sph_compiler import SPHCompiler
@@ -120,6 +121,7 @@ class FiberIntegrator(Tool):
         self.fiber_dt = scheme.fiber_dt
         self.domain_updates = updates
         self.steps = steps
+        self.eta0 = scheme.rho0 * scheme.nu
 
         # if there are more than 1 particles involved, elastic equations are
         # iterated in an inner loop.
@@ -145,7 +147,7 @@ class FiberIntegrator(Tool):
                 g2.append(Bending(dest=fiber, sources=None, ei=scheme.E*scheme.I))
                 g2.append(Contact(dest=fiber, sources=scheme.fibers, E=scheme.E,
                             d=scheme.dx, dim=scheme.dim, k=scheme.k,
-                            lim=scheme.lim))
+                            lim=scheme.lim, eta0=self.eta0))
                 g2.append(ArtificialDamping(dest=fiber, sources=None, d=scheme.D))
             equations.append(Group(equations=g2))
 
