@@ -149,15 +149,15 @@ class RVE(Application):
         R = self.dx/2
         self.A = np.pi*R**2
         self.I = np.pi*R**4/4.0
-        mass = 3*self.rho0*self.dx*self.A
-        self.J = 1/4*mass*R**2 + 1/12*mass*(3*self.dx)**2
+        mass = 3.0*self.rho0*self.dx*self.A
+        self.J = 1.0/4.0*mass*R**2 + 1.0/12*mass*(3.0*self.dx)**2
 
         # SPH uses weakly compressible fluids. Therefore, the speed of sound c0
         # is computed as 10 times the maximum velocity. This should keep the
         # density change within 1%
-        self.Vmax = (self.options.G*self.L/2
-                     + self.options.g/(2*self.nu)*self.L**2/4)
-        self.c0 = 10*self.Vmax
+        self.Vmax = (self.options.G*self.L/2.0
+                     + self.options.g/(2.0*self.nu)*self.L**2/4.0)
+        self.c0 = 10.0*self.Vmax
         self.p0 = self.c0**2*self.rho0
 
         # Background pressure in Adami's transport velocity formulation
@@ -165,19 +165,19 @@ class RVE(Application):
 
         # The time is set to zero, if only postprocessing is required.
         if self.options.postonly:
-            self.t = 0
+            self.t = 0.0
         else:
             l = (self.options.ar+1.0/self.options.ar)
             self.t = self.options.rot*np.pi*l/self.options.G
         print("Simulated time is %g s"%self.t)
 
         fdx = self.dx
-        dx2 = fdx/2
+        dx2 = fdx/2.0
 
         _x = np.arange(dx2, self.L, fdx)
         _z = np.arange(dx2, self.L, fdx)
 
-        self.n = round(self.options.vol_frac*len(_x)*len(_z))
+        self.n = int(round(self.options.vol_frac*len(_x)*len(_z)))
 
     def configure_scheme(self):
         self.scheme.configure(rho0=self.rho0, c0=self.c0, nu=self.nu,

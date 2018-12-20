@@ -46,7 +46,6 @@ from pysph.sph.scheme import BeadChainScheme
 
 # Jeffrey's equivalent aspect ratio (coarse approximation)
 #   H. L. Goldsmith and S. G. Mason
-#   CHAPTER 2 - THE MICRORHEOLOGY OF DISPERSIONS A2 - EIRICH, pp. 85–250.
 #   Academic Press, 1967.
 def get_equivalent_aspect_ratio(aspect_ratio):
     return [1.24*aspect_ratio/np.sqrt(np.log(aspect_ratio)),

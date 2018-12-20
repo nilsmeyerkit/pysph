@@ -132,10 +132,10 @@ class Channel(Application):
         self.Lf = self.options.ar * self.dx
 
         # Use fiber aspect ratio to determine the channel width.
-        self.Ly = self.Lf + 2 * int(0.1 * self.options.ar) * self.dx
+        self.Ly = self.Lf + 2.0 * int(0.1 * self.options.ar) * self.dx
 
         # Reynolds number
-        self.Vmax = self.options.G * self.Ly / 2
+        self.Vmax = self.options.G * self.Ly / 2.0
         Re = self.options.rho0 * self.Vmax * self.Lf / self.options.mu
         print("Original Reynolds number: %g" % Re)
         self.rho0 = (self.options.mu * self.options.Re) / (self.Vmax * self.Lf)
@@ -168,20 +168,20 @@ class Channel(Application):
         # coputation than for 3 dimensions.
         if self.options.dim == 2:
             self.A = self.dx
-            self.I = self.dx**3 / 12
-            mass = 3 * self.rho0 * self.dx * self.A
-            self.J = 1 / 12 * mass * (self.dx**2 + (3 * self.dx)**2)
+            self.I = self.dx**3 / 12.0
+            mass = 3.0 * self.rho0 * self.dx * self.A
+            self.J = 1.0 / 12.0 * mass * (self.dx**2 + (3.0 * self.dx)**2)
         else:
             R = self.dx / 2
             self.A = np.pi * R**2
             self.I = np.pi * R**4 / 4.0
-            mass = 3 * self.rho0 * self.dx * self.A
-            self.J = 1 / 4 * mass * R**2 + 1 / 12 * mass * (3 * self.dx)**2
+            mass = 3.0 * self.rho0 * self.dx * self.A
+            self.J = 1.0 / 4.0 * mass * R**2 + 1.0 / 12.0 * mass * (3.0 * self.dx)**2
 
         # SPH uses weakly compressible fluids. Therefore, the speed of sound c0
         # is computed as 10 times the maximum velocity. This should keep the
         # density change within 1%
-        self.c0 = 10 * self.Vmax
+        self.c0 = 10.0 * self.Vmax
         self.p0 = self.c0**2 * self.rho0
 
         # Background pressure in Adami's transport velocity formulation
@@ -216,7 +216,7 @@ class Channel(Application):
         # The fluid might be scaled compared to the fiber. fdx is a shorthand
         # for the fluid spacing and dx2 is a shorthand for the half of it.
         fdx = self.options.fluid_res * self.dx
-        dx2 = fdx / 2
+        dx2 = fdx / 2.0
 
         # Creating grid points for particles
         _x = np.arange(dx2, self.Lx, fdx)
@@ -233,9 +233,9 @@ class Channel(Application):
             zz = self.z_fiber
 
             # vertical
-            if (fx[i] < xx + self.dx / 2 and fx[i] > xx - self.dx / 2 and
-                fy[i] < yy + self.Lf / 2 and fy[i] > yy - self.Lf / 2 and
-                    fz[i] < zz + self.dx / 2 and fz[i] > zz - self.dx / 2):
+            if (fx[i] < xx + self.dx / 2.0 and fx[i] > xx - self.dx / 2.0 and
+                fy[i] < yy + self.Lf / 2.0 and fy[i] > yy - self.Lf / 2.0 and
+                    fz[i] < zz + self.dx / 2.0 and fz[i] > zz - self.dx / 2.0):
                 indices.append(i)
 
             # horizontal
@@ -249,8 +249,8 @@ class Channel(Application):
 
         # vertical fiber
         _fibx = np.array([xx])
-        _fiby = np.arange(yy - self.Lf / 2 + self.dx / 2,
-                          yy + self.Lf / 2 + self.dx / 4,
+        _fiby = np.arange(yy - self.Lf / 2.0 + self.dx / 2.0,
+                          yy + self.Lf / 2.0 + self.dx / 4.0,
                           self.dx)
 
         # horizontal fiber
@@ -263,7 +263,7 @@ class Channel(Application):
         fibx, fiby, fibz = self.get_meshgrid(_fibx, _fiby, _fibz)
 
         # Determine the size of dummy region
-        ghost_extent = 3 * fdx / self.options.fluid_res
+        ghost_extent = 3.0 * fdx / self.options.fluid_res
 
         # Create the channel particles at the top
         _y = np.arange(self.Ly + dx2, self.Ly + dx2 + ghost_extent, fdx)
@@ -337,9 +337,9 @@ class Channel(Application):
             fiber.holdtag[idx] = 100
 
         # Setting the initial velocities for a shear flow.
-        fluid.u[:] = self.options.G * (fluid.y[:] - self.Ly / 2)
-        fiber.u[:] = self.options.G * (fiber.y[:] - self.Ly / 2)
-        channel.u[:] = self.options.G * (channel.y[:] - self.Ly / 2)
+        fluid.u[:] = self.options.G * (fluid.y[:] - self.Ly / 2.0)
+        fiber.u[:] = self.options.G * (fiber.y[:] - self.Ly / 2.0)
+        channel.u[:] = self.options.G * (channel.y[:] - self.Ly / 2.0)
 
         # Return the particle list.
         return [fluid, channel, fiber]
