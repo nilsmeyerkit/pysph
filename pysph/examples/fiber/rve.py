@@ -9,7 +9,6 @@ import random
 import itertools
 import numpy as np
 from scipy.integrate import odeint
-from math import sqrt
 
 # matplotlib (set up for server use)
 import matplotlib
@@ -120,10 +119,10 @@ class RVE(Application):
         # Computation of a scale factor in a way that dt_cfl exactly matches
         # dt_viscous.
         a = self.h0*0.125*11/0.4
-        #nu_needed = a*self.options.G*self.L/2
+        # nu_needed = a*self.options.G*self.L/2
         nu_needed = (a*self.options.G*self.L/4
-                     +np.sqrt(a/8*self.options.g*self.L**2
-                              +(a/2)**2/4*self.options.G**2*self.L**2))
+                     + np.sqrt(a/8*self.options.g*self.L**2
+                     + (a/2)**2/4*self.options.G**2*self.L**2))
 
         # If there is no other scale scale factor provided, use automatically
         # computed factor.
@@ -169,7 +168,7 @@ class RVE(Application):
         else:
             l = (self.options.ar+1.0/self.options.ar)
             self.t = self.options.rot*np.pi*l/self.options.G
-        print("Simulated time is %g s"%self.t)
+        print("Simulated time is %g s" % self.t)
 
         fdx = self.dx
         dx2 = fdx/2
@@ -180,16 +179,16 @@ class RVE(Application):
         self.n = round(self.options.vol_frac*len(_x)*len(_z))
 
     def configure_scheme(self):
-        self.scheme.configure(rho0=self.rho0, c0=self.c0, nu=self.nu,
+        self.scheme.configure(
+            rho0=self.rho0, c0=self.c0, nu=self.nu,
             p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=self.A, I=self.I,
             J=self.J, E=self.options.E, D=self.D, gx=self.options.g,
             k=self.options.k)
         # in case of very low volume fraction
         if self.n < 1:
             self.scheme.configure(fibers=[])
-        self.scheme.configure_solver(tf=self.t, vtk = self.options.vtk,
-            N=self.options.rot*100)
-        #self.scheme.configure_solver(tf=self.t, pfreq=1, vtk = self.options.vtk)
+        self.scheme.configure_solver(tf=self.t, vtk=self.options.vtk,
+                                     N=self.options.rot*100)
 
     def create_particles(self):
         """Three particle arrays are created: A fluid, representing the polymer
@@ -217,7 +216,7 @@ class RVE(Application):
         _x = np.arange(dx2, self.L, fdx)
         _y = np.arange(dx2, self.L, fdx)
         _z = np.arange(dx2, self.L, fdx)
-        fx,fy,fz = self.get_meshgrid(_x, _y, _z)
+        fx, fy, fz = self.get_meshgrid(_x, _y, _z)
 
         # Remove particles at fiber position.
         indices = []
@@ -226,15 +225,15 @@ class RVE(Application):
         fiby = tuple()
         fibz = tuple()
 
-        positions = list(itertools.product(_x,_z))
+        positions = list(itertools.product(_x, _z))
         for xx, zz in random.sample(positions, self.n):
             for i in range(len(fx)):
                 yy = 0.5*self.L
 
                 # vertical
                 if (fx[i] < xx+self.dx/2 and fx[i] > xx-self.dx/2 and
-                    fy[i] < yy+self.L/2  and fy[i] > yy-self.L/2 and
-                    fz[i] < zz+self.dx/2 and fz[i] > zz-self.dx/2):
+                    fy[i] < yy+self.L/2 and fy[i] > yy-self.L/2 and
+                        fz[i] < zz+self.dx/2 and fz[i] > zz-self.dx/2):
                     indices.append(i)
 
             # Generating fiber particle grid. Uncomment proper section for
@@ -242,26 +241,26 @@ class RVE(Application):
 
             # vertical fiber
             _fibx = np.array([xx])
-            _fiby = np.arange(yy-self.L/2+self.dx/2, yy+self.L/2+self.dx/4, self.dx)
+            _fiby = np.arange(yy-self.L/2+self.dx/2, yy+self.L/2+self.dx/4,
+                              self.dx)
             _fibz = np.array([zz])
-            _fibx,_fiby,_fibz = self.get_meshgrid(_fibx, _fiby, _fibz)
+            _fibx, _fiby, _fibz = self.get_meshgrid(_fibx, _fiby, _fibz)
             fibx = fibx + (_fibx,)
             fiby = fiby + (_fiby,)
             fibz = fibz + (_fibz,)
 
-        print("Created %d fibers."%self.n)
+        print("Created %d fibers." % self.n)
 
         # Determine the size of dummy region
         ghost_extent = 3*fdx
 
         # Create the channel particles at the top
         _y = np.arange(self.L+dx2, self.L+ghost_extent, fdx)
-        tx,ty,tz = self.get_meshgrid(_x, _y, _z)
+        tx, ty, tz = self.get_meshgrid(_x, _y, _z)
 
         # Create the channel particles at the bottom
         _y = np.arange(-dx2, -dx2-ghost_extent, -fdx)
-        bx,by,bz = self.get_meshgrid(_x, _y, _z)
-
+        bx, by, bz = self.get_meshgrid(_x, _y, _z)
 
         # Concatenate the top and bottom arrays (and for 3D cas also right and
         # left arrays)
@@ -269,32 +268,32 @@ class RVE(Application):
         cy = np.concatenate((ty, by))
         cz = np.concatenate((tz, bz))
 
-
         # Finally create all particle arrays. Note that fluid particles are
         # removed in the area, where the fiber is placed.
-        channel = get_particle_array_beadchain(name='channel',
-                    x=cx, y=cy, z=cz, m=mass, rho=self.rho0, h=self.h0, V=V)
-        fluid = get_particle_array_beadchain(name='fluid',
-                    x=fx, y=fy, z=fz, m=mass, rho=self.rho0, h=self.h0, V=V)
+        channel = get_particle_array_beadchain(
+            name='channel', x=cx, y=cy, z=cz, m=mass, rho=self.rho0, h=self.h0,
+            V=V)
+        fluid = get_particle_array_beadchain(
+            name='fluid', x=fx, y=fy, z=fz, m=mass, rho=self.rho0, h=self.h0,
+            V=V)
         fluid.remove_particles(indices)
         if self.n > 0:
-            fibers = get_particle_array_beadchain_fiber(name='fibers',
-                    x=np.concatenate(fibx), y=np.concatenate(fiby),
-                    z=np.concatenate(fibz), m=fiber_mass, rho=self.rho0,
-                    h=self.h0, lprev=self.dx, lnext=self.dx, phi0=np.pi,
-                    phifrac=2.0, fidx=range(self.options.ar*self.n),
-                    V=fiber_V)
+            fibers = get_particle_array_beadchain_fiber(
+                name='fibers', x=np.concatenate(fibx), y=np.concatenate(fiby),
+                z=np.concatenate(fibz), m=fiber_mass, rho=self.rho0,
+                h=self.h0, lprev=self.dx, lnext=self.dx, phi0=np.pi,
+                phifrac=2.0, fidx=range(self.options.ar*self.n), V=fiber_V)
             # 'Break' fibers in segments
-            endpoints = [i*self.options.ar-1 for i in range(1,self.n)]
+            endpoints = [i*self.options.ar-1 for i in range(1, self.n)]
             fibers.fractag[endpoints] = 1
 
             # mark some fibers for colors
             minimum = min(self.n, 3)
-            for i,ep in enumerate(endpoints[0:minimum]):
+            for i, ep in enumerate(endpoints[0:minimum]):
                 fibers.color[ep-(self.options.ar-1):ep+1] = i+1
 
         # Print number of particles.
-        print("Shear flow : nfluid = %d, nchannel = %d"%(
+        print("Shear flow : nfluid = %d, nchannel = %d" % (
             fluid.get_number_of_particles(),
             channel.get_number_of_particles()))
 
@@ -308,34 +307,32 @@ class RVE(Application):
         else:
             return [fluid, channel]
 
-
     def create_domain(self):
         """The channel has periodic boundary conditions in x-direction."""
         return DomainManager(xmin=0, xmax=self.L, zmin=0, zmax=self.L,
                              periodic_in_x=True, periodic_in_z=True)
 
     def create_tools(self):
+        """Set up fiber integrator."""
         if self.n < 1:
             return []
         else:
             return [FiberIntegrator(self.particles, self.scheme, self.domain,
-                                parallel=True)]
-
+                                    parallel=True)]
 
     def get_meshgrid(self, xx, yy, zz):
-        """This function is just a shorthand for the generation of meshgrids."""
+        """This function is a shorthand for the generation of meshgrids."""
         x, y, z = np.meshgrid(xx, yy, zz)
         x = x.ravel()
         y = y.ravel()
         z = z.ravel()
-        return [x,y,z]
+        return [x, y, z]
 
     def get_equivalent_aspect_ratio(self, aspect_ratio):
         """Jeffrey's equivalent aspect ratio (coarse approximation)
             Cox et al.
         """
         return 1.24 * aspect_ratio / np.sqrt(np.log(aspect_ratio))
-
 
     def symm(self, A):
         '''
@@ -381,15 +378,15 @@ class RVE(Application):
         """This function utilizes a invariant based optimal fitting closure to
         generate a fourth order tensor from a second order tensor.
         Reference: Chung & Kwon paper about 'Invariant-based optimal fitting
-        closure approximation for the numerical prediction of flow-induced fiber
-        orientation'
+        closure approximation for the numerical prediction of flow-induced
+        fiber orientation'
 
         Input:
         A: Second order orientation tensor
         """
 
         # build second order orientation tensor in eigensystem representaion
-        e1,e2,e3 = np.linalg.eigvals(A)
+        e1, e2, e3 = np.linalg.eigvals(A)
 
         # first invariant
         I = e1 + e2 + e3
@@ -527,7 +524,7 @@ class RVE(Application):
 
     def folgar_tucker_ode(self, A, t, ar, G, Ci=0.0, kappa=1.0):
         A = np.reshape(A,(3,3))
-        w,v = np.linalg.eig(A)
+        w, v = np.linalg.eig(A)
         L = (w[0]*np.einsum('i,j,k,l->ijkl',v[:,0],v[:,0],v[:,0],v[:,0])
              +w[1]*np.einsum('i,j,k,l->ijkl',v[:,1],v[:,1],v[:,1],v[:,1])
              +w[2]*np.einsum('i,j,k,l->ijkl',v[:,2],v[:,2],v[:,2],v[:,2]))
@@ -582,8 +579,8 @@ class RVE(Application):
                 # extrating all arrays.
                 directions = []
                 fiber = data['arrays']['fibers']
-                startpoints = [i*(self.options.ar-1) for i in range(0,self.n)]
-                endpoints = [i*(self.options.ar-1)-1 for i in range(1,self.n+1)]
+                startpoints = [i*(self.options.ar-1) for i in range(0, self.n)]
+                endpoints = [i*(self.options.ar-1)-1 for i in range(1, self.n+1)]
                 for start,end in zip(startpoints, endpoints):
                     px = np.mean(fiber.rxnext[start:end])
                     py = np.mean(fiber.rynext[start:end])
@@ -594,24 +591,16 @@ class RVE(Application):
                     directions.append(p)
 
                 N = len(directions)
-                a = np.zeros([3,3])
+                a = np.zeros([3, 3])
                 for p in directions:
                     for i in range(3):
                         for j in range(3):
                             a[i, j] += 1.0/N*(p[i]*p[j])
                 A.append(a.ravel())
 
-        tt = np.array(t)
-        A0 = np.array([[0.0,0.0,0.0],[0.0,1.0,0.0],[0.0,0.0,0.0]])
-        are = self.get_equivalent_aspect_ratio(self.options.ar)
-        A_FT = []
-        cis = [0.00, 0.001, 0.001]
-        kappas = [1.00, 1.00, 0.50]
-        for Ci, kappa in zip(cis, kappas):
-            print("Solving RSC equation with Ci=%.3f and kappa = %.2f"
-                  %(Ci,kappa))
-            A_FT.append(odeint(self.folgar_tucker_ode,A0.ravel(),tt, atol=1E-15,
-                                    args=(are,self.options.G, Ci, kappa)))
+        csv_file = os.path.join(self.output_dir, 'N.csv')
+        data = np.hstack((np.matrix(t).T, np.vstack(A)))
+        np.savetxt(csv_file, data, delimiter=',')
 
         eta_fluid = self.options.mu*np.ones_like(eta)
         # open new plot
@@ -619,7 +608,7 @@ class RVE(Application):
         plt.plot(t[1:], eta[1:], '--k',
                  t[1:], eta_fluid[1:], '-k')
         plt.legend(['Simulated effective value', 'Fluid only'])
-        #plt.title('Viscosity with %d fibers'%self.n)
+        # plt.title('Viscosity with %d fibers'%self.n)
         plt.ylim([0.8*self.options.mu, 2.0*self.options.mu])
         plt.xlabel('t [s]')
         plt.ylabel('$\eta$ [Pa s]')
@@ -641,6 +630,22 @@ class RVE(Application):
         plt.figure()
 
         if self.options.folgartucker and self.n > 0:
+            tt = np.array(t)
+            A0 = np.array([[0.0, 0.0, 0.0],
+                           [0.0, 1.0, 0.0],
+                           [0.0, 0.0, 0.0]])
+            are = self.get_equivalent_aspect_ratio(self.options.ar)
+            A_FT = []
+            cis = [0.00, 0.001, 0.001]
+            kappas = [1.00, 1.00, 0.50]
+            for Ci, kappa in zip(cis, kappas):
+                print("Solving RSC equation with Ci=%.3f and kappa = %.2f"
+                      % (Ci, kappa))
+                A_FT.append(odeint(self.folgar_tucker_ode,
+                                   A0.ravel(),
+                                   tt,
+                                   atol=1E-15,
+                                   args=(are, self.options.G, Ci, kappa)))
             AA = np.vstack(A)
             AFT = np.array(A_FT)
             legend_list = []
