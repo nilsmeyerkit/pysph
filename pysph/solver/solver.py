@@ -1,12 +1,12 @@
 """ An implementation of a general solver base class """
-
+from __future__ import print_function
 # System library imports.
 import os
 import numpy
 
 # PySPH imports
 from pysph.base.kernels import CubicSpline
-from pysph.sph.acceleration_eval import AccelerationEval
+from pysph.sph.acceleration_eval import make_acceleration_evals
 from pysph.sph.sph_compiler import SPHCompiler
 
 from pysph.solver.utils import FloatPBar, load, dump
@@ -17,6 +17,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 EPSILON = numpy.finfo(float).eps*2
+
 
 class Solver(object):
     """Base class for all PySPH Solvers
@@ -98,8 +99,7 @@ class Solver(object):
         # set the particles to None
         self.particles = None
 
-        # Set the AccelerationEval instance to None.
-        self.acceleration_eval = None
+        self.acceleration_evals = None
 
         # solver time and iteration count
         self.t = 0
@@ -184,9 +184,8 @@ class Solver(object):
             if hasattr(self, attr):
                 setattr(self, attr, value)
             else:
-                msg = 'Unknown keyword arg "%s" passed to constructor'%attr
+                msg = 'Unknown keyword arg "%s" passed to constructor' % attr
                 raise TypeError(msg)
-
 
     ##########################################################################
     # Public interface.
@@ -209,24 +208,18 @@ class Solver(object):
             self.kernel = kernel
 
         mode = 'mpi' if self.in_parallel else 'serial'
-        self.acceleration_eval = AccelerationEval(
+        self.acceleration_evals = make_acceleration_evals(
             particles, equations, self.kernel, mode
         )
 
-        sep = '-'*70
-        eqn_info = '[\n' + ',\n'.join([str(e) for e in equations]) + '\n]'
-        logger.info('Using equations:\n%s\n%s\n%s'%(sep, eqn_info, sep))
-        logger.info(
-            'Using integrator:\n%s\n  %s\n%s'%(sep, self.integrator, sep)
-        )
-
         sph_compiler = SPHCompiler(
-            self.acceleration_eval, self.integrator
+            self.acceleration_evals, self.integrator
         )
         sph_compiler.compile()
 
         # Set the nnps for all concerned objects.
-        self.acceleration_eval.set_nnps(nnps)
+        for ae in self.acceleration_evals:
+            ae.set_nnps(nnps)
         self.integrator.set_nnps(nnps)
 
         # set the parallel manager for the integrator
@@ -237,7 +230,7 @@ class Solver(object):
 
         # set integrator option for constant smoothing length
         self.fixed_h = fixed_h
-        self.integrator.set_fixed_h( fixed_h )
+        self.integrator.set_fixed_h(fixed_h)
 
         logger.debug("Solver setup complete.")
 
@@ -252,7 +245,7 @@ class Solver(object):
 
         >>> def post_stage_callback_function(t, dt, stage):
         >>>     # This function is called after every stage of integrator.
-        >>>     print t, dt, stage
+        >>>     print(t, dt, stage)
         >>>     # Do something
         >>> solver.add_post_stage_callback(post_stage_callback_function)
         """
@@ -268,7 +261,7 @@ class Solver(object):
 
         >>> def post_step_callback_function(solver):
         >>>     # This function is called after every time step.
-        >>>     print solver.t, solver.dt
+        >>>     print(solver.t, solver.dt)
         >>>     # Do something
         >>> solver.add_post_step_callback(post_step_callback_function)
         """
@@ -284,7 +277,7 @@ class Solver(object):
 
         >>> def pre_step_callback_function(solver):
         >>>     # This function is called before every time step.
-        >>>     print solver.t, solver.dt
+        >>>     print(solver.t, solver.dt)
         >>>     # Do something
         >>> solver.add_pre_step_callback(pre_step_callback_function)
         """
@@ -349,8 +342,8 @@ class Solver(object):
 
         if array_names:
             for name in array_names:
-                if not name in available_arrays:
-                    raise RuntimeError("Array %s not availabe"%(name))
+                if name not in available_arrays:
+                    raise RuntimeError("Array %s not availabe" % (name))
 
                 for arr in self.particles:
                     if arr.name == name:
@@ -406,7 +399,8 @@ class Solver(object):
         self.parallel_output_mode = mode
 
     def set_command_handler(self, callable, command_interval=1):
-        """ set the `callable` to be called at every `command_interval` iteration
+        """ set the `callable` to be called at every `command_interval`
+        iteration
 
         the `callable` is called with the solver instance as an argument
         """
@@ -441,11 +435,11 @@ class Solver(object):
 
         # Initial solution
         self.dump_output()
-        self.barrier() # everybody waits for this to complete
+        self.barrier()  # everybody waits for this to complete
 
         # Compute the accelerations once for the predictor corrector
         # integrator to work correctly at the first time step.
-        self.acceleration_eval.compute(self.t, self.dt)
+        self.integrator.initial_acceleration(self.t, self.dt)
 
         # Now get a suitable adaptive (if requested) and damped timestep to
         # integrate with.
@@ -460,11 +454,11 @@ class Solver(object):
 
             if self.rank == 0:
                 logger.debug(
-                    "Iteration=%d, time=%f, timestep=%f" % \
-                        (self.count, self.t, self.dt)
+                    "Iteration=%d, time=%f, timestep=%f" %
+                    (self.count, self.t, self.dt)
                 )
             # perform the integration and update the time.
-            #print 'Solver Iteration', self.count, self.dt, self.t
+            # print('Solver Iteration', self.count, self.dt, self.t)
             self.integrator.step(self.t, self.dt)
 
             # perform any post step functions
@@ -542,12 +536,12 @@ class Solver(object):
             return
 
         if self.rank == 0:
-            msg = 'Writing output at time %g, iteration %d, dt = %g'%(
+            msg = 'Writing output at time %g, iteration %d, dt = %g' % (
                 self.t, self.count, self.dt)
             logger.info(msg)
 
         fname = os.path.join(self.output_directory,
-                             self.fname  + '_' + str(self.count))
+                             self.fname + '_' + str(self.count))
 
         comm = None
         if self.parallel_output_mode == "collected" and self.in_parallel:
@@ -578,25 +572,26 @@ class Solver(object):
 
         Notes
         -----
-        Data is loaded from the :py:attr:`output_directory` using the same format
-        as stored by the :py:meth:`dump_output` method.
-        Proper functioning required that all the relevant properties of arrays be
+
+        Data is loaded from the :py:attr:`output_directory` using the same
+        format as stored by the :py:meth:`dump_output` method. Proper
+        functioning required that all the relevant properties of arrays be
         dumped.
 
         """
         # get the list of available files
-        available_files = [i.rsplit('_',1)[1][:-4]
-                            for i in os.listdir(self.output_directory)
-                             if i.startswith(self.fname) and i.endswith('.npz')]
+        available_files = [i.rsplit('_', 1)[1][:-4]
+                           for i in os.listdir(self.output_directory)
+                           if i.startswith(self.fname) and i.endswith('.npz')]
 
         if count == '?':
             return sorted(set(available_files), key=int)
 
         else:
-            if not count in available_files:
-                msg = "File with iteration count `%s` does not exist"%(count)
-                msg += "\nValid iteration counts are %s"%(sorted(set(available_files), key=int))
-                #print msg
+            if count not in available_files:
+                msg = "File with iteration count `%s` does not exist" % (count)
+                msg += "\nValid iteration counts are %s" % (
+                    sorted(set(available_files), key=int))
                 raise IOError(msg)
 
         array_names = [pa.name for pa in self.particles]
@@ -605,7 +600,7 @@ class Solver(object):
         data = load(os.path.join(self.output_directory,
                                  self.fname+'_'+str(count)+'.npz'))
 
-        arrays = [ data["arrays"][i] for i in array_names ]
+        arrays = [data["arrays"][i] for i in array_names]
 
         # set the Particle's arrays
         self.particles = arrays

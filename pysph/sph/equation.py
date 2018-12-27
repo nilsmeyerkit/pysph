@@ -5,6 +5,7 @@ the Group class.
 import ast
 
 from collections import defaultdict
+
 try:
     from collections import OrderedDict
 except ImportError:
@@ -18,8 +19,9 @@ import numpy
 from textwrap import dedent
 
 # Local imports.
-from pysph.cpy.api import (CythonGenerator, KnownType, OpenCLConverter,
-                           get_symbols)
+from compyle.api import (CythonGenerator, KnownType, OpenCLConverter,
+                         get_symbols)
+from compyle.config import get_config
 
 
 getfullargspec = getattr(
@@ -59,6 +61,7 @@ class Context(dict):
         >>> c.keys()
         ['a', 'x', 'b']
     """
+
     def __getattr__(self, key):
         try:
             return self.__getitem__(key)
@@ -348,7 +351,10 @@ def get_arrays_used_in_equation(equation):
     """
     src_arrays = set()
     dest_arrays = set()
-    for meth_name in ('initialize', 'loop', 'loop_all', 'post_loop'):
+    methods = (
+        'initialize', 'initialize_pair', 'loop', 'loop_all', 'post_loop'
+    )
+    for meth_name in methods:
         meth = getattr(equation, meth_name, None)
         if meth is not None:
             args = getfullargspec(meth).args
@@ -372,7 +378,6 @@ def get_init_args(obj, method, ignore=None):
 # `Equation` class.
 ##############################################################################
 class Equation(object):
-
     ##########################################################################
     # `object` interface.
     ##########################################################################
@@ -508,7 +513,7 @@ class Group(object):
         )
 
     def _has_code(self, kind='loop'):
-        assert kind in ('initialize', 'loop', 'loop_all',
+        assert kind in ('initialize', 'initialize_pair', 'loop', 'loop_all',
                         'post_loop', 'reduce')
         for equation in self.equations:
             if hasattr(equation, kind):
@@ -622,6 +627,9 @@ class Group(object):
     def has_initialize(self):
         return self._has_code('initialize')
 
+    def has_initialize_pair(self):
+        return self._has_code('initialize_pair')
+
     def has_loop(self):
         return self._has_code('loop')
 
@@ -671,7 +679,7 @@ class CythonGroup(Group):
         return '\n'.join(decl)
 
     def _get_code(self, kernel=None, kind='loop'):
-        assert kind in ('initialize', 'loop', 'loop_all',
+        assert kind in ('initialize', 'initialize_pair', 'loop', 'loop_all',
                         'post_loop', 'reduce')
         # We assume here that precomputed quantities are only relevant
         # for loops and not post_loops and initialization.
@@ -695,7 +703,7 @@ class CythonGroup(Group):
                 if kind == 'reduce':
                     args = ['dst.array', 't', 'dt']
                 call_args = ', '.join(args)
-                c = 'self.{eq_name}.{method}({args})'\
+                c = 'self.{eq_name}.{method}({args})' \
                     .format(eq_name=eq.var_name, method=kind, args=call_args)
                 code.append(c)
         if len(code) > 0:
@@ -749,6 +757,9 @@ class CythonGroup(Group):
     def get_initialize_code(self, kernel=None):
         return self._get_code(kernel, kind='initialize')
 
+    def get_initialize_pair_code(self, kernel=None):
+        return self._get_code(kernel, kind='initialize_pair')
+
     def get_loop_code(self, kernel=None):
         return self._get_code(kernel, kind='loop')
 
@@ -801,14 +812,39 @@ class CythonGroup(Group):
     def get_equation_init(self):
         lines = []
         for i, equation in enumerate(self.equations):
-            code = 'self.{name} = {cls}(**equations[{idx}].__dict__)'\
-                        .format(name=equation.var_name, cls=equation.name,
-                                idx=i)
+            code = 'self.{name} = {cls}(**equations[{idx}].__dict__)' \
+                .format(name=equation.var_name, cls=equation.name,
+                        idx=i)
             lines.append(code)
         return '\n'.join(lines)
 
 
 class OpenCLGroup(Group):
+    # #### Private interface  #####
+    def _update_for_local_memory(self, predefined, eqs):
+        modified_classes = []
+        loop_ann = predefined.copy()
+        for k in loop_ann.keys():
+            if 's_' in k:
+                # TODO: Make each argument have their own KnownType
+                # right from the start
+                loop_ann[k] = KnownType(
+                    loop_ann[k].type.replace('__global', '__local')
+                )
+        for eq in eqs.values():
+            cls = eq.__class__
+            loop = getattr(cls, 'loop', None)
+            if loop is not None:
+                self._set_loop_annotation(loop, loop_ann)
+                modified_classes.append(cls)
+        return modified_classes
+
+    def _set_loop_annotation(self, func, value):
+        try:
+            func.__annotations__ = value
+        except AttributeError:
+            func.im_func.__annotations__ = value
+
     ##########################################################################
     # Public interface.
     ##########################################################################
@@ -827,9 +863,50 @@ class OpenCLGroup(Group):
         predefined = dict(get_predefined_types(self.pre_comp))
         predefined.update(known_types)
         predefined['NBRS'] = KnownType('__global unsigned int*')
+
+        use_local_memory = get_config().use_local_memory
+        modified_classes = []
+        if use_local_memory:
+            modified_classes = self._update_for_local_memory(predefined, eqs)
+
         code_gen = OpenCLConverter(known_types=predefined)
         ignore = ['reduce']
         for cls in sorted(classes.keys()):
             src = code_gen.parse_instance(eqs[cls], ignore_methods=ignore)
             wrappers.append(src)
+
+        if use_local_memory:
+            # Remove the added annotations
+            for cls in modified_classes:
+                self._set_loop_annotation(cls.loop, {})
+
         return '\n'.join(wrappers)
+
+
+class MultiStageEquations(object):
+    '''A class that allows a user to specify different equations
+    for different stages.
+
+    The object doesn't do much, except contain the different collections of
+    equations.
+
+    '''
+
+    def __init__(self, groups):
+        '''
+        Parameters
+        ----------
+
+        groups: list/tuple
+            A list/tuple of list of groups/equations, one for each stage.
+
+        '''
+        assert type(groups) in (list, tuple)
+        self.groups = groups
+
+    def __repr__(self):
+        name = self.__class__.__name__
+        kw = [', \n'.join(str(grps) for grps in stg) for stg in self.groups]
+        return '%s(groups=[[\n%s\n    ]]\n)' % (
+            name, '], [\n'.join(kw)
+        )
