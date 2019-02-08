@@ -251,12 +251,6 @@ class RVE(Application):
         fibers.u[:] = self.options.G*(fibers.z[:]-self.L/2)
         channel.u[:] = self.options.G*(channel.z[:]-self.L/2)
 
-        # Print number of particles.
-        print("Generated RVE : nfluid = %d, nwalls = %d, nfiber = %d" % (
-            fluid.get_number_of_particles(),
-            channel.get_number_of_particles(),
-            fibers.get_number_of_particles()))
-
         if self.n > 0:
             return [fluid, channel, fibers]
         else:
