@@ -299,10 +299,10 @@ class RVE(Application):
 
         # Setting the initial velocities for a shear flow.
         fluid.u[:] = self.options.G*(fluid.y[:]-self.L/2)
-        fibers.u[:] = self.options.G*(fibers.y[:]-self.L/2)
         channel.u[:] = self.options.G*(channel.y[:]-self.L/2)
 
         if self.n > 0:
+            fibers.u[:] = self.options.G*(fibers.y[:]-self.L/2)
             return [fluid, channel, fibers]
         else:
             return [fluid, channel]

@@ -88,17 +88,17 @@ class Beam(Application):
         self.gx = self.options.gx
         self.gy = self.options.gy
         self.gz = self.options.gz
-        print('Damping: %g, Omega0: %g'%(self.D,self.omega0))
+        print('Damping: %g, Omega0: %g' % (self.D, self.omega0))
 
         # setup time step
         dt_force = 0.25 * np.sqrt(
-                                self.h/(sqrt(self.gx**2+self.gy**2+self.gz**2)))
+            self.h/(sqrt(self.gx**2+self.gy**2+self.gz**2)))
         dt_tension = 0.5*self.h*np.sqrt(self.rho0/self.E)
         dt_bending = 0.5*self.h**2*np.sqrt(self.rho0*self.A/(self.E*2*self.I))
 
         self.tf = 4*np.pi/self.omega0
 
-        self.dt = min(dt_force,dt_tension, dt_bending)
+        self.dt = min(dt_force, dt_tension, dt_bending)
 
     def create_scheme(self):
         return None
@@ -116,10 +116,10 @@ class Beam(Application):
         volume = self.A * self.dx
 
         # create array
-        fiber = get_particle_array_beadchain_fiber(name='fiber', x=fiber_x,
-                y=fiber_y, z=fiber_z, m=volume*self.rho0, rho=self.rho0,
-                h=self.h, lprev=self.dx, lnext=self.dx, phi0=np.pi,
-                phifrac=2.0, fidx=range(self.N), V=1./volume)
+        fiber = get_particle_array_beadchain_fiber(
+            name='fiber', x=fiber_x, y=fiber_y, z=fiber_z, m=volume*self.rho0,
+            rho=self.rho0, h=self.h, lprev=self.dx, lnext=self.dx, phi0=np.pi,
+            phifrac=2.0, fidx=range(self.N), V=1./volume)
 
 
         # tag particles to be hold
