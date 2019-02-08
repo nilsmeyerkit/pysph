@@ -63,6 +63,11 @@ src = self.${source}
 ${indent(helper.get_src_array_setup(source, eq_group), 0)}
 src_array_index = src.index
 
+% if eq_group.has_initialize_pair():
+for d_idx in range(NP_DEST):
+    ${indent(eq_group.get_initialize_pair_code(helper.object.kernel), 1)}
+% endif
+
 % if eq_group.has_loop() or eq_group.has_loop_all():
 #######################################################################
 ## Iterate over destination particles.
@@ -154,7 +159,7 @@ from pysph.base.reduce_array import mpi_reduce_array as parallel_reduce_array
 % endif
 
 from pysph.base.nnps import get_number_of_threads
-from pyzoltan.core.carray cimport (DoubleArray, FloatArray, IntArray, LongArray, UIntArray,
+from cyarray.carray cimport (DoubleArray, FloatArray, IntArray, LongArray, UIntArray,
     aligned, aligned_free, aligned_malloc)
 
 ${helper.get_header()}

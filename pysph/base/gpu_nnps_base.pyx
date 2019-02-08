@@ -31,16 +31,16 @@ from pyopencl.elementwise import ElementwiseKernel
 
 from pysph.base.nnps_base cimport *
 from pysph.base.device_helper import DeviceHelper
-from pysph.cpy.config import get_config
-from pysph.cpy.array import Array
-from pysph.cpy.parallel import Elementwise, Scan
-from pysph.cpy.types import annotate
-from pysph.cpy.opencl import (get_context, get_queue,
-                              set_context, set_queue)
-import pysph.cpy.array as array
+from compyle.config import get_config
+from compyle.array import Array
+from compyle.parallel import Elementwise, Scan
+from compyle.types import annotate
+from compyle.opencl import (get_context, get_queue,
+                            set_context, set_queue)
+import compyle.array as array
 
 # Particle Tag information
-from pyzoltan.core.carray cimport BaseArray, aligned_malloc, aligned_free
+from cyarray.carray cimport BaseArray, aligned_malloc, aligned_free
 from utils import ParticleTAGS
 
 from nnps_base cimport *
@@ -89,6 +89,7 @@ cdef class GPUNeighborCache:
         # - Store sum kernel
         # - don't allocate neighbors_gpu each time.
         # - Don't allocate _nbr_lengths and start_idx.
+
         total_size_gpu = array.sum(self._nbr_lengths_gpu)
 
         cdef unsigned long total_size = <unsigned long>(total_size_gpu)
@@ -170,8 +171,8 @@ cdef class GPUNNPS(NNPSBase):
             This is useful when comparing parallel results with those
             from a serial run.
 
-        ctx : pyopencl.Context
-            For testing purpose
+        backend : string
+            Backend on which to build NNPS Module
         """
         NNPSBase.__init__(self, dim, particles, radius_scale, ghost_layers,
                 domain, cache, sort_gids)
@@ -272,7 +273,6 @@ cdef class GPUNNPS(NNPSBase):
             x.update_min_max()
             y.update_min_max()
             z.update_min_max()
-
             # find min and max of variables
             xmax = np.maximum(x.maximum, xmax)
             ymax = np.maximum(y.maximum, ymax)
