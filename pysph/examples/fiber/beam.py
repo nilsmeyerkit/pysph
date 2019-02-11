@@ -66,7 +66,7 @@ class Beam(Application):
 
         # fiber properties
         self.A = 1.0
-        self.I = self.A/12.0
+        self.Ip = self.A/12.0
         self.E = self.options.E
 
         # Analytical solution for angular eigenfrequencies:
@@ -74,7 +74,7 @@ class Beam(Application):
         # --> first analytical eigenfrequency:
         self.omega0_tension = np.pi/(2*self.L)*np.sqrt(self.E/self.rho0)
         self.omega0_bending = 3.5156*np.sqrt(
-                                self.E*self.I/(self.rho0*self.A*self.L**4))
+                                self.E*self.Ip/(self.rho0*self.A*self.L**4))
 
         # This is valid when gx >> gy and meant to be used for just one case
         if self.options.gx > self.options.gy:
@@ -94,7 +94,7 @@ class Beam(Application):
         dt_force = 0.25 * np.sqrt(
             self.h/(sqrt(self.gx**2+self.gy**2+self.gz**2)))
         dt_tension = 0.5*self.h*np.sqrt(self.rho0/self.E)
-        dt_bending = 0.5*self.h**2*np.sqrt(self.rho0*self.A/(self.E*2*self.I))
+        dt_bending = 0.5*self.h**2*np.sqrt(self.rho0*self.A/(self.E*2*self.Ip))
 
         self.tf = 4*np.pi/self.omega0
 
@@ -144,7 +144,7 @@ class Beam(Application):
                     Tension(dest='fiber', sources=None,
                         ea=self.E*self.A),
                     Bending(dest='fiber', sources=None,
-                        ei=self.E*self.I),
+                        ei=self.E*self.Ip),
                     Damping(dest='fiber',
                         sources=None,
                         d = self.D)
@@ -237,7 +237,7 @@ class Beam(Application):
         pa = data['arrays']['fiber']
         x0 = pa.x
         x_exact = self.gx*self.rho0/self.E*(self.L*x0-x0**2/2)
-        k = self.rho0*self.gy*self.A/(self.E*self.I)
+        k = self.rho0*self.gy*self.A/(self.E*self.Ip)
         y_exact = k/24*(x0**4-4*self.L*x0**3+6*self.L**2*x0**2)
 
         disp = os.path.join(self.output_dir, "disp_%d.csv"%self.options.N)

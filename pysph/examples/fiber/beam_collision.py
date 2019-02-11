@@ -1,9 +1,6 @@
-"""Tension of a fiber in gravity field (10 seconds).
-"""
-import os
+"""Tension of a fiber in gravity field (10 seconds)."""
 from math import sqrt
 import numpy as np
-from matplotlib import pyplot as plt
 
 # PySPH imports
 from pysph.base.utils import get_particle_array_beadchain_fiber
@@ -50,12 +47,12 @@ class Beam(Application):
 
     def consume_user_options(self):
         # fiber length
-        self.L = 10.0
+        self.reducedL = 10.0
 
         # numerical setup
         self.N = self.options.N
-        self.l = self.L/(1-1/(2*self.N))
-        self.dx = self.l/self.N     # particle spacing
+        self.reducedL = self.reducedL/(1-1/(2*self.N))
+        self.dx = self.reducedL/self.N     # particle spacing
         self.h = self.dx
 
         # fluid properties
@@ -64,13 +61,14 @@ class Beam(Application):
 
         # fiber properties
         self.A = 1.0
-        self.I = self.A/12.0
+        self.Ip = self.A/12.0
         self.E = self.options.E
         # Analytical solution for angular eigenfrequencies:
         #       Pi/L np.sqrt(E/rho) (2n-1)/2
         # --> first analytical eigenfrequency:
-        self.omega0_tension = np.pi/(2*self.L)*np.sqrt(self.E/self.rho0)
-        self.omega0_bending = 3.5156*np.sqrt(self.E*self.I/(self.rho0*self.A*self.L**4))
+        self.omega0_tension = np.pi/(2*self.reducedL)*np.sqrt(self.E/self.rho0)
+        self.omega0_bending = 3.5156*np.sqrt(
+            self.E*self.Ip/(self.rho0*self.A*self.reducedL**4))
         if self.options.gx > self.options.gy:
             self.omega0 = self.omega0_tension
         else:
@@ -79,37 +77,37 @@ class Beam(Application):
         self.D = self.options.d*m*self.omega0
         self.gx = self.options.gx
         self.gy = self.options.gy
-        print('Damping: %g, Omega0: %g'%(self.D,self.omega0))
+        print('Damping: %g, Omega0: %g' % (self.D, self.omega0))
 
         # setup time step
         dt_force = 0.25 * np.sqrt(self.h/(sqrt(self.gx**2+self.gy**2)))
         dt_tension = 0.5*self.h*np.sqrt(self.rho0/self.E)
-        dt_bending = 0.5*self.h**2*np.sqrt(self.rho0*self.A/(self.E*2*self.I))
+        dt_bending = 0.5*self.h**2*np.sqrt(self.rho0*self.A/(self.E*2*self.Ip))
 
         self.tf = 20
 
-        self.dt = min(dt_force,dt_tension, dt_bending)
+        self.dt = min(dt_force, dt_tension, dt_bending)
 
     def create_scheme(self):
         return None
 
     def create_particles(self):
-        _x = np.linspace(-self.dx, self.l-self.dx, self.N+1)
+        _x = np.linspace(-self.dx, self.reducedL-self.dx, self.N+1)
         _y = np.array([0.0])
         _z = np.array([0.0])
         # _x = np.array([0.0])
-        # _y = np.linspace(-self.dx, self.l-self.dx, self.N+1)
+        # _y = np.linspace(-self.dx, self.reducedL-self.dx, self.N+1)
         # _z = np.array([0.0])
         x, y, z = np.meshgrid(_x, _y, _z)
         fiber1_x = x.ravel()
         fiber1_y = y.ravel()
         fiber1_z = z.ravel()
 
-        _x = np.array([0.75*self.l])
+        _x = np.array([0.75*self.reducedL])
         _y = np.array([-2*self.dx])
-        _z = np.linspace(-0.25*self.l, 0.75*self.l, self.N+1)
+        _z = np.linspace(-0.25*self.reducedL, 0.75*self.reducedL, self.N+1)
         # _x = np.array([-self.dx])
-        # _y = np.linspace(-self.dx, self.l-self.dx, self.N+1)
+        # _y = np.linspace(-self.dx, self.reducedL-self.dx, self.N+1)
         # _z = np.array([0.0])
         x, y, z = np.meshgrid(_x, _y, _z)
         fiber2_x = x.ravel()
@@ -120,14 +118,16 @@ class Beam(Application):
         volume = self.A * self.dx
 
         # create arrays
-        fiber1 = get_particle_array_beadchain_fiber(name='fiber1', x=fiber1_x,
-                y=fiber1_y, z=fiber1_z, m=volume*self.rho0, rho=self.rho0,
-                h=self.h, lprev=self.dx, lnext=self.dx, phi0=np.pi,
-                phifrac=2.0, fidx=range(self.N+1), V=1./volume)
-        fiber2 = get_particle_array_beadchain_fiber(name='fiber2', x=fiber2_x,
-                y=fiber2_y, z=fiber2_z, m=volume*self.rho0, rho=self.rho0,
-                h=self.h, lprev=self.dx, lnext=self.dx, phi0=np.pi,
-                phifrac=2.0, fidx=range(self.N+1), V=1./volume)
+        fiber1 = get_particle_array_beadchain_fiber(
+            name='fiber1', x=fiber1_x, y=fiber1_y, z=fiber1_z,
+            m=volume*self.rho0, rho=self.rho0, h=self.h, lprev=self.dx,
+            lnext=self.dx, phi0=np.pi, phifrac=2.0, fidx=range(self.N+1),
+            V=1./volume)
+        fiber2 = get_particle_array_beadchain_fiber(
+            name='fiber2', x=fiber2_x, y=fiber2_y, z=fiber2_z,
+            m=volume*self.rho0, rho=self.rho0, h=self.h, lprev=self.dx,
+            lnext=self.dx, phi0=np.pi, phifrac=2.0, fidx=range(self.N+1),
+            V=1./volume)
 
         # tag particles to be hold
         fiber1.holdtag[:] = 0
@@ -148,36 +148,46 @@ class Beam(Application):
             ),
             Group(
                 equations=[
-                    MomentumEquationPressureGradient(dest='fiber1',
-                       sources=['fiber1', 'fiber2'], pb=0.0, gx=self.gx,
-                       gy=self.gy),
-                    MomentumEquationPressureGradient(dest='fiber2',
-                       sources=['fiber1', 'fiber2'], pb=0.0, gx=self.gx,
-                       gy=self.gy),
-                    Tension(dest='fiber1',
+                    MomentumEquationPressureGradient(
+                        dest='fiber1',
+                        sources=['fiber1', 'fiber2'], pb=0.0, gx=self.gx,
+                        gy=self.gy),
+                    MomentumEquationPressureGradient(
+                        dest='fiber2',
+                        sources=['fiber1', 'fiber2'], pb=0.0, gx=self.gx,
+                        gy=self.gy),
+                    Tension(
+                        dest='fiber1',
                         sources=None,
                         ea=self.E*self.A),
-                    Tension(dest='fiber2',
+                    Tension(
+                        dest='fiber2',
                         sources=None,
                         ea=self.E*self.A),
-                    Bending(dest='fiber1',
+                    Bending(
+                        dest='fiber1',
                         sources=None,
-                        ei=self.E*self.I),
-                    Bending(dest='fiber2',
+                        ei=self.E*self.Ip),
+                    Bending(
+                        dest='fiber2',
                         sources=None,
-                        ei=self.E*self.I),
-                    Contact(dest='fiber1',
-                       sources=['fiber1', 'fiber2'],
-                       E = self.E, d=self.dx, k=self.options.k),
-                    Contact(dest='fiber2',
+                        ei=self.E*self.Ip),
+                    Contact(
+                        dest='fiber1',
                         sources=['fiber1', 'fiber2'],
-                        E = self.E, d=self.dx, k=self.options.k),
-                    Damping(dest='fiber1',
+                        E=self.E, d=self.dx, k=self.options.k),
+                    Contact(
+                        dest='fiber2',
+                        sources=['fiber1', 'fiber2'],
+                        E=self.E, d=self.dx, k=self.options.k),
+                    Damping(
+                        dest='fiber1',
                         sources=None,
-                        d = self.D),
-                    Damping(dest='fiber2',
+                        d=self.D),
+                    Damping(
+                        dest='fiber2',
                         sources=None,
-                        d = self.D)
+                        d=self.D)
                 ],
             ),
             Group(
@@ -192,12 +202,14 @@ class Beam(Application):
     def create_solver(self):
         # Setting up the default integrator for fiber particles
         kernel = QuinticSpline(dim=3)
-        integrator = EPECIntegrator(fiber1=TransportVelocityStep(),
+        integrator = EPECIntegrator(
+            fiber1=TransportVelocityStep(),
             fiber2=TransportVelocityStep())
-        solver = Solver(kernel=kernel, dim=3, integrator=integrator, dt=self.dt,
-                         tf=self.tf, N=200,
-                         vtk=True)
+        solver = Solver(
+            kernel=kernel, dim=3, integrator=integrator, dt=self.dt,
+            tf=self.tf, N=200, vtk=True)
         return solver
+
 
 if __name__ == '__main__':
     app = Beam()

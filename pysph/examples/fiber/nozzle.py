@@ -129,7 +129,7 @@ class Nozzle(Application):
         # mechanical properties
         R = self.h0 / 2
         self.A = np.pi * R**2
-        self.I = np.pi * R**4 / 4.0
+        self.Ip = np.pi * R**4 / 4.0
         mass = 3 * self.rho0 * self.h0 * self.A
         self.J = 1 / 4 * mass * R**2 + 1 / 12 * mass * (3 * self.h0)**2
 
@@ -161,7 +161,7 @@ class Nozzle(Application):
     def configure_scheme(self):
         self.scheme.configure(
             rho0=self.rho0, c0=self.c0, nu=self.nu, p0=self.p0, pb=self.pb,
-            h0=self.h0, dx=self.h0, A=self.A, I=self.I, J=self.J,
+            h0=self.h0, dx=self.h0, A=self.A, Ip=self.Ip, J=self.J,
             E=self.options.E, D=self.D, gx=self.gx, gy=self.gy, gz=self.gz,
             k=self.options.k)
         # in case of very low volume fraction

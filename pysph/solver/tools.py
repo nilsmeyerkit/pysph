@@ -94,8 +94,8 @@ class SimpleRemesher(Tool):
             self.interp.nnps.update_domain()
 
 class FiberIntegrator(Tool):
-    def __init__(self, all_particles, scheme, domain=None, innerloop=True, updates=True,
-            parallel=False, steps=None):
+    def __init__(self, all_particles, scheme, domain=None, innerloop=True,
+                 updates=True, parallel=False, steps=None):
         """The second integrator is a simple Euler-Integrator (accurate
         enough due to very small time steps; very fast) using EBGSteps.
         EBGSteps are basically the same as EulerSteps, exept for the fact
@@ -148,12 +148,23 @@ class FiberIntegrator(Tool):
 
             g2 = []
             for fiber in scheme.fibers:
-                g2.append(Tension(dest=fiber, sources=None, ea=scheme.E*scheme.A))
-                g2.append(Bending(dest=fiber, sources=None, ei=scheme.E*scheme.I))
-                g2.append(Contact(dest=fiber, sources=scheme.fibers, E=scheme.E,
-                            d=scheme.dx, dim=scheme.dim, k=scheme.k,
-                            lim=scheme.lim, eta0=self.eta0))
-                g2.append(ArtificialDamping(dest=fiber, sources=None, d=scheme.D))
+                g2.append(Tension(dest=fiber,
+                                  sources=None,
+                                  ea=scheme.E*scheme.A))
+                g2.append(Bending(dest=fiber,
+                                  sources=None,
+                                  ei=scheme.E*scheme.Ip))
+                g2.append(Contact(dest=fiber,
+                                  sources=scheme.fibers,
+                                  E=scheme.E,
+                                  d=scheme.dx,
+                                  dim=scheme.dim,
+                                  k=scheme.k,
+                                  lim=scheme.lim,
+                                  eta0=self.eta0))
+                g2.append(ArtificialDamping(dest=fiber,
+                                            sources=None,
+                                            d=scheme.D))
             equations.append(Group(equations=g2))
 
             g3 = []

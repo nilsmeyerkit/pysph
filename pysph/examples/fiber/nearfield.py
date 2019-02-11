@@ -134,7 +134,7 @@ class Channel(Application):
         # For 2 dimensions surface, mass and moments have a different
         # coputation than for 3 dimensions.
         self.A = self.dx
-        self.I = self.dx**3 / 12
+        self.Ip = self.dx**3 / 12
         mass = 3 * self.rho0 * self.dx * self.A
         self.J = 1 / 12 * mass * (self.dx**2 + (3 * self.dx)**2)
 
@@ -164,7 +164,7 @@ class Channel(Application):
     def configure_scheme(self):
         self.scheme.configure(
             rho0=self.rho0, c0=self.c0, nu=self.nu, p0=self.p0, pb=self.pb,
-            h0=self.h0, dx=self.dx, A=self.A, I=self.I, J=self.J,
+            h0=self.h0, dx=self.dx, A=self.A, Ip=self.Ip, J=self.J,
             E=self.options.E, D=self.D, dim=2, gx=self.options.g,
             viscous_fiber=True)
         # Return the particle list.

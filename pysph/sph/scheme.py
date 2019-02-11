@@ -701,7 +701,7 @@ class BeadChainScheme(Scheme):
         self.dx = None
         self.E = None
         self.A = None
-        self.I = None
+        self.Ip = None
         self.J = None
         self.D = None
         self.vc = vc
@@ -735,7 +735,7 @@ class BeadChainScheme(Scheme):
         dt_force = 0.25 * sqrt(self.h0 / (g + 0.001))
         dt_tension = 0.5 * self.dx * sqrt(self.rho0 / self.E)
         dt_bending = 0.5 * self.dx**2 * sqrt(self.rho0 * self.A /
-                                             (self.E * 2 * self.I))
+                                             (self.E * 2 * self.Ip))
         print("dt_cfl: %g" % dt_cfl)
         print("dt_viscous: %g" % dt_viscous)
         print("dt_force: %g" % dt_force)
@@ -1386,9 +1386,9 @@ class GSPHScheme(Scheme):
         self.g1 = g1
         self.g2 = g2
         self.rsolver = rsolver
-        self.interpolation = interpolation
+        self.Ipnterpolation = interpolation
         self.monotonicity = monotonicity
-        self.interface_zero = interface_zero
+        self.Ipnterface_zero = interface_zero
         self.hybrid = hybrid
         self.blend_alpha = blend_alpha
         self.tf = tf
@@ -1575,8 +1575,8 @@ class GSPHScheme(Scheme):
             g3.append(GSPHAcceleration(
                 dest=fluid, sources=all_pa, g1=self.g1,
                 g2=self.g2, monotonicity=self.monotonicity,
-                rsolver=self.rsolver, interpolation=self.interpolation,
-                interface_zero=self.interface_zero,
+                rsolver=self.rsolver, interpolation=self.Ipnterpolation,
+                interface_zero=self.Ipnterface_zero,
                 hybrid=self.hybrid, blend_alpha=self.blend_alpha,
                 gamma=self.gamma, niter=self.niter, tol=self.tol
             ))

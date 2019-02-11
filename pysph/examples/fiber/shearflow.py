@@ -168,13 +168,13 @@ class Channel(Application):
         # coputation than for 3 dimensions.
         if self.options.dim == 2:
             self.A = self.dx
-            self.I = self.dx**3 / 12.0
+            self.Ip = self.dx**3 / 12.0
             mass = 3.0 * self.rho0 * self.dx * self.A
             self.J = 1.0 / 12.0 * mass * (self.dx**2 + (3.0 * self.dx)**2)
         else:
             R = self.dx / 2
             self.A = np.pi * R**2
-            self.I = np.pi * R**4 / 4.0
+            self.Ip = np.pi * R**4 / 4.0
             mass = 3.0 * self.rho0 * self.dx * self.A
             self.J = 1.0 / 4.0 * mass * R**2 + 1.0 / 12.0 * mass * (3.0 * self.dx)**2
 
@@ -200,7 +200,7 @@ class Channel(Application):
     def configure_scheme(self):
         self.scheme.configure(
             rho0=self.rho0, c0=self.c0, nu=self.nu,
-            p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=self.A, I=self.I,
+            p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=self.A, Ip=self.Ip,
             J=self.J, E=self.options.E, D=self.D, dim=self.options.dim)
         self.scheme.configure_solver(
             tf=self.t, vtk=self.options.vtk, N=self.options.rot * 200)
