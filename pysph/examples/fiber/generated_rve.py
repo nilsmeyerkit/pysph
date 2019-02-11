@@ -1,13 +1,14 @@
-"""
-################################################################################
-Mini RVE
-################################################################################
+"""Compute shearflow in a generated RVE.
+
+This class realizes a shearflow between two plates with fibers arranged from
+startpoints and endpoints given as comma-sperated values in two textfiles:
+    start_points.txt
+    end_points.txt
 """
 # general imports
 import os
 import random
 import numpy as np
-from scipy.integrate import odeint
 
 # PySPH imports
 from pysph.base.nnps import DomainManager
@@ -22,14 +23,18 @@ from pysph.sph.scheme import BeadChainScheme
 
 
 class RVE(Application):
-    """Generation of a mini RVE and evaluation of its fiber orientation
-    tensor."""
+    """Generate an RVE from startpoints and endpoints.
+
+    The RVE is subjected to shearflow and  the fiber orientation tensor is
+    evaluated.
+    """
+
     def create_scheme(self):
-        """There is no scheme used in this application and equations are set up
-        manually."""
+        """Use the BeadChainScheme."""
         return BeadChainScheme(['fluid'], ['channel'], ['fibers'], dim=3)
 
     def add_user_options(self, group):
+        """Set up command line arguments and defaults."""
         group.add_argument(
             "--d", action="store", type=float, dest="d",
             default=0.00001, help="Fiber diameter"
@@ -84,8 +89,7 @@ class RVE(Application):
         )
 
     def consume_user_options(self):
-        """Initialization of geometry, properties and time stepping."""
-
+        """Initialize geometry, properties and time stepping."""
         # Initial spacing of particles is set to the same value as fiber
         # diameter.
         self.dx = self.options.d
@@ -126,7 +130,7 @@ class RVE(Application):
         # mechanical properties
         R = self.dx/2
         self.A = np.pi*R**2
-        self.I = np.pi*R**4/4.0
+        self.Ip = np.pi*R**4/4.0
         mass = 3.0*self.rho0*self.dx*self.A
         self.J = 1.0/4.0*mass*R**2 + 1.0/12*mass*(3.0*self.dx)**2
 
@@ -145,23 +149,34 @@ class RVE(Application):
         if self.options.postonly:
             self.t = 0.0
         else:
-            self.t = 1
+            self.t = 50
         print("Simulated time is %g s" % self.t)
 
     def configure_scheme(self):
+        """Set up the scheme."""
         self.scheme.configure(
-            rho0=self.rho0, c0=self.c0, nu=self.nu,
-            p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=self.A, I=self.I,
-            J=self.J, E=self.options.E, D=self.D, gx=self.options.g,
+            rho0=self.rho0,
+            c0=self.c0,
+            nu=self.nu,
+            p0=self.p0,
+            pb=self.pb,
+            h0=self.h0,
+            dx=self.dx,
+            A=self.A,
+            Ip=self.Ip,
+            J=self.J,
+            E=self.options.E,
+            D=self.D,
+            gx=self.options.g,
             k=self.options.k)
-        # self.scheme.configure(fibers=[])
-        self.scheme.configure_solver(tf=self.t, vtk=self.options.vtk, N=100)
+        self.scheme.configure_solver(tf=self.t, vtk=self.options.vtk, N=1000)
 
     def create_particles(self):
-        """Three particle arrays are created: A fluid, representing the polymer
-        matrix, a fiber with additional properties and a channel of dummy
-        particles."""
+        """Create three particle arrays.
 
+        A fluid, representing the polymer matrix, a fiber with additional
+        properties and a channel of dummy particles.
+        """
         # The fluid might be scaled compared to the fiber. fdx is a shorthand
         # for the fluid spacing and dx2 is a shorthand for the half of it.
         fdx = self.dx
@@ -257,7 +272,7 @@ class RVE(Application):
             return [fluid, channel]
 
     def create_domain(self):
-        """The channel has periodic boundary conditions."""
+        """Set up periodic boundary conditions."""
         return DomainManager(xmin=0, xmax=self.L, ymin=0, ymax=self.L,
                              periodic_in_x=True, periodic_in_y=True)
 
@@ -270,7 +285,7 @@ class RVE(Application):
                                     parallel=True)]
 
     def get_meshgrid(self, xx, yy, zz):
-        """This function is a shorthand for the generation of meshgrids."""
+        """Return raveled meshgrid."""
         x, y, z = np.meshgrid(xx, yy, zz)
         x = x.ravel()
         y = y.ravel()
@@ -278,7 +293,7 @@ class RVE(Application):
         return [x, y, z]
 
     def get_fiber_positions(self, p1, p2, N):
-        """ Create particles along a straight line.
+        """Create particles along a straight line.
 
         Args
         ----
@@ -291,22 +306,24 @@ class RVE(Application):
         Returns
         -------
             list of point positions
-        """
 
+        """
         return zip(*[np.linspace(p1[i], p2[i], N) for i in range(len(p1))])
 
     def post_process(self, info_fname):
+        """Compute fiber orientation tensor at each time step.
+
+        Args
+        ----
+            info_fname: name of log-file
+        """
         if len(self.output_files) == 0:
             return
 
         # empty list for time
         t = []
-
         # empty lists for fiber orientation tensors
         A = []
-
-        # empty list for viscosity
-        eta = []
 
         # iteration over all output files
         output_files = remove_irrelevant_files(self.output_files)
@@ -316,26 +333,15 @@ class RVE(Application):
             # extracting time
             t.append(data['solver_data']['t'])
 
-            channel = data['arrays']['channel']
-            Fw = np.sqrt(channel.Fwx[:]**2+channel.Fwy[:]**2+channel.Fwz[:]**2)
-            surface = self.L**2
-            tau = np.sum(Fw)/(2*surface)
-            eta.append(tau/self.options.G)
-
             if self.n > 0:
                 # extrating all arrays.
                 directions = []
-                fiber = data['arrays']['fibers']
-                starts = [i*(self.options.ar-1) for i in range(0, self.n)]
-                ends = [i*(self.options.ar-1)-1 for i in range(1, self.n + 1)]
-                for start, end in zip(starts, ends):
-                    px = np.mean(fiber.rxnext[start:end])
-                    py = np.mean(fiber.rynext[start:end])
-                    pz = np.mean(fiber.rznext[start:end])
-
+                fib = data['arrays']['fibers']
+                for px, py, pz in zip(fib.rxnext, fib.rynext, fib.rznext):
                     n = np.array([px, py, pz])
                     p = n/np.linalg.norm(n)
-                    directions.append(p)
+                    if not np.isnan(p).any():
+                        directions.append(p)
 
                 N = len(directions)
                 a = np.zeros([3, 3])
