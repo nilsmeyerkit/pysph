@@ -136,7 +136,7 @@ cpdef UIntArray arange_uint(int start, int stop=*)
 
 # Basic particle array wrapper used for NNPS
 cdef class NNPSParticleArrayWrapper:
-    cdef public DoubleArray x,y,z,h
+    cdef public DoubleArray x,y,z,u,v,w,h
     cdef public UIntArray gid
     cdef public IntArray tag
     cdef public ParticleArray pa
@@ -161,6 +161,13 @@ cdef class CPUDomainManager:
     cdef public double ytranslate
     cdef public double ztranslate
 
+    cdef public double gamma_xy
+    cdef public double gamma_yx
+    cdef public double gamma_xz
+    cdef public double gamma_zx
+    cdef public double gamma_yz
+    cdef public double gamma_zy
+
     cdef public int dim
     cdef public bint periodic_in_x, periodic_in_y, periodic_in_z
     cdef public bint is_periodic
@@ -173,7 +180,11 @@ cdef class CPUDomainManager:
     cdef public double radius_scale  # Radius scale for kernel
     cdef public double n_layers      # Number of layers of ghost particles
 
+    cdef public double t             # Time for Lees-Edwards BC
+    cdef public double dt            # Time step for Lees-Edwards BC
+
     cdef double dbl_max              # Maximum value of double
+
 
     # remove ghost particles from a previous iteration
     cdef _remove_ghosts(self)
@@ -183,6 +194,11 @@ cdef class CPUDomainManager:
 
     # Convenience function to add a value to a carray
     cdef _add_to_array(self, DoubleArray arr, double disp)
+
+    # Functions to shift ghost particle periodically in a direction
+    cdef _shift_periodic_x(self, DoubleArray arr, double disp)
+    cdef _shift_periodic_y(self, DoubleArray arr, double disp)
+    cdef _shift_periodic_z(self, DoubleArray arr, double disp)
 
     # create new ghosts
     cdef _create_ghosts_periodic(self)

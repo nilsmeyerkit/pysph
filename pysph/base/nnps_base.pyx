@@ -220,6 +220,9 @@ cdef class NNPSParticleArrayWrapper:
         self.x = pa.get_carray('x')
         self.y = pa.get_carray('y')
         self.z = pa.get_carray('z')
+        self.u = pa.get_carray('u')
+        self.v = pa.get_carray('v')
+        self.w = pa.get_carray('w')
         self.h = pa.get_carray('h')
 
         self.gid = pa.get_carray('gid')
@@ -239,8 +242,10 @@ cdef class NNPSParticleArrayWrapper:
 cdef class DomainManager:
     def __init__(self, double xmin=-1000, double xmax=1000, double ymin=0,
                  double ymax=0, double zmin=0, double zmax=0,
+                 gamma_xy=0.0, gamma_yx=0.0, gamma_zx=0.0, gamma_xz=0.0,
+                 gamma_zy=0.0, gamma_yz=0.0,
                  periodic_in_x=False, periodic_in_y=False, periodic_in_z=False,
-                 double n_layers=2.0, backend=None):
+                 double n_layers=2.0, backend=None, dt=0.0):
         """Constructor
 
         Parameters
@@ -262,8 +267,10 @@ cdef class DomainManager:
         self.manager = domain_manager(
             xmin=xmin, xmax=xmax, ymin=ymin,
             ymax=ymax, zmin=zmin, zmax=zmax, periodic_in_x=periodic_in_x,
+            gamma_xy=gamma_xy, gamma_yx=gamma_yx, gamma_zx=gamma_zx,
+            gamma_xz=gamma_xz, gamma_yz=gamma_yz, gamma_zy=gamma_zy,
             periodic_in_y=periodic_in_y, periodic_in_z=periodic_in_z,
-            n_layers=n_layers, backend=self.backend
+            n_layers=n_layers, backend=self.backend, dt=dt
         )
 
     def set_pa_wrappers(self, wrappers):
@@ -309,7 +316,9 @@ cdef class CPUDomainManager:
     def __init__(self, double xmin=-1000, double xmax=1000, double ymin=0,
                  double ymax=0, double zmin=0, double zmax=0,
                  periodic_in_x=False, periodic_in_y=False, periodic_in_z=False,
-                 double n_layers=2.0, backend=None):
+                 gamma_xy=0.0, gamma_yx=0.0, gamma_zx=0.0, gamma_xz=0.0,
+                 gamma_zy=0.0, gamma_yz=0.0,
+                 double n_layers=2.0, backend=None, dt =0.0):
         """Constructor
 
         The n_layers argument specifies the number of ghost layers as multiples
@@ -334,6 +343,14 @@ cdef class CPUDomainManager:
         self.ytranslate = ymax - ymin
         self.ztranslate = zmax - zmin
 
+        # Shear rate for Lees-Edwards condition
+        self.gamma_xy = gamma_xy
+        self.gamma_yx = gamma_yx
+        self.gamma_zx = gamma_zx
+        self.gamma_xz = gamma_xz
+        self.gamma_zy = gamma_zy
+        self.gamma_yz = gamma_yz
+
         # empty list of particle array wrappers for now
         self.pa_wrappers = []
         self.narrays = 0
@@ -346,6 +363,10 @@ cdef class CPUDomainManager:
         self.in_parallel = False
 
         self.dbl_max = np.finfo(float).max
+
+        # time for Lees-Edwards BC
+        self.t = -dt   # account for first two iterations at compiling.
+        self.dt = dt
 
     #### Public protocol ################################################
     def set_pa_wrappers(self, wrappers):
@@ -400,6 +421,36 @@ cdef class CPUDomainManager:
         for i in range(arr.length):
             arr.data[i] += disp
 
+    cdef _shift_periodic_x(self, DoubleArray arr, double disp):
+        cdef int i
+        cdef double cell_size = self.n_layers * self.cell_size
+        for i in range(arr.length):
+            arr.data[i] += disp % (self.xtranslate + 2.0*cell_size)
+            if arr.data[i] < (self.xmin - cell_size):
+                arr.data[i] += self.xtranslate + 2.0*cell_size
+            if arr.data[i] > (self.xmax + cell_size):
+                arr.data[i] -= self.xtranslate + 2.0*cell_size
+
+    cdef _shift_periodic_y(self, DoubleArray arr, double disp):
+        cdef int i
+        cdef double cell_size = self.n_layers * self.cell_size
+        for i in range(arr.length):
+            arr.data[i] += disp % (self.ytranslate + 2.0*cell_size)
+            if arr.data[i] < (self.ymin - cell_size):
+                arr.data[i] += self.ytranslate + 2.0*cell_size
+            if arr.data[i] > (self.ymax + cell_size):
+                arr.data[i] -= self.ytranslate + 2.0*cell_size
+
+    cdef _shift_periodic_z(self, DoubleArray arr, double disp):
+        cdef int i
+        cdef double cell_size = self.n_layers * self.cell_size
+        for i in range(arr.length):
+            arr.data[i] += disp % (self.ztranslate + 2.0*cell_size)
+            if arr.data[i] < (self.zmin - cell_size):
+                arr.data[i] += self.ztranslate + 2.0*cell_size
+            if arr.data[i] > (self.zmax + cell_size):
+                arr.data[i] -= self.ztranslate + 2.0*cell_size
+
     cdef _box_wrap_periodic(self):
         """Box-wrap particles for periodicity
 
@@ -432,25 +483,70 @@ cdef class CPUDomainManager:
         cdef double xi, yi, zi
         cdef int i, np
 
+        # update total time
+        self.t = self.t + 0.5*self.dt
+
         # iterate over each array and mark for translation
         for pa_wrapper in self.pa_wrappers:
             x = pa_wrapper.x; y = pa_wrapper.y; z = pa_wrapper.z
+            u = pa_wrapper.u; v = pa_wrapper.v; w = pa_wrapper.w
             np = x.length
 
             # iterate over particles and box-wrap
             for i in range(np):
-
                 if periodic_in_x:
-                    if x.data[i] < xmin : x.data[i] = x.data[i] + xtranslate
-                    if x.data[i] > xmax : x.data[i] = x.data[i] - xtranslate
+                    if x.data[i] < xmin :
+                        x.data[i] = x.data[i] + xtranslate
+                        if periodic_in_y:
+                            y.data[i] = y.data[i] + (xtranslate*self.gamma_yx*self.t) % ytranslate
+                            v.data[i] = v.data[i] + xtranslate*self.gamma_yx
+                        if periodic_in_z:
+                            z.data[i] = z.data[i] + (xtranslate*self.gamma_zx*self.t) % ztranslate
+                            w.data[i] = w.data[i] + xtranslate*self.gamma_zx
+                    if x.data[i] > xmax :
+                        x.data[i] = x.data[i] - xtranslate
+                        if periodic_in_y:
+                            y.data[i] = y.data[i] - (xtranslate*self.gamma_yx*self.t) % ytranslate
+                            v.data[i] = v.data[i] - xtranslate*self.gamma_yx
+                        if periodic_in_z:
+                            z.data[i] = z.data[i] - (xtranslate*self.gamma_zx*self.t) % ztranslate
+                            w.data[i] = w.data[i] - xtranslate*self.gamma_zx
 
                 if periodic_in_y:
-                    if y.data[i] < ymin : y.data[i] = y.data[i] + ytranslate
-                    if y.data[i] > ymax : y.data[i] = y.data[i] - ytranslate
+                    if y.data[i] < ymin :
+                        y.data[i] = y.data[i] + ytranslate
+                        if periodic_in_x:
+                            x.data[i] = x.data[i] + (ytranslate*self.gamma_xy*self.t) % xtranslate
+                            u.data[i] = u.data[i] + ytranslate*self.gamma_xy
+                        if periodic_in_z:
+                            z.data[i] = z.data[i] + (ytranslate*self.gamma_zy*self.t) % ztranslate
+                            w.data[i] = w.data[i] + ytranslate*self.gamma_zy
+                    if y.data[i] > ymax :
+                        y.data[i] = y.data[i] - ytranslate
+                        if periodic_in_x:
+                            x.data[i] = x.data[i] - (ytranslate*self.gamma_xy*self.t) % xtranslate
+                            u.data[i] = u.data[i] - ytranslate*self.gamma_xy
+                        if periodic_in_z:
+                            z.data[i] = z.data[i] - (ytranslate*self.gamma_zy*self.t) % ztranslate
+                            w.data[i] = w.data[i] - ytranslate*self.gamma_zy
 
                 if periodic_in_z:
-                    if z.data[i] < zmin : z.data[i] = z.data[i] + ztranslate
-                    if z.data[i] > zmax : z.data[i] = z.data[i] - ztranslate
+                    if z.data[i] < zmin :
+                        z.data[i] = z.data[i] + ztranslate
+                        if periodic_in_x:
+                            x.data[i] = x.data[i] + (ztranslate*self.gamma_xz*self.t) % xtranslate
+                            u.data[i] = u.data[i] + ztranslate*self.gamma_xz
+                        if periodic_in_y:
+                            y.data[i] = y.data[i] + (ztranslate*self.gamma_yz*self.t) % ytranslate
+                            v.data[i] = v.data[i] + ztranslate*self.gamma_yz
+                    if z.data[i] > zmax :
+                        z.data[i] = z.data[i] - ztranslate
+                        if periodic_in_x:
+                          x.data[i] = x.data[i] - (ztranslate*self.gamma_xz*self.t) % xtranslate
+                          u.data[i] = u.data[i] - ztranslate*self.gamma_xz
+                        if periodic_in_y:
+                          y.data[i] = y.data[i] - (ztranslate*self.gamma_yz*self.t) % ytranslate
+                          v.data[i] = v.data[i] - ztranslate*self.gamma_yz
 
     def _check_limits(self, xmin, xmax, ymin, ymax, zmin, zmax):
         """Sanity check on the limits"""
@@ -540,11 +636,27 @@ cdef class CPUDomainManager:
                 # x_low
                 copy = pa.extract_particles( x_low )
                 self._add_to_array(copy.get_carray('x'), xtranslate)
+                if periodic_in_y:
+                    self._shift_periodic_y(copy.get_carray('y'),
+                                           xtranslate*self.gamma_yx*self.t)
+                    self._add_to_array(copy.get_carray('v'), xtranslate*self.gamma_yx)
+                if periodic_in_z:
+                    self._shift_periodic_z(copy.get_carray('z'),
+                                           xtranslate*self.gamma_zx*self.t)
+                    self._add_to_array(copy.get_carray('w'), xtranslate*self.gamma_zx)
                 added.append_parray(copy)
 
                 # x_high
                 copy = pa.extract_particles( x_high )
                 self._add_to_array(copy.get_carray('x'), -xtranslate)
+                if periodic_in_y:
+                    self._shift_periodic_y(copy.get_carray('y'),
+                                           -xtranslate*self.gamma_yx*self.t)
+                    self._add_to_array(copy.get_carray('v'), -xtranslate*self.gamma_yx)
+                if periodic_in_z:
+                    self._shift_periodic_z(copy.get_carray('z'),
+                                           -xtranslate*self.gamma_zx*self.t)
+                    self._add_to_array(copy.get_carray('w'), -xtranslate*self.gamma_zx)
                 added.append_parray(copy)
 
             if periodic_in_y:
@@ -558,21 +670,53 @@ cdef class CPUDomainManager:
 
                 copy = added.extract_particles(low)
                 self._add_to_array(copy.get_carray('y'), ytranslate)
+                if periodic_in_x:
+                    self._shift_periodic_x(copy.get_carray('x'),
+                                           ytranslate*self.gamma_xy*self.t)
+                    self._add_to_array(copy.get_carray('u'), ytranslate*self.gamma_xy)
+                if periodic_in_z:
+                    self._shift_periodic_z(copy.get_carray('z'),
+                                           ytranslate*self.gamma_zy*self.t)
+                    self._add_to_array(copy.get_carray('w'), ytranslate*self.gamma_zy)
                 added.append_parray(copy)
 
                 copy = added.extract_particles(high)
                 self._add_to_array(copy.get_carray('y'), -ytranslate)
+                if periodic_in_x:
+                    self._shift_periodic_x(copy.get_carray('x'),
+                                           -ytranslate*self.gamma_xy*self.t)
+                    self._add_to_array(copy.get_carray('u'), -ytranslate*self.gamma_xy)
+                if periodic_in_z:
+                    self._shift_periodic_z(copy.get_carray('z'),
+                                           -ytranslate*self.gamma_zy*self.t)
+                    self._add_to_array(copy.get_carray('w'), -ytranslate*self.gamma_zy)
                 added.append_parray(copy)
 
                 # Add the actual y_high and y_low now.
                 # y_high
                 copy = pa.extract_particles( y_high )
                 self._add_to_array(copy.get_carray('y'), -ytranslate)
+                if periodic_in_x:
+                    self._shift_periodic_x(copy.get_carray('x'),
+                                           -ytranslate*self.gamma_xy*self.t)
+                    self._add_to_array(copy.get_carray('u'), -ytranslate*self.gamma_xy)
+                if periodic_in_z:
+                    self._shift_periodic_z(copy.get_carray('z'),
+                                           -ytranslate*self.gamma_zy*self.t)
+                    self._add_to_array(copy.get_carray('w'), -ytranslate*self.gamma_zy)
                 added.append_parray(copy)
 
                 # y_low
                 copy = pa.extract_particles( y_low )
                 self._add_to_array(copy.get_carray('y'), ytranslate)
+                if periodic_in_x:
+                    self._shift_periodic_x(copy.get_carray('x'),
+                                           ytranslate*self.gamma_xy*self.t)
+                    self._add_to_array(copy.get_carray('u'), ytranslate*self.gamma_xy)
+                if periodic_in_z:
+                    self._shift_periodic_z(copy.get_carray('z'),
+                                           ytranslate*self.gamma_zy*self.t)
+                    self._add_to_array(copy.get_carray('w'), ytranslate*self.gamma_zy)
                 added.append_parray(copy)
 
             if periodic_in_z:
@@ -586,21 +730,53 @@ cdef class CPUDomainManager:
 
                 copy = added.extract_particles(low)
                 self._add_to_array(copy.get_carray('z'), ztranslate)
+                if periodic_in_x:
+                    self._shift_periodic_x(copy.get_carray('x'),
+                                           ztranslate*self.gamma_xz*self.t)
+                    self._add_to_array(copy.get_carray('u'), ztranslate*self.gamma_xz)
+                if periodic_in_y:
+                    self._shift_periodic_y(copy.get_carray('y'),
+                                           ztranslate*self.gamma_yz*self.t)
+                    self._add_to_array(copy.get_carray('v'), ztranslate*self.gamma_yz)
                 added.append_parray(copy)
 
                 copy = added.extract_particles(high)
                 self._add_to_array(copy.get_carray('z'), -ztranslate)
+                if periodic_in_x:
+                    self._shift_periodic_x(copy.get_carray('x'),
+                                           -ztranslate*self.gamma_xz*self.t)
+                    self._add_to_array(copy.get_carray('u'), -ztranslate*self.gamma_xz)
+                if periodic_in_y:
+                    self._shift_periodic_y(copy.get_carray('y'),
+                                           -ztranslate*self.gamma_yz*self.t)
+                    self._add_to_array(copy.get_carray('v'), -ztranslate*self.gamma_yz)
                 added.append_parray(copy)
 
                 # Add the actual z_high and z_low now.
                 # z_high
                 copy = pa.extract_particles( z_high )
                 self._add_to_array(copy.get_carray('z'), -ztranslate)
+                if periodic_in_x:
+                    self._shift_periodic_x(copy.get_carray('x'),
+                                           -ztranslate*self.gamma_xz*self.t)
+                    self._add_to_array(copy.get_carray('u'), -ztranslate*self.gamma_xz)
+                if periodic_in_y:
+                    self._shift_periodic_y(copy.get_carray('y'),
+                                           -ztranslate*self.gamma_yz*self.t)
+                    self._add_to_array(copy.get_carray('v'), -ztranslate*self.gamma_yz)
                 added.append_parray(copy)
 
                 # z_low
                 copy = pa.extract_particles( z_low )
                 self._add_to_array(copy.get_carray('z'), ztranslate)
+                if periodic_in_x:
+                    self._shift_periodic_x(copy.get_carray('x'),
+                                           ztranslate*self.gamma_xz*self.t)
+                    self._add_to_array(copy.get_carray('u'), ztranslate*self.gamma_xz)
+                if periodic_in_y:
+                    self._shift_periodic_y(copy.get_carray('y'),
+                                           ztranslate*self.gamma_yz*self.t)
+                    self._add_to_array(copy.get_carray('v'), ztranslate*self.gamma_yz)
                 added.append_parray(copy)
 
 
