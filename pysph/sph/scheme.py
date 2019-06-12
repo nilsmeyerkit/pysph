@@ -866,8 +866,9 @@ class BeadChainScheme(Scheme):
                     g5.append(MomentumEquationViscosity(
                         dest=fluid, sources=self.fluids + self.fibers,
                         nu=self.nu))
-                    g5.append(SolidWallNoSlipBC(
-                        dest=fluid, sources=self.solids, nu=self.nu))
+                    if len(self.solids) > 0:
+                        g5.append(SolidWallNoSlipBC(
+                            dest=fluid, sources=self.solids, nu=self.nu))
 
             g5.append(MomentumEquationArtificialStress(
                 dest=fluid, sources=self.fluids + self.fibers))
