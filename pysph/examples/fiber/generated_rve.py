@@ -12,7 +12,8 @@ import numpy as np
 
 # PySPH imports
 from pysph.base.nnps import DomainManager
-from pysph.base.utils import (get_particle_array_beadchain,
+from pysph.base.utils import (get_particle_array_beadchain_solid,
+                              get_particle_array_beadchain_fluid,
                               get_particle_array_beadchain_fiber)
 
 from pysph.solver.application import Application
@@ -53,7 +54,7 @@ class RVE(Application):
         )
         group.add_argument(
             "--E", action="store", type=float, dest="E",
-            default=2.5E5, help="Young's modulus"
+            default=1E9, help="Young's modulus"
         )
         group.add_argument(
             "--G", action="store", type=float, dest="G",
@@ -125,7 +126,7 @@ class RVE(Application):
         self.nu = self.options.mu/self.rho0
 
         # empirical determination for the damping, which is just enough
-        self.D = self.options.D or 0.2*self.options.ar
+        self.D = self.options.D or 0.001*self.options.ar
 
         # mechanical properties
         R = self.dx/2
@@ -246,10 +247,10 @@ class RVE(Application):
         cz = np.concatenate((tz, bz))
 
         # Finally create all particle arrays.
-        channel = get_particle_array_beadchain(
+        channel = get_particle_array_beadchain_solid(
             name='channel', x=cx, y=cy, z=cz, m=mass, rho=self.rho0, h=self.h0,
             V=V)
-        fluid = get_particle_array_beadchain(
+        fluid = get_particle_array_beadchain_fluid(
             name='fluid', x=fx, y=fy, z=fz, m=mass, rho=self.rho0, h=self.h0,
             V=V)
         rand_idx = random.sample(range(len(fx)), len(fibx))

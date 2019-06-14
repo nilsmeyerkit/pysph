@@ -11,7 +11,7 @@ import numpy as np
 
 # PySPH imports
 from pysph.base.nnps import DomainManager
-from pysph.base.utils import (get_particle_array_beadchain,
+from pysph.base.utils import (get_particle_array_beadchain_fluid,
                               get_particle_array_beadchain_fiber)
 
 from pysph.solver.application import Application
@@ -250,7 +250,7 @@ class RVE(Application):
 
         # Finally create all particle arrays. Note that fluid particles are
         # removed in the area, where the fiber is placed.
-        fluid = get_particle_array_beadchain(
+        fluid = get_particle_array_beadchain_fluid(
             name='fluid', x=fx, y=fy, z=fz, m=mass, rho=self.rho0, h=self.h0,
             V=V)
         fluid.remove_particles(indices)
@@ -263,11 +263,6 @@ class RVE(Application):
             # 'Break' fibers in segments
             endpoints = [i*self.options.ar-1 for i in range(1, self.n)]
             fibers.fractag[endpoints] = 1
-
-            # mark some fibers for colors
-            minimum = min(self.n, 3)
-            for i, ep in enumerate(endpoints[0:minimum]):
-                fibers.color[ep-(self.options.ar-1):ep+1] = i+1
 
         # Setting the initial velocities for a shear flow.
         fluid.u[:] = self.options.G*(fluid.y[:]-self.L/2)

@@ -458,7 +458,7 @@ def is_overloaded_method(method):
                 return True
     return False
 
-def get_particle_array_beadchain(constants=None, **props):
+def get_particle_array_beadchain_solid(constants=None, **props):
     """Return a particle array for the BeadChainScheme for a fluid and solid.
 
     Parameters
@@ -476,20 +476,56 @@ def get_particle_array_beadchain(constants=None, **props):
     get_particle_array
 
     """
-    fluid_props = ['V', 'wf', 'uf', 'vf', 'wg', 'wij', 'vg', 'ug', 'phifrac',
-                   'awhat', 'avhat', 'auhat', 'vhat', 'what', 'uhat', 'vmag2',
-                   'arho', 'phi0', 'fractag', 'rho0', 'holdtag', 'eu', 'ev',
-                   'ew', 'dudx', 'dudy', 'dudz', 'dvdx', 'dvdy', 'dvdz',
-                   'dwdx', 'dwdy', 'dwdz', 'Fx', 'Fy', 'Fz', 'arho', 'ex',
-                   'ey', 'ez','rxnext', 'rynext', 'rznext', 'rxprev', 'ryprev',
-                   'rzprev', 'fidx', 'color', 'Fwx', 'Fwy', 'Fwz']
+    solid_props = ['V', 'vmag2',
+                   'ug', 'vg', 'wg',
+                   'wf', 'uf', 'wij', 'vf',
+                   'auhat', 'avhat', 'awhat',
+                   'uhat', 'vhat', 'what',
+                   'dudx', 'dudy', 'dudz',
+                   'dvdx', 'dvdy', 'dvdz',
+                   'dwdx', 'dwdy', 'dwdz',
+                   'Fwx', 'Fwy', 'Fwz']
+
+    pa = get_particle_array(
+        constants=constants, additional_props=solid_props, **props
+    )
+    pa.set_output_arrays(['x', 'y', 'z', 'u', 'v', 'w', 'rho', 'm', 'h', 'p',
+                          'pid', 'gid', 'V', 'ug', 'vg', 'wg',
+                          'Fwx', 'Fwy', 'Fwz'])
+
+    return pa
+
+def get_particle_array_beadchain_fluid(constants=None, **props):
+    """Return a particle array for the BeadChainScheme for a fluid and solid.
+
+    Parameters
+    ----------
+    constants : dict
+        Dictionary of constants
+
+    Other Parameters
+    ----------------
+    props : dict
+        Additional keywords passed are set as the property arrays.
+
+    See Also
+    --------
+    get_particle_array
+
+    """
+    fluid_props = ['V', 'vmag2',
+                   'ug', 'vg', 'wg',
+                   'auhat', 'avhat', 'awhat',
+                   'uhat', 'vhat', 'what',
+                   'dudx', 'dudy', 'dudz',
+                   'dvdx', 'dvdy', 'dvdz',
+                   'dwdx', 'dwdy', 'dwdz']
 
     pa = get_particle_array(
         constants=constants, additional_props=fluid_props, **props
     )
-    pa.set_output_arrays(['x', 'y', 'z', 'u', 'v', 'w', 'rho', 'm','h', 'p',
-                          'pid', 'holdtag', 'gid', 'V', 'ug', 'vg', 'wg',
-                          'color', 'Fwx', 'Fwy', 'Fwz'])
+    pa.set_output_arrays(['x', 'y', 'z', 'u', 'v', 'w', 'rho', 'm', 'h', 'p',
+                          'pid', 'gid', 'V'])
 
     return pa
 
@@ -515,10 +551,10 @@ def get_particle_array_beadchain_fiber(constants=None, **props):
                    'awhat', 'avhat', 'auhat', 'vhat', 'what', 'uhat', 'vmag2',
                    'arho', 'phi0', 'fractag', 'rho0', 'holdtag', 'eu', 'ev',
                    'ew', 'dudx', 'dudy', 'dudz', 'dvdx', 'dvdy', 'dvdz',
-                   'dwdx', 'dwdy', 'dwdz', 'Fx', 'Fy', 'Fz', 'arho', 'ex',
-                   'ey', 'ez', 'lprev', 'lnext', 'phi0',
+                   'dwdx', 'dwdy', 'dwdz', 'Fx', 'Fy', 'Fz', 'ex',
+                   'ey', 'ez', 'lprev', 'lnext',
                    'rxnext', 'rynext', 'rznext', 'rnext', 'rxprev', 'ryprev',
-                   'rzprev', 'rprev', 'fidx', 'color', 'Fwx', 'Fwy', 'Fwz']
+                   'rzprev', 'rprev', 'fidx', 'Fwx', 'Fwy', 'Fwz']
 
     pa = get_particle_array(
         constants=constants, additional_props=fiber_props, **props
@@ -527,7 +563,6 @@ def get_particle_array_beadchain_fiber(constants=None, **props):
                           'holdtag', 'gid', 'ug', 'vg', 'wg', 'V', 'Fx', 'Fy',
                           'Fz', 'rxnext', 'rynext', 'rznext', 'rnext', 'pid',
                           'rxprev', 'ryprev', 'rzprev', 'rprev', 'fidx',
-                          'color', 'fractag', 'Fwx', 'Fwy', 'Fwz', 'wij',
-                          'phifrac', 'arho', 'phi0', 'rho0', 'lprev', 'lnext'])
+                          'fractag', 'lprev', 'lnext'])
 
     return pa

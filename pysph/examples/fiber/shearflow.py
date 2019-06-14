@@ -21,7 +21,8 @@ rc('text', usetex=True)
 
 # PySPH imports
 from pysph.base.nnps import DomainManager
-from pysph.base.utils import (get_particle_array_beadchain,
+from pysph.base.utils import (get_particle_array_beadchain_fluid,
+                              get_particle_array_beadchain_solid,
                               get_particle_array_beadchain_fiber)
 
 from pysph.tools.interpolator import Interpolator
@@ -296,10 +297,10 @@ class Channel(Application):
         # Finally create all particle arrays. Note that fluid particles are
         # removed in the area, where the fiber is placed.
         if self.options.dim == 2:
-            channel = get_particle_array_beadchain(
+            channel = get_particle_array_beadchain_solid(
                 name='channel', x=cx, y=cy, m=mass, rho=self.rho0, h=self.h0,
                 V=V)
-            fluid = get_particle_array_beadchain(
+            fluid = get_particle_array_beadchain_fluid(
                 name='fluid', x=fx, y=fy, m=mass, rho=self.rho0, h=self.h0,
                 V=V)
             fluid.remove_particles(indices)
@@ -308,10 +309,10 @@ class Channel(Application):
                 h=self.h0, lprev=self.dx, lnext=self.dx, phi0=np.pi,
                 phifrac=self.options.phifrac, fidx=fidx, V=fiber_V)
         else:
-            channel = get_particle_array_beadchain(
+            channel = get_particle_array_beadchain_solid(
                 name='channel', x=cx, y=cy, z=cz, m=mass, rho=self.rho0,
                 h=self.h0, V=V)
-            fluid = get_particle_array_beadchain(
+            fluid = get_particle_array_beadchain_fluid(
                 name='fluid', x=fx, y=fy, z=fz, m=mass, rho=self.rho0,
                 h=self.h0, V=V)
             fluid.remove_particles(indices)
