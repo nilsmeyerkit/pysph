@@ -8,16 +8,6 @@ import os
 import random
 import itertools
 import numpy as np
-from scipy.integrate import odeint
-
-# matplotlib (set up for server use)
-import matplotlib
-matplotlib.use('Agg')
-from matplotlib import pyplot as plt
-from matplotlib import rc
-from matplotlib.ticker import FormatStrFormatter
-rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
-rc('text', usetex=True)
 
 # PySPH imports
 from pysph.base.nnps import DomainManager
@@ -25,7 +15,7 @@ from pysph.base.utils import (get_particle_array_beadchain,
                               get_particle_array_beadchain_fiber)
 
 from pysph.solver.application import Application
-from pysph.solver.utils import load,remove_irrelevant_files
+from pysph.solver.utils import load, remove_irrelevant_files
 from pysph.solver.tools import FiberIntegrator
 
 from pysph.sph.scheme import BeadChainScheme
@@ -37,7 +27,7 @@ class RVE(Application):
     def create_scheme(self):
         """There is no scheme used in this application and equations are set up
         manually."""
-        return BeadChainScheme(['fluid'], ['channel'], ['fibers'], dim=3)
+        return BeadChainScheme(['fluid'], [], ['fibers'], dim=3)
 
     def add_user_options(self, group):
         group.add_argument(
@@ -89,10 +79,6 @@ class RVE(Application):
             default=0.01, help="Volume fraction of fibers in suspension."
         )
         group.add_argument(
-            "--folgartucker", action="store_true", dest="folgartucker",
-            default=False, help="Decides if Folgar Tucker solution is plotted."
-        )
-        group.add_argument(
             "--k", action="store", type=float, dest="k",
             default=0.0, help="Friction coefficient between fibers."
         )
@@ -122,7 +108,7 @@ class RVE(Application):
         # nu_needed = a*self.options.G*self.L/2
         nu_needed = (a*self.options.G*self.L/4
                      + np.sqrt(a/8*self.options.g*self.L**2
-                     + (a/2)**2/4*self.options.G**2*self.L**2))
+                               + (a/2)**2/4*self.options.G**2*self.L**2))
 
         # If there is no other scale scale factor provided, use automatically
         # computed factor.
@@ -198,7 +184,8 @@ class RVE(Application):
         if self.n < 1:
             self.scheme.configure(fibers=[])
         self.scheme.configure_solver(tf=self.t, vtk=self.options.vtk,
-                                     N=self.options.rot*100)
+                                     N=self.options.rot*100,
+                                     output_only_real=False)
 
     def create_particles(self):
         """Three particle arrays are created: A fluid, representing the polymer
@@ -261,28 +248,8 @@ class RVE(Application):
 
         print("Created %d fibers." % self.n)
 
-        # Determine the size of dummy region
-        ghost_extent = 3*fdx
-
-        # Create the channel particles at the top
-        _y = np.arange(self.L+dx2, self.L+ghost_extent, fdx)
-        tx, ty, tz = self.get_meshgrid(_x, _y, _z)
-
-        # Create the channel particles at the bottom
-        _y = np.arange(-dx2, -dx2-ghost_extent, -fdx)
-        bx, by, bz = self.get_meshgrid(_x, _y, _z)
-
-        # Concatenate the top and bottom arrays (and for 3D cas also right and
-        # left arrays)
-        cx = np.concatenate((tx, bx))
-        cy = np.concatenate((ty, by))
-        cz = np.concatenate((tz, bz))
-
         # Finally create all particle arrays. Note that fluid particles are
         # removed in the area, where the fiber is placed.
-        channel = get_particle_array_beadchain(
-            name='channel', x=cx, y=cy, z=cz, m=mass, rho=self.rho0, h=self.h0,
-            V=V)
         fluid = get_particle_array_beadchain(
             name='fluid', x=fx, y=fy, z=fz, m=mass, rho=self.rho0, h=self.h0,
             V=V)
@@ -302,33 +269,33 @@ class RVE(Application):
             for i, ep in enumerate(endpoints[0:minimum]):
                 fibers.color[ep-(self.options.ar-1):ep+1] = i+1
 
-        # Print number of particles.
-        print("Shear flow : nfluid = %d, nchannel = %d" % (
-            fluid.get_number_of_particles(),
-            channel.get_number_of_particles()))
-
         # Setting the initial velocities for a shear flow.
         fluid.u[:] = self.options.G*(fluid.y[:]-self.L/2)
-        channel.u[:] = self.options.G*(channel.y[:]-self.L/2)
 
         if self.n > 0:
             fibers.u[:] = self.options.G*(fibers.y[:]-self.L/2)
-            return [fluid, channel, fibers]
+            return [fluid, fibers]
         else:
-            return [fluid, channel]
+            return [fluid]
 
     def create_domain(self):
         """The channel has periodic boundary conditions in x-direction."""
-        return DomainManager(xmin=0, xmax=self.L, zmin=0, zmax=self.L,
-                             periodic_in_x=True, periodic_in_z=True)
+        return DomainManager(xmin=0, xmax=self.L, periodic_in_x=True,
+                             ymin=0, ymax=self.L, periodic_in_y=True,
+                             zmin=0, zmax=self.L, periodic_in_z=True,
+                             gamma_xy=self.options.G,
+                             n_layers=1,
+                             dt=self.solver.dt)
 
     def create_tools(self):
         """Set up fiber integrator."""
         if self.n < 1:
             return []
         else:
-            return [FiberIntegrator(self.particles, self.scheme, self.domain,
-                                    parallel=True)]
+            return [FiberIntegrator(self.particles, self.scheme,
+                                    self.domain,
+                                    #  parallel=True
+                                    )]
 
     def get_meshgrid(self, xx, yy, zz):
         """This function is a shorthand for the generation of meshgrids."""
@@ -338,238 +305,25 @@ class RVE(Application):
         z = z.ravel()
         return [x, y, z]
 
-    def get_equivalent_aspect_ratio(self, aspect_ratio):
-        """Jeffrey's equivalent aspect ratio (coarse approximation)
-            Cox et al.
-        """
-        return 1.24 * aspect_ratio / np.sqrt(np.log(aspect_ratio))
-
-    def symm(self, A):
-        '''
-        This function computes the symmetric part of a fourth order Tensor A
-        and returns a symmetric fourth order tensor S.
-        '''
-        # initial symmetric tensor with zeros
-        S = np.zeros((3, 3, 3, 3))
-
-        # Einsteins summation
-        for i in range(3):
-            for j in range(3):
-                for k in range(3):
-                    for l in range(3):
-                        # sum of all permutations divided by 4!=24
-                        S[i, j, k, l] = 1.0/24.0*(A[i, j, k, l]
-                                                  + A[j, i, k, l]
-                                                  + A[i, j, l, k]
-                                                  + A[j, i, l, k]
-                                                  + A[k, l, i, j]
-                                                  + A[l, k, i, j]
-                                                  + A[k, l, j, i]
-                                                  + A[l, k, j, i]
-                                                  + A[i, k, j, l]
-                                                  + A[k, i, j, l]
-                                                  + A[i, k, l, j]
-                                                  + A[k, i, l, j]
-                                                  + A[j, l, i, k]
-                                                  + A[l, j, i, k]
-                                                  + A[j, l, k, i]
-                                                  + A[l, j, k, i]
-                                                  + A[i, l, j, k]
-                                                  + A[l, i, j, k]
-                                                  + A[i, l, k, j]
-                                                  + A[l, i, k, j]
-                                                  + A[j, k, i, l]
-                                                  + A[k, j, i, l]
-                                                  + A[j, k, l, i]
-                                                  + A[k, j, l, i])
-        return S
-
-    def generate_fourth_order_tensor(self, A):
-        """This function utilizes a invariant based optimal fitting closure to
-        generate a fourth order tensor from a second order tensor.
-        Reference: Chung & Kwon paper about 'Invariant-based optimal fitting
-        closure approximation for the numerical prediction of flow-induced
-        fiber orientation'
-
-        Input:
-        A: Second order orientation tensor
-        """
-
-        # build second order orientation tensor in eigensystem representaion
-        e1, e2, e3 = np.linalg.eigvals(A)
-
-        # first invariant
-        I = e1 + e2 + e3
-
-        # second invariant
-        II = e1*e2+e2*e3+e1*e3
-
-        # third invariant
-        III = e1*e2*e3
-
-        # coefficients from Chung & Kwon paper
-        C1 = np.zeros((1, 21))
-
-        C2 = np.zeros((1, 21))
-
-        C3 = np.array([[0.24940908165786E2,
-                        -0.435101153160329E3,
-                        0.372389335663877E4,
-                        0.703443657916476E4,
-                        0.823995187366106E6,
-                        -0.133931929894245E6,
-                        0.880683515327916E6,
-                        -0.991630690741981E7,
-                        -0.159392396237307E5,
-                        0.800970026849796E7,
-                        -0.237010458689252E7,
-                        0.379010599355267E8,
-                        -0.337010820273821E8,
-                        0.322219416256417E5,
-                        -0.257258805870567E9,
-                        0.214419090344474E7,
-                        -0.449275591851490E8,
-                        -0.213133920223355E8,
-                        0.157076702372204E10,
-                        -0.232153488525298E5,
-                        -0.395769398304473E10]])
-
-        C4 = np.array([[-0.497217790110754E0,
-                        0.234980797511405E2,
-                        -0.391044251397838E3,
-                        0.153965820593506E3,
-                        0.152772950743819E6,
-                        -0.213755248785646E4,
-                        -0.400138947092812E4,
-                        -0.185949305922308E7,
-                        0.296004865275814E4,
-                        0.247717810054366E7,
-                        0.101013983339062E6,
-                        0.732341494213578E7,
-                        -0.147919027644202E8,
-                        -0.104092072189767E5,
-                        -0.635149929624336E8,
-                        -0.247435106210237E6,
-                        -0.902980378929272E7,
-                        0.724969796807399E7,
-                        0.487093452892595E9,
-                        0.138088690964946E5,
-                        -0.160162178614234E10]])
-
-        C5 = np.zeros((1, 21))
-
-        C6 = np.array([[0.234146291570999E2,
-                        -0.412048043372534E3,
-                        0.319553200392089E4,
-                        0.573259594331015E4,
-                        -0.485212803064813E5,
-                        -0.605006113515592E5,
-                        -0.477173740017567E5,
-                        0.599066486689836E7,
-                        -0.110656935176569E5,
-                        -0.460543580680696E8,
-                        0.203042960322874E7,
-                        -0.556606156734835E8,
-                        0.567424911007837E9,
-                        0.128967058686204E5,
-                        -0.152752854956514E10,
-                        -0.499321746092534E7,
-                        0.132124828143333E9,
-                        -0.162359994620983E10,
-                        0.792526849882218E10,
-                        0.466767581292985E4,
-                        -0.128050778279459E11]])
-
-        # build matrix of coefficients by stacking vectors
-        C = np.vstack((C1, C2, C3, C4, C5, C6))
-
-        # compute parameters as fith order polynom based on invariants
-        beta3 = (C[2, 0]+C[2, 1]*II+C[2, 2]*II**2++C[2, 3]*III+C[2, 4]*III**2
-                 + C[2, 5]*II*III+C[2, 6]*II**2*III+C[2, 7]*II*III**2+C[2, 8]*II**3
-                 + C[2, 9]*III**3+C[2, 10]*II**3*III+C[2, 11]*II**2*III**2
-                 + C[2, 12]*II*III**3+C[2, 13]*II**4+C[2, 14]*III**4
-                 + C[2, 15]*II**4*III+C[2, 16]*II**3*III**2+C[2, 17]*II**2*III**3
-                 + C[2, 18]*II*III**4+C[2, 19]*II**5+C[2, 20]*III**5)
-
-        beta4 = (C[3, 0]+C[3, 1]*II+C[3, 2]*II**2++C[3, 3]*III+C[3, 4]*III**2
-                 + C[3, 5]*II*III+C[3, 6]*II**2*III+C[3, 7]*II*III**2+C[3, 8]*II**3
-                 + C[3, 9]*III**3+C[3, 10]*II**3*III+C[3, 11]*II**2*III**2
-                 + C[3, 12]*II*III**3+C[3, 13]*II**4+C[3, 14]*III**4
-                 + C[3, 15]*II**4*III+C[3, 16]*II**3*III**2+C[3, 17]*II**2*III**3
-                 + C[3, 18]*II*III**4+C[3, 19]*II**5+C[3, 20]*III**5)
-
-        beta6 = (C[5, 0]+C[5, 1]*II+C[5, 2]*II**2++C[5, 3]*III+C[5, 4]*III**2
-                 + C[5, 5]*II*III+C[5, 6]*II**2*III+C[5, 7]*II*III**2+C[5, 8]*II**3
-                 + C[5, 9]*III**3+C[5, 10]*II**3*III+C[5, 11]*II**2*III**2
-                 + C[5, 12]*II*III**3+C[5, 13]*II**4+C[5, 14]*III**4
-                 + C[5, 15]*II**4*III+C[5, 16]*II**3*III**2+C[5, 17]*II**2*III**3
-                 + C[5, 18]*II*III**4+C[5, 19]*II**5+C[5, 20]*III**5)
-
-        beta1 = 3.0/5.0*(-1.0/7.0
-                         + 1.0/5.0*beta3*(1.0/7.0+4.0/7.0*II+8.0/3.0*III)
-                         - beta4*(1.0/5.0-8.0/15.0*II-14.0/15.0*III)
-                         - beta6*(1.0/35.0
-                                  - 24.0/105.0*III
-                                  - 4.0/35.0*II
-                                  + 16.0/15.0*II*III
-                                  + 8.0/35.0*II**2))
-
-        beta2 = 6.0/7.0*(1.0
-                         - 1.0/5.0*beta3*(1.0+4.0*II)
-                         + 7.0/5.0*beta4*(1.0/6.0-II)
-                         - beta6*(-1.0/5.0+2.0/3.0*III+4.0/5.0*II-8.0/5.0*II**2))
-
-        beta5 = -4.0/5.0*beta3-7.0/5.0*beta4-6.0/5.0*beta6*(1.0-4.0/3.0*II)
-
-        # second order identy matrix
-        delta = np.eye(3)
-
-        # generate fourth order tensor with parameters and tensor algebra
-        return (beta1*self.symm(np.einsum('ij,kl->ijkl', delta, delta))
-                + beta2*self.symm(np.einsum('ij,kl->ijkl', delta, A))
-                + beta3*self.symm(np.einsum('ij,kl->ijkl', A, A))
-                + beta4*self.symm(np.einsum('ij,km,ml->ijkl', delta, A, A))
-                + beta5*self.symm(np.einsum('ij,km,ml->ijkl', A, A, A))
-                + beta6*self.symm(np.einsum('im,mj,kn,nl->ijkl', A, A, A, A)))
-
-    def folgar_tucker_ode(self, A, t, ar, G, Ci=0.0, kappa=1.0):
-        A = np.reshape(A,(3,3))
-        w, v = np.linalg.eig(A)
-        L = (w[0]*np.einsum('i,j,k,l->ijkl',v[:,0],v[:,0],v[:,0],v[:,0])
-             +w[1]*np.einsum('i,j,k,l->ijkl',v[:,1],v[:,1],v[:,1],v[:,1])
-             +w[2]*np.einsum('i,j,k,l->ijkl',v[:,2],v[:,2],v[:,2],v[:,2]))
-        M = (np.einsum('i,j,k,l->ijkl',v[:,0],v[:,0],v[:,0],v[:,0])
-             +np.einsum('i,j,k,l->ijkl',v[:,1],v[:,1],v[:,1],v[:,1])
-             +np.einsum('i,j,k,l->ijkl',v[:,2],v[:,2],v[:,2],v[:,2]))
-
-        lbd = (ar**2-1.0)/(ar**2+1.0)
-        omega = np.array([[0.0, G/2, 0.0],[-G/2, 0.0, 0.0],[0.0, 0.0, 0.0]])
-        D = np.array([[0.0, G/2, 0.0],[G/2, 0.0, 0.0],[0.0, 0.0, 0.0]])
-        AA = self.generate_fourth_order_tensor(A)
-        closure = AA + (1.0-kappa)*(L-np.einsum('ijmn,mnkl->ijkl',M,AA))
-        #print(np.linalg.norm(RSC-AA))
-        delta = np.eye(3)
-
-        DADT = (np.einsum('ik,kj->ij', omega, A)
-                -np.einsum('ik,kj->ij', A, omega)
-                +lbd*(np.einsum('ik,kj->ij', D, A)
-                      +np.einsum('ik,kj->ij', A, D)
-                      -2*np.einsum('ijkl,kl->ij', closure, D))
-                +2*Ci*G*(delta-3*A))
-        return DADT.ravel()
-
     def post_process(self, info_fname):
         if len(self.output_files) == 0:
             return
+
+        from pysph.tools.pprocess import get_ke_history
+        from matplotlib import pyplot as plt
+        t, ke = get_ke_history(self.output_files, 'fluid')
+        plt.clf()
+        plt.plot(t, ke)
+        plt.xlabel('t')
+        plt.ylabel('Kinetic energy')
+        fig = os.path.join(self.output_dir, "ke_history.png")
+        plt.savefig(fig, dpi=300)
 
         # empty list for time
         t = []
 
         # empty lists for fiber orientation tensors
         A = []
-
-        # empty list for viscosity
-        eta = []
 
         # iteration over all output files
         output_files = remove_irrelevant_files(self.output_files)
@@ -579,19 +333,14 @@ class RVE(Application):
             # extracting time
             t.append(data['solver_data']['t'])
 
-            channel = data['arrays']['channel']
-            Fw = np.sqrt(channel.Fwx[:]**2+channel.Fwy[:]**2+channel.Fwz[:]**2)
-            surface = self.L**2
-            tau = np.sum(Fw)/(2*surface)
-            eta.append(tau/self.options.G)
-
             if self.n > 0:
                 # extrating all arrays.
                 directions = []
                 fiber = data['arrays']['fibers']
                 startpoints = [i*(self.options.ar-1) for i in range(0, self.n)]
-                endpoints = [i*(self.options.ar-1)-1 for i in range(1, self.n+1)]
-                for start,end in zip(startpoints, endpoints):
+                endpoints = [i*(self.options.ar-1)-1 for i in range(1,
+                                                                    self.n+1)]
+                for start, end in zip(startpoints, endpoints):
                     px = np.mean(fiber.rxnext[start:end])
                     py = np.mean(fiber.rynext[start:end])
                     pz = np.mean(fiber.rznext[start:end])
@@ -612,125 +361,12 @@ class RVE(Application):
         data = np.hstack((np.matrix(t).T, np.vstack(A)))
         np.savetxt(csv_file, data, delimiter=',')
 
-        eta_fluid = self.options.mu*np.ones_like(eta)
-        # open new plot
-        plt.figure()
-        plt.plot(t[1:], eta[1:], '--k',
-                 t[1:], eta_fluid[1:], '-k')
-        plt.legend(['Simulated effective value', 'Fluid only'])
-        # plt.title('Viscosity with %d fibers'%self.n)
-        plt.ylim([0.8*self.options.mu, 2.0*self.options.mu])
-        plt.xlabel('t [s]')
-        plt.ylabel('$\eta$ [Pa s]')
-        plt.grid()
-        plt.tight_layout()
-
-        # save figure
-        visfig = os.path.join(self.output_dir, 'viscosity.pdf')
-        plt.savefig(visfig, dpi=300, bbox_inches='tight')
-        try:
-            tex_fig = os.path.join(self.output_dir, "viscosity.tex")
-            from matplotlib2tikz import save as tikz_save
-            tikz_save(tex_fig)
-        except ImportError:
-            print("Did not write tikz figure.")
-        print("Viscosity plot written to %s." % visfig)
-
-        # open new plot
-        plt.figure()
-
-        if self.options.folgartucker and self.n > 0:
-            tt = np.array(t)
-            A0 = np.array([[0.0, 0.0, 0.0],
-                           [0.0, 1.0, 0.0],
-                           [0.0, 0.0, 0.0]])
-            are = self.get_equivalent_aspect_ratio(self.options.ar)
-            A_FT = []
-            cis = [0.00, 0.001, 0.001]
-            kappas = [1.00, 1.00, 0.50]
-            for Ci, kappa in zip(cis, kappas):
-                print("Solving RSC equation with Ci=%.3f and kappa = %.2f"
-                      % (Ci, kappa))
-                A_FT.append(odeint(self.folgar_tucker_ode,
-                                   A0.ravel(),
-                                   tt,
-                                   atol=1E-15,
-                                   args=(are, self.options.G, Ci, kappa)))
-            AA = np.vstack(A)
-            AFT = np.array(A_FT)
-            legend_list = []
-            for ci, kappa in zip(cis,kappas):
-                legend_list.append("$C_I=%.3f, \kappa=%.2f$"%(ci,kappa))
-            legend_list.append('SPH')
-
-            plt.subplot(3,3,1)
-            plt.plot(tt, np.transpose(AFT[:,:,0]), t, AA[:,0], '-k')
-            plt.title('$A_{11}$')
-            plt.ylim((-1,1))
-            plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
-            lgd = plt.legend(legend_list, bbox_to_anchor=(0.9, -1.8))
-
-            plt.subplot(3,3,2)
-            plt.plot(tt, np.transpose(AFT[:,:,1]), t, AA[:,1], '-k')
-            plt.title('$A_{12}$')
-            plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
-            plt.ylim((-1,1))
-
-            plt.subplot(3,3,3)
-            plt.plot(tt, np.transpose(AFT[:,:,2]), t, AA[:,2], '-k')
-            plt.title('$A_{13}$')
-            plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
-            plt.ylim((-1,1))
-
-            # plt.subplot(3,3,4)
-            # plt.plot(tt, np.transpose(AFT[:,:,3]), t, AA[:,3], '--k')
-            # plt.title('$A_{21}$')
-            # plt.ylim((-1,1))
-
-            plt.subplot(3,3,5)
-            plt.plot(tt, np.transpose(AFT[:,:,4]), t, AA[:,4], '-k')
-            plt.title('$A_{22}$')
-            plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
-            plt.ylim((-1,1))
-
-            plt.subplot(3,3,6)
-            plt.plot(tt, np.transpose(AFT[:,:,5]), t, AA[:,5], '-k')
-            plt.title('$A_{23}$')
-            plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
-            plt.ylim((-1,1))
-
-            #plt.subplot(3,3,7)
-            # plt.plot(tt, np.transpose(AFT[:,:,6]), t, AA[:,6], '--k')
-            # plt.title('$A_{31}$')
-
-            # plt.subplot(3,3,8)
-            # plt.plot(tt, np.transpose(AFT[:,:,7]), t, AA[:,7], '--k')
-            # plt.title('$A_{32}$')
-
-            plt.subplot(3,3,9)
-            plt.plot(tt, np.transpose(AFT[:,:,8]), t, AA[:,8], '-k')
-            plt.title('$A_{33}$')
-            plt.gca().xaxis.set_major_formatter(FormatStrFormatter('%ds'))
-            plt.ylim((-1,1))
-
-
-            # save figure
-            plt.tight_layout()
-            ori = os.path.join(self.output_dir, 'orientation.pdf')
-            plt.savefig(ori, dpi=300, bbox_inches='tight')
-            try:
-                tex_fig = os.path.join(self.output_dir, "orientation.tex")
-                from matplotlib2tikz import save as tikz_save
-                tikz_save(tex_fig)
-            except ImportError:
-                print("Did not write tikz figure.")
-            print("Orientation plot written to %s."% ori)
-
-
-
-
 
 if __name__ == '__main__':
+    import cProfile
+    import pstats
     app = RVE()
-    app.run()
+    cProfile.runctx('app.run()', None, locals(), 'stats')
+    p = pstats.Stats('stats')
+    p.sort_stats('tottime').print_stats(20)
     app.post_process(app.info_filename)

@@ -196,9 +196,8 @@ cdef class CPUDomainManager:
     cdef _add_to_array(self, DoubleArray arr, double disp)
 
     # Functions to shift ghost particle periodically in a direction
-    cdef _shift_periodic_x(self, DoubleArray arr, double disp)
-    cdef _shift_periodic_y(self, DoubleArray arr, double disp)
-    cdef _shift_periodic_z(self, DoubleArray arr, double disp)
+    cdef _shift_periodic(self, DoubleArray arr, double disp, double min_pos,
+                         double max_pos)
 
     # create new ghosts
     cdef _create_ghosts_periodic(self)

@@ -89,8 +89,7 @@ class CouetteFlow(Application):
             ['fluid'], [], dim=2, rho0=rho0, c0=c0, nu=nu,
             p0=p0, pb=p0, h0=dx*hdx
         )
-        s.configure_solver(tf=tf, dt=dt)
-        s.set_output_only_real = False
+        s.configure_solver(tf=tf, dt=dt, output_only_real=False)
         return s
 
 
