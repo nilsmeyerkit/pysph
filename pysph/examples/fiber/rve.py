@@ -223,13 +223,13 @@ class RVE(Application):
         fibz = tuple()
 
         positions = list(itertools.product(_x, _z))
-        for xx, zz in random.sample(positions, self.n):
+        for yy, zz in random.sample(positions, self.n):
             for i in range(len(fx)):
-                yy = 0.5*self.L
+                xx = 0.5*self.L
 
                 # vertical
-                if (fx[i] < xx+self.dx/2 and fx[i] > xx-self.dx/2 and
-                    fy[i] < yy+self.L/2 and fy[i] > yy-self.L/2 and
+                if (fx[i] < xx+self.L/2 and fx[i] > xx-self.L/2 and
+                    fy[i] < yy+self.dx/2 and fy[i] > yy-self.dx/2 and
                         fz[i] < zz+self.dx/2 and fz[i] > zz-self.dx/2):
                     indices.append(i)
 
@@ -237,9 +237,10 @@ class RVE(Application):
             # horizontal or vertical alignment respectivley.
 
             # vertical fiber
-            _fibx = np.array([xx])
-            _fiby = np.arange(yy-self.L/2+self.dx/2, yy+self.L/2+self.dx/4,
+
+            _fibx = np.arange(xx-self.L/2+self.dx/2, xx+self.L/2+self.dx/4,
                               self.dx)
+            _fiby = np.array([yy])
             _fibz = np.array([zz])
             _fibx, _fiby, _fibz = self.get_meshgrid(_fibx, _fiby, _fibz)
             fibx = fibx + (_fibx,)
@@ -265,10 +266,10 @@ class RVE(Application):
             fibers.fractag[endpoints] = 1
 
         # Setting the initial velocities for a shear flow.
-        fluid.u[:] = self.options.G*(fluid.y[:]-self.L/2)
+        fluid.v[:] = self.options.G*(fluid.x[:]-self.L/2)
 
         if self.n > 0:
-            fibers.u[:] = self.options.G*(fibers.y[:]-self.L/2)
+            fibers.v[:] = self.options.G*(fibers.x[:]-self.L/2)
             return [fluid, fibers]
         else:
             return [fluid]
@@ -278,7 +279,7 @@ class RVE(Application):
         return DomainManager(xmin=0, xmax=self.L, periodic_in_x=True,
                              ymin=0, ymax=self.L, periodic_in_y=True,
                              zmin=0, zmax=self.L, periodic_in_z=True,
-                             gamma_xy=self.options.G,
+                             gamma_yx=self.options.G,
                              n_layers=1,
                              dt=self.solver.dt)
 
@@ -289,6 +290,7 @@ class RVE(Application):
         else:
             return [FiberIntegrator(self.particles, self.scheme,
                                     self.domain,
+                                    updates=False,
                                     #  parallel=True
                                     )]
 

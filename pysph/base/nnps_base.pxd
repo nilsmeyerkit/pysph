@@ -161,11 +161,8 @@ cdef class CPUDomainManager:
     cdef public double ytranslate
     cdef public double ztranslate
 
-    cdef public double gamma_xy
     cdef public double gamma_yx
-    cdef public double gamma_xz
     cdef public double gamma_zx
-    cdef public double gamma_yz
     cdef public double gamma_zy
 
     cdef public int dim

@@ -93,6 +93,7 @@ class SimpleRemesher(Tool):
             self.array.set(**data)
             self.interp.nnps.update_domain()
 
+
 class FiberIntegrator(Tool):
     def __init__(self, all_particles, scheme, domain=None, innerloop=True,
                  updates=True, parallel=False, steps=None):
@@ -187,18 +188,29 @@ class FiberIntegrator(Tool):
                 periodic_in_x = domain.manager.periodic_in_x
                 periodic_in_y = domain.manager.periodic_in_y
                 periodic_in_z = domain.manager.periodic_in_z
+                gamma_yx = domain.manager.gamma_yx
+                gamma_zx = domain.manager.gamma_zx
+                gamma_zy = domain.manager.gamma_zy
+                n_layers = domain.manager.n_layers
                 self.domain = DomainManager(xmin=xmin, xmax=xmax, ymin=ymin,
                                             ymax=ymax, zmin=zmin, zmax=zmax,
                                             periodic_in_x=periodic_in_x,
                                             periodic_in_y=periodic_in_y,
-                                            periodic_in_z=periodic_in_z)
+                                            periodic_in_z=periodic_in_z,
+                                            gamma_yx=gamma_yx,
+                                            gamma_zx=gamma_zx,
+                                            gamma_zy=gamma_zy,
+                                            n_layers=n_layers,
+                                            dt=self.fiber_dt
+                                            )
             else:
-                self.domain=None
-            # A seperate list for the nearest neighbourhood search is benefitial
-            # since it is much smaller than the original one.
+                self.domain = None
+            # A seperate list for the nearest neighbourhood search is
+            # benefitial since it is much smaller than the original one.
             nnps = LinkedListNNPS(dim=scheme.dim, particles=particles,
-                            radius_scale=kernel.radius_scale, domain=self.domain,
-                            fixed_h=False, cache=False, sort_gids=False)
+                                  radius_scale=kernel.radius_scale,
+                                  domain=self.domain,
+                                  fixed_h=False, cache=False, sort_gids=False)
             # The acceleration evaluator needs to be set up in order to compile
             # it together with the integrator.
             if parallel:
@@ -228,21 +240,22 @@ class FiberIntegrator(Tool):
             self.fiber_integrator.set_nnps(nnps)
 
     def post_stage(self, current_time, dt, stage):
-        """This post stage function gets called after each outer loop and starts
-        an inner loop for the fiber iteration."""
+        """This post stage function gets called after each outer loop and
+        starts an inner loop for the fiber iteration."""
         from math import ceil
         if self.innerloop:
             # 1) predictor
             # 2) post stage 1:
             if stage == 1:
                 N = self.steps or int(ceil(self.dt/self.fiber_dt))
-                for n in range(0,N):
-                    self.fiber_integrator.step(current_time,dt/N)
+                for n in range(0, N):
+                    self.fiber_integrator.step(current_time, dt/N)
                     current_time += dt/N
                     if self.domain_updates and self.domain:
                         self.domain.update()
             # 3) Evaluation
             # 4) post stage 2
+
 
 class DensityCorrection(Tool):
     """
