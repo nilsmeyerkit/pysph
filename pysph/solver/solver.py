@@ -177,7 +177,7 @@ class Solver(object):
         self.fixed_h = fixed_h
 
         # flag indicating VTK output
-        self.vtk =vtk
+        self.vtk = vtk
 
         # Set all extra keyword arguments
         for attr, value in kwargs.items():
@@ -548,9 +548,9 @@ class Solver(object):
             comm = self.comm
 
         dump(fname, self.particles, self._get_solver_data(),
-            detailed_output=self.detailed_output,
-            only_real=self.output_only_real, mpi_comm=comm,
-            compress=self.compress_output)
+             detailed_output=self.detailed_output,
+             only_real=self.output_only_real, mpi_comm=comm,
+             compress=self.compress_output)
         if self.vtk:
             dump_vtk(fname, self.particles,
                 scalars=['rho', 'p', 'holdtag', 'fractag', 'V', 'color'],
