@@ -55,10 +55,6 @@ class RVE(Application):
             default=3.3, help="Shear rate"
         )
         group.add_argument(
-            "--g", action="store", type=float, dest="g",
-            default=0, help="Body force in x-direction"
-        )
-        group.add_argument(
             "--D", action="store", type=float, dest="D",
             default=None, help="Damping coefficient for artificial damping"
         )
@@ -86,6 +82,10 @@ class RVE(Application):
             "--rot", action="store", type=float, dest="rot",
             default=2.0, help="Number of half rotations."
         )
+        group.add_argument(
+            "--C", action="store", type=float, dest="C",
+            default=15.0, help="Cube size as multiples of fiber diameter."
+        )
 
     def consume_user_options(self):
         """Initialization of geometry, properties and time stepping."""
@@ -102,26 +102,21 @@ class RVE(Application):
         # The fiber length is the aspect ratio times fiber diameter
         self.L = self.options.ar*self.dx
 
+        # Cube size
+        self.C = self.options.C*self.dx
+
         # Computation of a scale factor in a way that dt_cfl exactly matches
         # dt_viscous.
         a = self.h0*0.125*11/0.4
-        # nu_needed = a*self.options.G*self.L/2
-        nu_needed = (a*self.options.G*self.L/4
-                     + np.sqrt(a/8*self.options.g*self.L**2
-                               + (a/2)**2/4*self.options.G**2*self.L**2))
+        nu_needed = a*self.options.G*self.C/2
 
         # If there is no other scale scale factor provided, use automatically
         # computed factor.
-        if self.options.ar < 35:
-            auto_scale_factor = self.options.mu/(nu_needed*self.options.rho0)
-        else:
-            auto_scale_factor = 0.6*self.options.mu/nu_needed/self.options.rho0
+        auto_scale_factor = self.options.mu/(nu_needed*self.options.rho0)
         self.scale_factor = self.options.scale_factor or auto_scale_factor
 
-        # The density can be scaled using the mass scaling factor. To account
-        # for proper external forces, gravity is scaled just the other way.
+        # The density can be scaled using the mass scaling factor.
         self.rho0 = self.options.rho0*self.scale_factor
-        self.options.g = self.options.g/self.scale_factor
 
         # The kinematic viscosity is computed from absolute viscosity and
         # scaled (!) density.
@@ -140,8 +135,7 @@ class RVE(Application):
         # SPH uses weakly compressible fluids. Therefore, the speed of sound c0
         # is computed as 10 times the maximum velocity. This should keep the
         # density change within 1%
-        self.Vmax = (self.options.G*self.L/2.0
-                     + self.options.g/(2.0*self.nu)*self.L**2/4.0)
+        self.Vmax = self.options.G*self.C/2.0
         self.c0 = 10.0*self.Vmax
         self.p0 = self.c0**2*self.rho0
 
@@ -152,17 +146,13 @@ class RVE(Application):
         if self.options.postonly:
             self.t = 0.0
         else:
-            l = (self.options.ar+1.0/self.options.ar)
-            self.t = self.options.rot*np.pi*l/self.options.G
+            lbd = (self.options.ar+1.0/self.options.ar)
+            self.t = self.options.rot*np.pi*lbd/self.options.G
         print("Simulated time is %g s" % self.t)
 
-        fdx = self.dx
-        dx2 = fdx/2.0
-
-        _x = np.arange(dx2, self.L, fdx)
-        _z = np.arange(dx2, self.L, fdx)
-
-        self.n = int(round(self.options.vol_frac*len(_x)*len(_z)))
+        vol_fiber = self.L*self.dx*self.dx
+        vol = self.C**3
+        self.n = int(round(self.options.vol_frac*vol/vol_fiber))
 
     def configure_scheme(self):
         self.scheme.configure(
@@ -178,14 +168,14 @@ class RVE(Application):
             J=self.J,
             E=self.options.E,
             D=self.D,
-            gx=self.options.g,
             k=self.options.k)
         # in case of very low volume fraction
         if self.n < 1:
             self.scheme.configure(fibers=[])
         self.scheme.configure_solver(tf=self.t, vtk=self.options.vtk,
                                      N=self.options.rot*100,
-                                     output_only_real=False)
+                                     # output_only_real=False
+                                     )
 
     def create_particles(self):
         """Three particle arrays are created: A fluid, representing the polymer
@@ -210,9 +200,9 @@ class RVE(Application):
         fiber_V = 1./fiber_volume
 
         # Creating grid points for particles
-        _x = np.arange(dx2, self.L, fdx)
-        _y = np.arange(dx2, self.L, fdx)
-        _z = np.arange(dx2, self.L, fdx)
+        _x = np.arange(dx2, self.C, fdx)
+        _y = np.arange(dx2, self.C, fdx)
+        _z = np.arange(dx2, self.C, fdx)
         fx, fy, fz = self.get_meshgrid(_x, _y, _z)
 
         # Remove particles at fiber position.
@@ -222,23 +212,41 @@ class RVE(Application):
         fiby = tuple()
         fibz = tuple()
 
-        positions = list(itertools.product(_x, _z))
-        for yy, zz in random.sample(positions, self.n):
+        positions = list(itertools.product(_x, _y, _z))
+        for xx, yy, zz in random.sample(positions, self.n):
             for i in range(len(fx)):
-                xx = 0.5*self.L
-
-                # vertical
-                if (fx[i] < xx+self.L/2 and fx[i] > xx-self.L/2 and
-                    fy[i] < yy+self.dx/2 and fy[i] > yy-self.dx/2 and
-                        fz[i] < zz+self.dx/2 and fz[i] > zz-self.dx/2):
-                    indices.append(i)
+                # periodic extending above
+                if xx+self.L/2 > self.C:
+                    if ((fx[i] < (xx+self.L/2-self.C) or
+                        fx[i] > xx-self.L/2) and
+                        fy[i] < yy+self.dx/2 and
+                        fy[i] > yy-self.dx/2 and
+                        fz[i] < zz+self.dx/2 and
+                        fz[i] > zz-self.dx/2):
+                        indices.append(i)
+                # periodic extending below
+                elif xx-self.L/2 < 0:
+                    if ((fx[i] < xx+self.L/2 or
+                        fx[i] > (xx-self.L/2+self.C)) and
+                        fy[i] < yy+self.dx/2 and
+                        fy[i] > yy-self.dx/2 and
+                        fz[i] < zz+self.dx/2 and
+                        fz[i] > zz-self.dx/2):
+                        indices.append(i)
+                # standard case
+                else:
+                    if (fx[i] < xx+self.L/2 and
+                        fx[i] > xx-self.L/2 and
+                        fy[i] < yy+self.dx/2 and
+                        fy[i] > yy-self.dx/2 and
+                        fz[i] < zz+self.dx/2 and
+                        fz[i] > zz-self.dx/2):
+                        indices.append(i)
 
             # Generating fiber particle grid. Uncomment proper section for
             # horizontal or vertical alignment respectivley.
-
-            # vertical fiber
-
-            _fibx = np.arange(xx-self.L/2+self.dx/2, xx+self.L/2+self.dx/4,
+            _fibx = np.arange(xx-self.L/2,
+                              xx+self.L/2 - self.dx/4,
                               self.dx)
             _fiby = np.array([yy])
             _fibz = np.array([zz])
@@ -255,6 +263,7 @@ class RVE(Application):
             name='fluid', x=fx, y=fy, z=fz, m=mass, rho=self.rho0, h=self.h0,
             V=V)
         fluid.remove_particles(indices)
+
         if self.n > 0:
             fibers = get_particle_array_beadchain_fiber(
                 name='fibers', x=np.concatenate(fibx), y=np.concatenate(fiby),
@@ -266,19 +275,19 @@ class RVE(Application):
             fibers.fractag[endpoints] = 1
 
         # Setting the initial velocities for a shear flow.
-        fluid.v[:] = self.options.G*(fluid.x[:]-self.L/2)
+        fluid.v[:] = self.options.G*(fluid.x[:]-self.C/2)
 
         if self.n > 0:
-            fibers.v[:] = self.options.G*(fibers.x[:]-self.L/2)
+            fibers.v[:] = self.options.G*(fibers.x[:]-self.C/2)
             return [fluid, fibers]
         else:
             return [fluid]
 
     def create_domain(self):
         """The channel has periodic boundary conditions in x-direction."""
-        return DomainManager(xmin=0, xmax=self.L, periodic_in_x=True,
-                             ymin=0, ymax=self.L, periodic_in_y=True,
-                             zmin=0, zmax=self.L, periodic_in_z=True,
+        return DomainManager(xmin=0, xmax=self.C, periodic_in_x=True,
+                             ymin=0, ymax=self.C, periodic_in_y=True,
+                             zmin=0, zmax=self.C, periodic_in_z=True,
                              gamma_yx=self.options.G,
                              n_layers=1,
                              dt=self.solver.dt)
