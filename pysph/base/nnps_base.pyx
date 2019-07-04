@@ -362,8 +362,9 @@ cdef class CPUDomainManager:
         self.dbl_max = np.finfo(float).max
 
         # time for Lees-Edwards BC
-        self.t = -dt   # account for first two iterations at compiling.
+        self.t = 0   # account for first iterations at compiling.
         self.dt = dt
+        self.loops = 0
 
     #### Public protocol ################################################
     def set_pa_wrappers(self, wrappers):
@@ -393,9 +394,6 @@ cdef class CPUDomainManager:
         # compute the cell sizes
         self._compute_cell_size_for_binning()
 
-        # update total time
-        self.t = self.t + 0.5*self.dt
-
         # Periodicity is handled by adjusting particles according to a
         # given cubic domain box. In parallel, it is expected that the
         # appropriate parallel NNPS is responsible for the creation of
@@ -414,6 +412,13 @@ cdef class CPUDomainManager:
 
             # Update GPU.
             self._update_gpu()
+
+            # update total time (Designed for Transport velocity step)
+            # print("Loops: %d" % self.loops)
+            if self.loops % 2 == 0:
+                self.t = self.t + self.dt
+            # print(self.t)
+            self.loops =self.loops + 1
 
     #### Private protocol ###############################################
     @cython.wraparound (False) #turn off negative indexing

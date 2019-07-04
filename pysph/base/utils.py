@@ -495,6 +495,7 @@ def get_particle_array_beadchain_solid(constants=None, **props):
 
     return pa
 
+
 def get_particle_array_beadchain_fluid(constants=None, **props):
     """Return a particle array for the BeadChainScheme for a fluid and solid.
 
@@ -525,9 +526,12 @@ def get_particle_array_beadchain_fluid(constants=None, **props):
         constants=constants, additional_props=fluid_props, **props
     )
     pa.set_output_arrays(['x', 'y', 'z', 'u', 'v', 'w', 'rho', 'm', 'h', 'p',
-                          'pid', 'gid', 'V'])
+                          'pid', 'gid', 'V', 'tag', 'dudx', 'dudy', 'dudz',
+                          'dvdx', 'dvdy', 'dvdz',
+                          'dwdx', 'dwdy', 'dwdz'])
 
     return pa
+
 
 def get_particle_array_beadchain_fiber(constants=None, **props):
     """Return a particle array for the BeadChainScheme for a fiber.
@@ -562,7 +566,9 @@ def get_particle_array_beadchain_fiber(constants=None, **props):
     pa.set_output_arrays(['x', 'y', 'z', 'u', 'v', 'w', 'rho', 'm', 'h', 'p',
                           'holdtag', 'gid', 'ug', 'vg', 'wg', 'V', 'Fx', 'Fy',
                           'Fz', 'rxnext', 'rynext', 'rznext', 'rnext', 'pid',
-                          'rxprev', 'ryprev', 'rzprev', 'rprev', 'fidx',
-                          'fractag', 'lprev', 'lnext'])
+                          'rxprev', 'ryprev', 'rzprev', 'rprev', 'fidx', 'tag',
+                          'fractag', 'lprev', 'lnext', 'dudx', 'dudy', 'dudz',
+                          'dvdx', 'dvdy', 'dvdz',
+                          'dwdx', 'dwdy', 'dwdz', 'Fwx', 'Fwy', 'Fwz'])
 
     return pa

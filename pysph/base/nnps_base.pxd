@@ -179,6 +179,7 @@ cdef class CPUDomainManager:
 
     cdef public double t             # Time for Lees-Edwards BC
     cdef public double dt            # Time step for Lees-Edwards BC
+    cdef public int loops            # loop counter
 
     cdef double dbl_max              # Maximum value of double
 
