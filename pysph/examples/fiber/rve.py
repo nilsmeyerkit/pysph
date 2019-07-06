@@ -222,7 +222,7 @@ class RVE(Application):
                         fy[i] < yy+self.dx/2 and
                         fy[i] > yy-self.dx/2 and
                         fz[i] < zz+self.dx/2 and
-                        fz[i] > zz-self.dx/2):
+                            fz[i] > zz-self.dx/2):
                         indices.append(i)
                 # periodic extending below
                 elif xx-self.L/2 < 0:
@@ -231,7 +231,7 @@ class RVE(Application):
                         fy[i] < yy+self.dx/2 and
                         fy[i] > yy-self.dx/2 and
                         fz[i] < zz+self.dx/2 and
-                        fz[i] > zz-self.dx/2):
+                            fz[i] > zz-self.dx/2):
                         indices.append(i)
                 # standard case
                 else:
@@ -240,7 +240,7 @@ class RVE(Application):
                         fy[i] < yy+self.dx/2 and
                         fy[i] > yy-self.dx/2 and
                         fz[i] < zz+self.dx/2 and
-                        fz[i] > zz-self.dx/2):
+                            fz[i] > zz-self.dx/2):
                         indices.append(i)
 
             # Generating fiber particle grid. Uncomment proper section for

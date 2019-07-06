@@ -133,7 +133,7 @@ class FiberIntegrator(Tool):
         # iterated in an inner loop.
         if self.innerloop:
             # second integrator
-            #self.fiber_integrator = EulerIntegrator(fiber=EBGStep())
+            # self.fiber_integrator = EulerIntegrator(fiber=EBGStep())
             steppers = {}
             for f in scheme.fibers:
                 steppers[f] = EBGStep()

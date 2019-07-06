@@ -212,14 +212,14 @@ class Friction(Equation):
         super(Friction, self).__init__(dest, sources)
 
     def initialize(self, d_idx, d_au, d_av, d_aw):
-       d_au[d_idx] = 0.0
-       d_av[d_idx] = 0.0
-       d_aw[d_idx] = 0.0
+        d_au[d_idx] = 0.0
+        d_av[d_idx] = 0.0
+        d_aw[d_idx] = 0.0
 
     def loop(self, d_idx, d_m, d_rho, d_rxnext, d_rynext, d_rznext,
-                d_rnext, d_rxprev, d_ryprev, d_rzprev, d_rprev, d_fractag,
-                d_au, d_av, d_aw, d_dudx, d_dudy, d_dudz, d_dvdx,
-                d_dvdy, d_dvdz, d_dwdx, d_dwdy, d_dwdz):
+             d_rnext, d_rxprev, d_ryprev, d_rzprev, d_rprev, d_fractag,
+             d_au, d_av, d_aw, d_dudx, d_dudy, d_dudz, d_dvdx,
+             d_dvdy, d_dvdz, d_dwdx, d_dwdy, d_dwdz):
         if (d_rnext[d_idx] > 1E-14 and d_rprev[d_idx] > 1E-14):
 
             dx = d_rxprev[d_idx]-d_rxnext[d_idx]
