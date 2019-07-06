@@ -552,13 +552,7 @@ class Solver(object):
              only_real=self.output_only_real, mpi_comm=comm,
              compress=self.compress_output)
         if self.vtk:
-            dump_vtk(fname, self.particles,
-                scalars=['rho', 'p', 'holdtag', 'fractag', 'V', 'color'],
-                velocity=['u', 'v', 'w'],
-                next=['rxnext','rynext','rznext'],
-                prev=['rxprev','ryprev','rzprev'],
-                acceleration=['au','av','aw'],
-                reaction_force=['Fx','Fy','Fz'])
+            dump_vtk(fname, self.particles)
 
     def load_output(self, count):
         """Load particle data from dumped output file.
