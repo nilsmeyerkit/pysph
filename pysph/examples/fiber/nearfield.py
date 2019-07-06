@@ -193,28 +193,19 @@ class Channel(Application):
         fx, fy, fz = self.get_meshgrid(_x, _y)
 
         # add some random noise
-        # noise = dx2
-        # fx = fx + np.random.normal(0,noise, fx.shape)
-        # fy = fy + np.random.normal(0,noise, fy.shape)
+        noise = fdx/20
+        fx = fx + np.random.normal(0, noise, fx.shape)
+        fy = fy + np.random.normal(0, noise, fy.shape)
 
         # Remove particles at fiber position. Uncomment proper section for
         # horizontal or vertical alignment respectivley.
-        indices = []
         dist = 100000
         for i in range(len(fx)):
             xx = self.x_fiber
             yy = self.y_fiber
             zz = self.z_fiber
-
-            if (fx[i] < xx + self.dx / 2 and fx[i] > xx - self.dx / 2 and
-                fy[i] < yy + self.dx / 2 and fy[i] > yy - self.dx / 2 and
-                    fz[i] < zz + self.dx / 2 and fz[i] > zz - self.dx / 2):
-                indices.append(i)
             if ((fx[i] - xx)**2 + (fy[i] - yy)**2 + (fz[i] - zz)**2) < dist:
                 min_dist_idx = i
-
-        if len(indices) == 0:
-            indices.append(min_dist_idx)
 
         # fiber
         _fibx = np.array([xx])
@@ -258,7 +249,7 @@ class Channel(Application):
             name='channel', x=cx, y=cy, m=mass, rho=self.rho0, h=self.h0, V=V)
         fluid = get_particle_array_beadchain_fluid(
             name='fluid', x=fx, y=fy, m=mass, rho=self.rho0, h=self.h0, V=V)
-        fluid.remove_particles(indices)
+        fluid.remove_particles([min_dist_idx])
         fiber = get_particle_array_beadchain_fiber(
             name='fiber', x=fibx, y=fiby, m=fiber_mass, rho=self.rho0,
             h=self.h0, lprev=self.dx, lnext=self.dx, phi0=np.pi, phifrac=2.0,
