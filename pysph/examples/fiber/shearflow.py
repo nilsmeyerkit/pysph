@@ -34,13 +34,32 @@ from pysph.solver.tools import FiberIntegrator
 from pysph.sph.scheme import BeadChainScheme
 
 
-def get_equivalent_aspect_ratio(aspect_ratio):
+def get_cox_aspect_ratio(aspect_ratio):
     u"""Jeffrey's equivalent aspect ratio.
 
     Approximation from
     Cox et al.
     """
     return 1.24 * aspect_ratio / np.sqrt(np.log(aspect_ratio))
+
+
+def get_zhang_aspect_ratio(aspect_ratio):
+    """Jeffery's equivalent aspect ratio.
+
+    Approximation from
+    Zhang et al. 2011
+    """
+    return (0.000035*aspect_ratio**3 - 0.00467*aspect_ratio**2 +
+            0.764*aspect_ratio + 0.404)
+
+
+def get_gm_aspect_ratio(aspect_ratio):
+    """Jeffery's equivalent aspect ratio.
+
+    Approximation from
+    Goldsmith and Mason
+    """
+    return 0.742*aspect_ratio-0.0017*aspect_ratio**2
 
 
 def jeffery_ode(phi, t, ar, G):
@@ -163,7 +182,7 @@ class Channel(Application):
             else:
                 self.D = 0.000002 * self.rho0 * self.options.ar
         else:
-            self.D = 0.00000001 * self.rho0 * self.options.ar
+            self.D = 0.000000001 * self.rho0 * self.options.ar
 
         # For 2 dimensions surface, mass and moments have a different
         # coputation than for 3 dimensions.
@@ -612,7 +631,7 @@ class Channel(Application):
             print(T)
             T_mean = np.mean(T)
             T_std = np.std(T)
-            are = get_equivalent_aspect_ratio(self.options.ar)
+            are = get_cox_aspect_ratio(self.options.ar)
             l_cox = (are + 1.0 / are)
             T_cox = np.pi * l_cox / self.options.G
             l = (self.options.ar + 1.0 / self.options.ar)
@@ -651,11 +670,15 @@ class Channel(Application):
         print("Solving Jeffery's ODE")
         t = np.array(t)
         phi0 = angle[0]
-        are = get_equivalent_aspect_ratio(self.options.ar)
-        angle_jeffery = odeint(jeffery_ode, phi0, t, atol=1E-15,
-                               args=(self.options.ar, self.options.G))
+        ar_zhang = get_zhang_aspect_ratio(self.options.ar)
+        ar_cox = get_cox_aspect_ratio(self.options.ar)
+        ar_gm = get_gm_aspect_ratio(self.options.ar)
+        angle_jeffery_zhang = odeint(jeffery_ode, phi0, t, atol=1E-15,
+                                     args=(ar_zhang, self.options.G))
         angle_jeffery_cox = odeint(jeffery_ode, phi0, t, atol=1E-15,
-                                   args=(are, self.options.G))
+                                   args=(ar_cox, self.options.G))
+        angle_jeffery_gm = odeint(jeffery_ode, phi0, t, atol=1E-15,
+                                   args=(ar_gm, self.options.G))
 
         # constraint between -pi/2 and pi/2
         # angle_jeffery = (angle_jeffery+np.pi/2.0)%np.pi-np.pi/2.0
@@ -665,19 +688,20 @@ class Channel(Application):
 
         # plot computed angle and Jeffery's solution
         plt.plot(t, angle, '-k')
-        plt.plot(t, angle_jeffery, '--k')
-        plt.plot(t, angle_jeffery_cox, '.k', color='grey')
+        plt.plot(t, angle_jeffery_zhang, '--k', color='grey')
+        plt.plot(t, angle_jeffery_cox, ':k', color='grey')
+        plt.plot(t, angle_jeffery_gm, '.k', color='grey')
 
         # labels
         plt.xlabel('Time $t$ in s')
-        plt.ylabel('Rotation angle $\phi$')
-        plt.legend(['SPH Simulation', 'Jeffery', 'Jeffery (equiv.)'])
+        plt.ylabel(r'Rotation angle $\phi$')
+        plt.legend(['SPH Simulation', 'Jeffery (Zhang)', 'Jeffery (Cox)', 'Jeffery (Goldsm.)'])
         plt.grid()
         x1, x2, y1, y2 = plt.axis()
         plt.axis((0, x2, 0, y2))
         ax = plt.gca()
         ax.set_yticks([0, 0.5 * np.pi, np.pi, 1.5 * np.pi])
-        ax.set_yticklabels(['0', '$\pi/2$', '$\pi$', '$3/2\pi$'])
+        ax.set_yticklabels(['0', r'$\pi/2$', r'$\pi$', r'$3/2\pi$'])
         plt.tight_layout()
 
         # save figure
@@ -692,11 +716,6 @@ class Channel(Application):
         except ImportError:
             print("Did not write tikz figure.")
         print("Angleplot written to %s." % angfig)
-
-        # save angles as *.csv file
-        csv_file = os.path.join(self.output_dir, 'angle.csv')
-        angle_jeffery = np.reshape(angle_jeffery, (angle_jeffery.size,))
-        np.savetxt(csv_file, (t, angle, angle_jeffery), delimiter=',')
 
         # open new figure
         plt.figure()
