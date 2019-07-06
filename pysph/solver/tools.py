@@ -105,6 +105,7 @@ class FiberIntegrator(Tool):
         is neseccery to not disturb the real velocity through artificial
         damping in this step. The ebg velocity is initialized for each
         inner loop again and reset in the outer loop."""
+        from math import ceil
         from pysph.base.kernels import QuinticSpline
         from pysph.sph.integrator_step import EBGStep
         from compyle.config import get_config
@@ -192,6 +193,8 @@ class FiberIntegrator(Tool):
                 gamma_zx = domain.manager.gamma_zx
                 gamma_zy = domain.manager.gamma_zy
                 n_layers = domain.manager.n_layers
+                N = self.steps or int(ceil(self.dt/self.fiber_dt))
+                dt = self.dt/N
                 self.domain = DomainManager(xmin=xmin, xmax=xmax, ymin=ymin,
                                             ymax=ymax, zmin=zmin, zmax=zmax,
                                             periodic_in_x=periodic_in_x,
@@ -201,7 +204,7 @@ class FiberIntegrator(Tool):
                                             gamma_zx=gamma_zx,
                                             gamma_zy=gamma_zy,
                                             n_layers=n_layers,
-                                            dt=self.fiber_dt
+                                            dt=2*dt
                                             )
             else:
                 self.domain = None

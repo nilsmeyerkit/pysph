@@ -299,7 +299,7 @@ class RVE(Application):
         else:
             return [FiberIntegrator(self.particles, self.scheme,
                                     self.domain,
-                                    updates=False,
+                                    updates=True,
                                     #  parallel=True
                                     )]
 
