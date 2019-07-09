@@ -818,7 +818,6 @@ class BeadChainScheme(Scheme):
         for fluid in self.fluids:
             g2.append(StateEquation(
                 dest=fluid, sources=None, p0=self.p0, rho0=self.rho0, b=1.0))
-            g2.append(VelocityGradient(dest=fluid, sources=all))
 
         for solid in self.solids:
             g2.append(SetWallVelocity(dest=solid,
@@ -828,7 +827,6 @@ class BeadChainScheme(Scheme):
         for fiber in self.fibers:
             g2.append(StateEquation(dest=fiber, sources=None, p0=self.p0,
                                     rho0=self.rho0, b=1.0))
-            g2.append(VelocityGradient(dest=fiber, sources=all))
             if self.viscous_fiber:
                 g2.append(SetWallVelocity(dest=fiber,
                                           sources=self.fluids, dim=self.dim))
@@ -847,6 +845,7 @@ class BeadChainScheme(Scheme):
         g4 = []
         for fiber in self.fibers:
             g4.append(ComputeDistance(dest=fiber, sources=[fiber]))
+            g4.append(VelocityGradient(dest=fiber, sources=all))
 
         equations.append(Group(equations=g4))
 
