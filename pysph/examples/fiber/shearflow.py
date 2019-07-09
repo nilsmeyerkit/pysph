@@ -122,7 +122,7 @@ class Channel(Application):
         )
         group.add_argument(
             "--frac", action="store", type=float, dest="phifrac",
-            default=2.0, help="Critical bending angle for fracture."
+            default=5.0, help="Critical bending angle for fracture."
         )
         group.add_argument(
             "--fluidres", action="store", type=float, dest="fluid_res",
@@ -182,7 +182,7 @@ class Channel(Application):
             else:
                 self.D = 0.000002 * self.rho0 * self.options.ar
         else:
-            self.D = 0.000000001 * self.rho0 * self.options.ar
+            self.D = 0.00000001 * self.rho0 * self.options.ar
 
         # For 2 dimensions surface, mass and moments have a different
         # coputation than for 3 dimensions.
@@ -220,8 +220,9 @@ class Channel(Application):
     def configure_scheme(self):
         self.scheme.configure(
             rho0=self.rho0, c0=self.c0, nu=self.nu,
-            p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=self.A, Ip=self.Ip,
-            J=self.J, E=self.options.E, D=self.D, dim=self.options.dim)
+            p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=self.A,
+            Ip=self.Ip, J=self.J, E=self.options.E, D=self.D,
+            dim=self.options.dim)
         self.scheme.configure_solver(
             tf=self.t, vtk=self.options.vtk, N=self.options.rot * 200)
         # self.scheme.configure_solver(tf=self.t, pfreq=1,
