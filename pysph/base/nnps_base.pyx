@@ -415,7 +415,8 @@ cdef class CPUDomainManager:
 
             # update total time (Designed for Transport velocity step)
             # print("Loops: %d" % self.loops)
-            if self.loops % 2 == 0:
+            # print("dt : %f" % self.dt )
+            if self.loops > 0 and self.loops % 2 == 1:
                 self.t = self.t + self.dt
             # print(self.t)
             self.loops =self.loops + 1

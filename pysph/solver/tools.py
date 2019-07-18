@@ -145,7 +145,7 @@ class FiberIntegrator(Tool):
             equations = []
             g1 = []
             for fiber in scheme.fibers:
-                g1.append(ComputeDistance(dest=fiber,sources=[fiber]))
+                g1.append(ComputeDistance(dest=fiber, sources=[fiber]))
             equations.append(Group(equations=g1))
 
             g2 = []

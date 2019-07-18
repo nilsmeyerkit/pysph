@@ -36,7 +36,7 @@ class RVE(Application):
         )
         group.add_argument(
             "--ar", action="store", type=int, dest="ar",
-            default=10, help="Aspect ratio of fiber"
+            default=5, help="Aspect ratio of fiber"
         )
         group.add_argument(
             "--rho", action="store", type=float, dest="rho0",
@@ -117,6 +117,10 @@ class RVE(Application):
 
         # The density can be scaled using the mass scaling factor.
         self.rho0 = self.options.rho0*self.scale_factor
+
+        Vmax = self.options.G * self.L / 2.0
+        Re_scaled = self.rho0 * Vmax * self.L / self.options.mu
+        print("Scaled Reynolds number: %g" % Re_scaled)
 
         # The kinematic viscosity is computed from absolute viscosity and
         # scaled (!) density.
@@ -245,9 +249,14 @@ class RVE(Application):
 
             # Generating fiber particle grid. Uncomment proper section for
             # horizontal or vertical alignment respectivley.
-            _fibx = np.arange(xx-self.L/2,
-                              xx+self.L/2 - self.dx/4,
-                              self.dx)
+            if self.options.ar % 2 == 1:
+                _fibx = np.linspace(xx-self.options.ar//2*self.dx,
+                                    xx+self.options.ar//2*self.dx,
+                                    self.options.ar)
+            else:
+                _fibx = np.arange(xx-self.L/2,
+                                  xx+self.L/2 - self.dx/4,
+                                  self.dx)
             _fiby = np.array([yy])
             _fibz = np.array([zz])
             _fibx, _fiby, _fibz = self.get_meshgrid(_fibx, _fiby, _fibz)
@@ -352,7 +361,11 @@ class RVE(Application):
                     pz = np.mean(fiber.rznext[start:end])
 
                     n = np.array([px, py, pz])
-                    p = n/np.linalg.norm(n)
+                    norm = np.linalg.norm(n)
+                    if norm == 0:
+                        p = np.array([1, 0, 0])
+                    else:
+                        p = n/norm
                     directions.append(p)
 
                 N = len(directions)
