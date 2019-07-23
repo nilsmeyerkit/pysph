@@ -86,6 +86,10 @@ class RVE(Application):
             "--C", action="store", type=float, dest="C",
             default=15.0, help="Cube size as multiples of fiber diameter."
         )
+        group.add_argument(
+            "--continue", action="store", type=str, dest="continuation",
+            default=None, help="Set a file for continuation of run."
+        )
 
     def consume_user_options(self):
         """Initialization of geometry, properties and time stepping."""
@@ -186,111 +190,124 @@ class RVE(Application):
         matrix, a fiber with additional properties and a channel of dummy
         particles."""
 
-        # The fluid might be scaled compared to the fiber. fdx is a shorthand
-        # for the fluid spacing and dx2 is a shorthand for the half of it.
-        fdx = self.dx
-        dx2 = fdx/2
+        if not self.options.continuation:
+            # The fluid might be scaled compared to the fiber. fdx is a
+            # shorthand for the fluid spacing and dx2 is a shorthand for
+            # the half of it.
+            fdx = self.dx
+            dx2 = fdx/2
 
-        # Computation of each particles initial volume.
-        volume = fdx**3
-        fiber_volume = self.dx**3
+            # Computation of each particles initial volume.
+            volume = fdx**3
+            fiber_volume = self.dx**3
 
-        # Mass is set to get the reference density of rho0.
-        mass = volume * self.rho0
-        fiber_mass = fiber_volume * self.rho0
+            # Mass is set to get the reference density of rho0.
+            mass = volume * self.rho0
+            fiber_mass = fiber_volume * self.rho0
 
-        # Initial inverse volume (necessary for transport velocity equations)
-        V = 1./volume
-        fiber_V = 1./fiber_volume
+            # Initial inverse volume (necessary for transport velocity
+            # equations)
+            V = 1./volume
+            fiber_V = 1./fiber_volume
 
-        # Creating grid points for particles
-        _x = np.arange(dx2, self.C, fdx)
-        _y = np.arange(dx2, self.C, fdx)
-        _z = np.arange(dx2, self.C, fdx)
-        fx, fy, fz = self.get_meshgrid(_x, _y, _z)
+            # Creating grid points for particles
+            _x = np.arange(dx2, self.C, fdx)
+            _y = np.arange(dx2, self.C, fdx)
+            _z = np.arange(dx2, self.C, fdx)
+            fx, fy, fz = self.get_meshgrid(_x, _y, _z)
 
-        # Remove particles at fiber position.
-        indices = []
-        fibers = []
-        fibx = tuple()
-        fiby = tuple()
-        fibz = tuple()
+            # Remove particles at fiber position.
+            indices = []
+            fibers = []
+            fibx = tuple()
+            fiby = tuple()
+            fibz = tuple()
 
-        positions = list(itertools.product(_x, _y, _z))
-        for xx, yy, zz in random.sample(positions, self.n):
-            for i in range(len(fx)):
-                # periodic extending above
-                if xx+self.L/2 > self.C:
-                    if ((fx[i] < (xx+self.L/2-self.C) or
-                        fx[i] > xx-self.L/2) and
-                        fy[i] < yy+self.dx/2 and
-                        fy[i] > yy-self.dx/2 and
-                        fz[i] < zz+self.dx/2 and
-                            fz[i] > zz-self.dx/2):
-                        indices.append(i)
-                # periodic extending below
-                elif xx-self.L/2 < 0:
-                    if ((fx[i] < xx+self.L/2 or
-                        fx[i] > (xx-self.L/2+self.C)) and
-                        fy[i] < yy+self.dx/2 and
-                        fy[i] > yy-self.dx/2 and
-                        fz[i] < zz+self.dx/2 and
-                            fz[i] > zz-self.dx/2):
-                        indices.append(i)
-                # standard case
+            positions = list(itertools.product(_x, _y, _z))
+            for xx, yy, zz in random.sample(positions, self.n):
+                for i in range(len(fx)):
+                    # periodic extending above
+                    if xx+self.L/2 > self.C:
+                        if ((fx[i] < (xx+self.L/2-self.C) or
+                            fx[i] > xx-self.L/2) and
+                            fy[i] < yy+self.dx/2 and
+                            fy[i] > yy-self.dx/2 and
+                            fz[i] < zz+self.dx/2 and
+                                fz[i] > zz-self.dx/2):
+                            indices.append(i)
+                    # periodic extending below
+                    elif xx-self.L/2 < 0:
+                        if ((fx[i] < xx+self.L/2 or
+                            fx[i] > (xx-self.L/2+self.C)) and
+                            fy[i] < yy+self.dx/2 and
+                            fy[i] > yy-self.dx/2 and
+                            fz[i] < zz+self.dx/2 and
+                                fz[i] > zz-self.dx/2):
+                            indices.append(i)
+                    # standard case
+                    else:
+                        if (fx[i] < xx+self.L/2 and
+                            fx[i] > xx-self.L/2 and
+                            fy[i] < yy+self.dx/2 and
+                            fy[i] > yy-self.dx/2 and
+                            fz[i] < zz+self.dx/2 and
+                                fz[i] > zz-self.dx/2):
+                            indices.append(i)
+
+                # Generating fiber particle grid. Uncomment proper section for
+                # horizontal or vertical alignment respectivley.
+                if self.options.ar % 2 == 1:
+                    _fibx = np.linspace(xx-self.options.ar//2*self.dx,
+                                        xx+self.options.ar//2*self.dx,
+                                        self.options.ar)
                 else:
-                    if (fx[i] < xx+self.L/2 and
-                        fx[i] > xx-self.L/2 and
-                        fy[i] < yy+self.dx/2 and
-                        fy[i] > yy-self.dx/2 and
-                        fz[i] < zz+self.dx/2 and
-                            fz[i] > zz-self.dx/2):
-                        indices.append(i)
+                    _fibx = np.arange(xx-self.L/2,
+                                      xx+self.L/2 - self.dx/4,
+                                      self.dx)
+                _fiby = np.array([yy])
+                _fibz = np.array([zz])
+                _fibx, _fiby, _fibz = self.get_meshgrid(_fibx, _fiby, _fibz)
+                fibx = fibx + (_fibx,)
+                fiby = fiby + (_fiby,)
+                fibz = fibz + (_fibz,)
 
-            # Generating fiber particle grid. Uncomment proper section for
-            # horizontal or vertical alignment respectivley.
-            if self.options.ar % 2 == 1:
-                _fibx = np.linspace(xx-self.options.ar//2*self.dx,
-                                    xx+self.options.ar//2*self.dx,
-                                    self.options.ar)
+            print("Created %d fibers." % self.n)
+
+            # Finally create all particle arrays. Note that fluid particles are
+            # removed in the area, where the fiber is placed.
+            fluid = get_particle_array_beadchain_fluid(
+                name='fluid', x=fx, y=fy, z=fz, m=mass, rho=self.rho0,
+                h=self.h0, V=V)
+            fluid.remove_particles(indices)
+
+            if self.n > 0:
+                fibers = get_particle_array_beadchain_fiber(
+                    name='fibers', x=np.concatenate(fibx),
+                    y=np.concatenate(fiby),
+                    z=np.concatenate(fibz), m=fiber_mass, rho=self.rho0,
+                    h=self.h0, lprev=self.dx, lnext=self.dx, phi0=np.pi,
+                    phifrac=2.0, fidx=range(self.options.ar*self.n), V=fiber_V)
+                # 'Break' fibers in segments
+                endpoints = [i*self.options.ar-1 for i in range(1, self.n)]
+                fibers.fractag[endpoints] = 1
+
+            # Setting the initial velocities for a shear flow.
+            fluid.v[:] = self.options.G*(fluid.x[:]-self.C/2)
+
+            if self.n > 0:
+                fibers.v[:] = self.options.G*(fibers.x[:]-self.C/2)
+                return [fluid, fibers]
             else:
-                _fibx = np.arange(xx-self.L/2,
-                                  xx+self.L/2 - self.dx/4,
-                                  self.dx)
-            _fiby = np.array([yy])
-            _fibz = np.array([zz])
-            _fibx, _fiby, _fibz = self.get_meshgrid(_fibx, _fiby, _fibz)
-            fibx = fibx + (_fibx,)
-            fiby = fiby + (_fiby,)
-            fibz = fibz + (_fibz,)
-
-        print("Created %d fibers." % self.n)
-
-        # Finally create all particle arrays. Note that fluid particles are
-        # removed in the area, where the fiber is placed.
-        fluid = get_particle_array_beadchain_fluid(
-            name='fluid', x=fx, y=fy, z=fz, m=mass, rho=self.rho0, h=self.h0,
-            V=V)
-        fluid.remove_particles(indices)
-
-        if self.n > 0:
-            fibers = get_particle_array_beadchain_fiber(
-                name='fibers', x=np.concatenate(fibx), y=np.concatenate(fiby),
-                z=np.concatenate(fibz), m=fiber_mass, rho=self.rho0,
-                h=self.h0, lprev=self.dx, lnext=self.dx, phi0=np.pi,
-                phifrac=2.0, fidx=range(self.options.ar*self.n), V=fiber_V)
-            # 'Break' fibers in segments
-            endpoints = [i*self.options.ar-1 for i in range(1, self.n)]
-            fibers.fractag[endpoints] = 1
-
-        # Setting the initial velocities for a shear flow.
-        fluid.v[:] = self.options.G*(fluid.x[:]-self.C/2)
-
-        if self.n > 0:
-            fibers.v[:] = self.options.G*(fibers.x[:]-self.C/2)
-            return [fluid, fibers]
+                return [fluid]
         else:
-            return [fluid]
+            data = load(self.options.continuation)
+            fluid = data['arrays']['fluid']
+            fibers = data['arrays']['fibers']
+            fibers.phifrac[:] = 2.0
+            fibers.phi0[:] = np.pi
+            self.solver.t = data['solver_data']['t']
+            self.solver.count = data['solver_data']['count']
+            return [fluid, fibers]
 
     def create_domain(self):
         """The channel has periodic boundary conditions in x-direction."""
