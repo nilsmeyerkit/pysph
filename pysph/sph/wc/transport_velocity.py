@@ -53,9 +53,9 @@ class SummationDensity(Equation):
         d_V[d_idx] = 0.0
         d_rho[d_idx] = 0.0
 
-    def loop(self, d_idx, s_idx, d_V, d_rho, d_m, s_m, WIJ):
-        d_V[d_idx] += s_m[s_idx]/d_m[d_idx] * WIJ
-        d_rho[d_idx] += s_m[s_idx] * WIJ
+    def loop(self, d_idx, d_V, d_rho, d_m, WIJ):
+        d_V[d_idx] += WIJ
+        d_rho[d_idx] += d_m[d_idx] * WIJ
 
 
 class VolumeSummation(Equation):
@@ -71,8 +71,8 @@ class VolumeSummation(Equation):
     def initialize(self, d_idx, d_V):
         d_V[d_idx] = 0.0
 
-    def loop(self, d_idx, s_idx, d_m, s_m, d_V, WIJ):
-        d_V[d_idx] += s_m[s_idx]/d_m[d_idx] * WIJ
+    def loop(self, d_idx, d_m, d_V, WIJ):
+        d_V[d_idx] += WIJ
 
 
 class VolumeFromMassDensity(Equation):
@@ -603,7 +603,7 @@ class SolidWallNoSlipBC(Equation):
         d_av[d_idx] = 0.0
         d_aw[d_idx] = 0.0
 
-    def loop(self, d_idx, s_idx, d_m, s_m, d_rho, s_rho, d_V, s_V,
+    def loop(self, d_idx, s_idx, d_m, d_rho, s_rho, d_V, s_V,
              d_u, d_v, d_w,
              s_Fwx, s_Fwy, s_Fwz,
              d_au, d_av, d_aw,
