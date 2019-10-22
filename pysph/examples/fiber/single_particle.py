@@ -46,11 +46,11 @@ class SingleParticle(Application):
         )
         group.add_argument(
             "--size", action="store", type=int, dest="size",
-            default=20, help="Cube size (multiples of fiber diameter)"
+            default=30, help="Cube size (multiples of fiber diameter)"
         )
         group.add_argument(
             "--t", action="store", type=float, dest="t",
-            default=0.00005, help="Cube size (multiples of fiber diameter)"
+            default=0.0001, help="Cube size (multiples of fiber diameter)"
         )
         group.add_argument(
             "--vtk", action="store_true", dest='vtk',
@@ -146,10 +146,20 @@ class SingleParticle(Application):
         noise = fdx/20
         fx = fx + np.random.normal(0, noise, fx.shape)
         fy = fy + np.random.normal(0, noise, fy.shape)
+        fz = fz + np.random.normal(0, noise, fz.shape)
 
         # fiber
         fibx, fiby, fibz = self.get_meshgrid(
             self.x_fiber, self.y_fiber, self.z_fiber)
+
+        dist = 100000
+        for i in range(len(fx)):
+            xx = self.x_fiber
+            yy = self.y_fiber
+            zz = self.z_fiber
+            if ((fx[i] - xx)**2 + (fy[i] - yy)**2 + (fz[i] - zz)**2) < dist:
+                min_dist_idx = i
+                dist = ((fx[i] - xx)**2 + (fy[i] - yy)**2 + (fz[i] - zz)**2)
 
         # Determine the size of dummy region
         ghost_extent = 3*fdx
@@ -193,6 +203,7 @@ class SingleParticle(Application):
         fluid = get_particle_array_beadchain_fluid(
             name='fluid', x=fx, y=fy, z=fz, m=mass, rho=self.rho0, h=self.h0,
             V=V)
+        fluid.remove_particles([min_dist_idx])
         fiber = get_particle_array_beadchain_fiber(
             name='fiber', x=fibx, y=fiby, z=fibz, m=mass, rho=self.rho0,
             h=self.h0, lprev=self.dx, lnext=self.dx, phi0=np.pi,
@@ -236,14 +247,7 @@ class SingleParticle(Application):
         It interpolates the properties from particles using the kernel.
         """
         from pysph.tools.interpolator import Interpolator
-        import matplotlib
-        matplotlib.use('Agg')
         from matplotlib import pyplot as plt
-        from matplotlib import rc
-        rc('font', **{'family': 'serif',
-                      'serif': ['Computer Modern'],
-                      'size': 18})
-        rc('text', usetex=True)
 
         # Interpolation grid
         X = np.linspace(0, self.L, 100)
@@ -269,18 +273,14 @@ class SingleParticle(Application):
         plt.figure()
         # configuring color map
         cmap = plt.cm.Reds
-        levels = np.linspace(0.0, 1.1, 30)
+        levels = np.linspace(0.0, 1.1, 11)
 
         # velocity contour (ungly solution against white lines:
         # repeat plots....)
-        plt.contourf(x, y, vmag, levels=levels,
-                     cmap=cmap, vmin=0.0, vmax=1.1)
-        plt.contourf(x, y, vmag, levels=levels,
-                     cmap=cmap, vmin=0.0, vmax=1.1)
-        vel = plt.contourf(x, y, vmag, levels=levels,
-                           cmap=cmap, vmin=0.0, vmax=1.1)
+        plt.contourf(x, y, vmag, levels=levels, cmap=cmap)
+        vel = plt.contourf(x, y, vmag, levels=levels, cmap=cmap)
         # streamlines
-        y_start = np.linspace(0.0, self.L, 20)
+        y_start = np.linspace(0.0, self.L, 40)
         x_start = np.zeros_like(y_start)
         start_points = np.array(list(zip(x_start, y_start)))
         plt.streamplot(X, Y, u, v,
@@ -301,6 +301,37 @@ class SingleParticle(Application):
         fig = os.path.join(self.output_dir, 'streamplot.pdf')
         plt.savefig(fig, dpi=300, bbox_inches='tight')
         print("Streamplot written to %s." % fig)
+
+        # Interpolate along line
+        interp = Interpolator(list(data['arrays'].values()),
+                              x=X, y=self.L/2.0, z=self.L/2.0)
+        interp.update_particle_arrays(list(data['arrays'].values()))
+        u = interp.interpolate('u')
+        p = interp.interpolate('p')
+
+        R = (3/(4*np.pi))**(1.0/3.0)*self.dx
+        r = X-self.L/2
+        ref_u = 1.0-3.0*R/(2*np.abs(r))+R**3/(2*np.abs(r)**3)
+        ref_p = -3.0/2.0*self.options.mu*self.v*R*r/(np.abs(r)**3)
+        mask = (np.abs(r) < R)
+        ref_u[mask] = np.nan
+        ref_p[mask] = np.nan
+
+        # open new figure
+        plt.figure()
+        plt.plot(X, ref_u, X, u/self.v)
+        # save plot
+        fig = os.path.join(self.output_dir, 'velocity.pdf')
+        plt.savefig(fig, dpi=300, bbox_inches='tight')
+        print("Velocity written to %s." % fig)
+
+        # open new figure
+        plt.figure()
+        plt.plot(X, ref_p, X, p)
+        # save plot
+        fig = os.path.join(self.output_dir, 'pressure.pdf')
+        plt.savefig(fig, dpi=300, bbox_inches='tight')
+        print("Pressure written to %s." % fig)
 
     def _plot_history(self):
         """This function create all plots employing a iteration over all time
