@@ -3,6 +3,8 @@
 3D Flow around a single fixed fiber particle.
 ################################################################################
 """
+import os
+
 # numpy and scipy
 import numpy as np
 
@@ -228,6 +230,78 @@ class SingleParticle(Application):
         z = z.ravel()
         return [x, y, z]
 
+    def _plot_streamlines(self):
+        """This function plots streamlines and the pressure field.
+
+        It interpolates the properties from particles using the kernel.
+        """
+        from pysph.tools.interpolator import Interpolator
+        import matplotlib
+        matplotlib.use('Agg')
+        from matplotlib import pyplot as plt
+        from matplotlib import rc
+        rc('font', **{'family': 'serif',
+                      'serif': ['Computer Modern'],
+                      'size': 18})
+        rc('text', usetex=True)
+
+        # Interpolation grid
+        X = np.linspace(0, self.L, 100)
+        Y = np.linspace(0, self.L, 110)
+        x, y = np.meshgrid(X, Y)
+
+        # Extract positions of fiber particles from last step to plot them
+        # on top of velocities.
+        last_output = self.output_files[-1]
+        data = load(last_output)
+        fiber = data['arrays']['fiber']
+        fx = fiber.x
+        fy = fiber.y
+
+        # Interpolation (precompiled) of velocities
+        interp = Interpolator(list(data['arrays'].values()),
+                              x=x, y=y, z=self.L/2.0)
+        interp.update_particle_arrays(list(data['arrays'].values()))
+        u = interp.interpolate('u')
+        v = interp.interpolate('v')
+        vmag = np.sqrt(u**2 + v**2)/self.v
+        # open new figure
+        plt.figure()
+        # configuring color map
+        cmap = plt.cm.Reds
+        levels = np.linspace(0.0, 1.1, 30)
+
+        # velocity contour (ungly solution against white lines:
+        # repeat plots....)
+        plt.contourf(x, y, vmag, levels=levels,
+                     cmap=cmap, vmin=0.0, vmax=1.1)
+        plt.contourf(x, y, vmag, levels=levels,
+                     cmap=cmap, vmin=0.0, vmax=1.1)
+        vel = plt.contourf(x, y, vmag, levels=levels,
+                           cmap=cmap, vmin=0.0, vmax=1.1)
+        # streamlines
+        y_start = np.linspace(0.0, self.L, 20)
+        x_start = np.zeros_like(y_start)
+        start_points = np.array(list(zip(x_start, y_start)))
+        plt.streamplot(X, Y, u, v,
+                       start_points=start_points,
+                       color='k',
+                       density=100,
+                       arrowstyle='-',
+                       linewidth=1.0)
+        # fiber
+        plt.scatter(fx, fy, color='w')
+
+        # set labels
+        cbar = plt.colorbar(vel, shrink=0.5)
+        cbar.set_label('Velocity $v/v_0$', labelpad=20.0)
+        plt.tight_layout()
+
+        # save plot
+        fig = os.path.join(self.output_dir, 'streamplot.pdf')
+        plt.savefig(fig, dpi=300, bbox_inches='tight')
+        print("Streamplot written to %s." % fig)
+
     def _plot_history(self):
         """This function create all plots employing a iteration over all time
         steps. """
@@ -266,13 +340,16 @@ class SingleParticle(Application):
 
         bar.finish()
 
-        np.savetxt('result.csv', np.transpose([t, Fx, Fy, Fz]), delimiter=',')
+        file = os.path.join(self.output_dir, 'force.csv')
+
+        np.savetxt(file, np.transpose([t, Fx, Fy, Fz]), delimiter=',')
 
     def post_process(self, info_fname):
         if len(self.output_files) == 0:
             return
 
         self._plot_history()
+        self._plot_streamlines()
 
 
 if __name__ == '__main__':
