@@ -15,7 +15,7 @@ References
 """
 
 from pysph.sph.equation import Equation
-from math import sin, pi, sqrt
+from math import sin, pi
 
 # constants
 M_PI = pi
@@ -55,11 +55,11 @@ class SummationDensity(Equation):
 
     def loop(self, d_idx, d_V, d_rho, d_m, WIJ):
         d_V[d_idx] += WIJ
-        d_rho[d_idx] += d_m[d_idx] * WIJ
+        d_rho[d_idx] += d_m[d_idx]*WIJ
 
 
 class VolumeSummation(Equation):
-    """**Number density for volume computation**
+    r"""**Number density for volume computation**
 
     See `SummationDensity`
 
@@ -71,7 +71,7 @@ class VolumeSummation(Equation):
     def initialize(self, d_idx, d_V):
         d_V[d_idx] = 0.0
 
-    def loop(self, d_idx, d_m, d_V, WIJ):
+    def loop(self, d_idx, d_V, WIJ):
         d_V[d_idx] += WIJ
 
 
@@ -97,16 +97,6 @@ class SetWallVelocity(Equation):
     *filtered* velocity variables :math:`uf, vf, wf`.
 
     """
-    def __init__(self, dest, sources, dim=0):
-        r"""
-        Parameters
-        ----------
-        dim : int
-            problem dimension
-        """
-
-        self.dim = dim
-        super(SetWallVelocity, self).__init__(dest, sources)
 
     def initialize(self, d_idx, d_uf, d_vf, d_wf, d_wij, d_Fwx, d_Fwy, d_Fwz):
         d_uf[d_idx] = 0.0
@@ -117,24 +107,18 @@ class SetWallVelocity(Equation):
         d_Fwy[d_idx] = 0.0
         d_Fwz[d_idx] = 0.0
 
-    def loop(self, d_idx, s_idx, d_uf, d_vf, d_wf, d_V, s_V,
+    def loop(self, d_idx, s_idx, d_uf, d_vf, d_wf,
              s_u, s_v, s_w, d_wij, WIJ):
 
         # normalisation factor is different from 'V' as the particles
         # near the boundary do not have full kernel support
         d_wij[d_idx] += WIJ
 
-        # particle volumes; d_V is inverse volume
-        Vi = 1./d_V[d_idx]
-        Vj = 1./s_V[s_idx]
-
-        factor = (Vi/Vj)**(1.0/self.dim)
-
         # sum in Eq. (22)
         # this will be normalized in post loop
-        d_uf[d_idx] += factor * s_u[s_idx] * WIJ
-        d_vf[d_idx] += factor * s_v[s_idx] * WIJ
-        d_wf[d_idx] += factor * s_w[s_idx] * WIJ
+        d_uf[d_idx] += s_u[s_idx] * WIJ
+        d_vf[d_idx] += s_v[s_idx] * WIJ
+        d_wf[d_idx] += s_w[s_idx] * WIJ
 
     def post_loop(self, d_uf, d_vf, d_wf, d_wij, d_idx,
                   d_ug, d_vg, d_wg, d_u, d_v, d_w):
@@ -169,9 +153,28 @@ class ContinuityEquation(Equation):
     def initialize(self, d_idx, d_arho):
         d_arho[d_idx] = 0.0
 
-    def loop(self, d_idx, s_idx, d_arho, s_V, d_rho, VIJ, DWIJ):
+    def loop(self, d_idx, s_idx, d_arho, s_m, s_rho, d_rho, VIJ, DWIJ):
         vijdotdwij = VIJ[0] * DWIJ[0] + VIJ[1] * DWIJ[1] + VIJ[2] * DWIJ[2]
-        d_arho[d_idx] += d_rho[d_idx] * vijdotdwij / s_V[s_idx]
+        d_arho[d_idx] += d_rho[d_idx] * vijdotdwij * s_m[s_idx] / s_rho[s_idx]
+
+
+class ContinuitySolid(Equation):
+    """Continuity equation for the solid's ghost particles.
+
+    The key difference is that we use the ghost velocity ug, and not the
+    particle velocity u.
+
+    """
+    def loop(self, d_idx, s_idx, d_rho, d_u, d_v, d_w, d_arho,
+             s_m, s_rho, s_ug, s_vg, s_wg, DWIJ):
+        Vj = s_m[s_idx] / s_rho[s_idx]
+        rhoi = d_rho[d_idx]
+        uij = d_u[d_idx] - s_ug[s_idx]
+        vij = d_v[d_idx] - s_vg[s_idx]
+        wij = d_w[d_idx] - s_wg[s_idx]
+        vij_dot_dwij = uij*DWIJ[0] + vij*DWIJ[1] + wij*DWIJ[2]
+
+        d_arho[d_idx] += rhoi*Vj*vij_dot_dwij
 
 
 class StateEquation(Equation):
@@ -295,19 +298,21 @@ class MomentumEquationPressureGradient(Equation):
         # particle volumes; d_V is inverse volume
         Vi = 1./d_V[d_idx]
         Vj = 1./s_V[s_idx]
+        Vi2 = Vi * Vi
+        Vj2 = Vj * Vj
 
         # inverse mass of destination particle
         mi1 = 1.0/d_m[d_idx]
 
         # accelerations 1st term in Eq. (8)
-        tmp = -pij * mi1 * 2 * (Vi * Vj)
+        tmp = -pij * mi1 * (Vi2 + Vj2)
 
         d_au[d_idx] += tmp * DWIJ[0]
         d_av[d_idx] += tmp * DWIJ[1]
         d_aw[d_idx] += tmp * DWIJ[2]
 
         # contribution due to the background pressure Eq. (13)
-        tmp = -self.pb * mi1 * 2 * (Vi * Vj)
+        tmp = -self.pb * mi1 * (Vi2 + Vj2)
 
         d_auhat[d_idx] += tmp * DWIJ[0]
         d_avhat[d_idx] += tmp * DWIJ[1]
@@ -374,9 +379,11 @@ class MomentumEquationViscosity(Equation):
         # particle volumes, d_V is inverse volume.
         Vi = 1./d_V[d_idx]
         Vj = 1./s_V[s_idx]
+        Vi2 = Vi * Vi
+        Vj2 = Vj * Vj
 
         # accelerations 3rd term in Eq. (8)
-        tmp = 1./d_m[d_idx] * 2 * (Vi * Vj) * etaij * Fij/(R2IJ + EPS)
+        tmp = 1./d_m[d_idx] * (Vi2 + Vj2) * etaij * Fij/(R2IJ + EPS)
 
         d_au[d_idx] += tmp * VIJ[0]
         d_av[d_idx] += tmp * VIJ[1]
@@ -491,6 +498,8 @@ class MomentumEquationArtificialStress(Equation):
         # particle volumes; d_V is inverse volume.
         Vi = 1./d_V[d_idx]
         Vj = 1./s_V[s_idx]
+        Vi2 = Vi * Vi
+        Vj2 = Vj * Vj
 
         # artificial stress tensor
         Axxi = rhoi*ui*(uhati - ui)
@@ -533,7 +542,7 @@ class MomentumEquationArtificialStress(Equation):
         )
 
         # accelerations 2nd part of Eq. (8)
-        tmp = 1./d_m[d_idx] * 2 * (Vi * Vj)
+        tmp = 1./d_m[d_idx] * (Vi2 + Vj2)
 
         d_au[d_idx] += tmp * Ax
         d_av[d_idx] += tmp * Ay
@@ -619,21 +628,24 @@ class SolidWallNoSlipBC(Equation):
         # particle volumes; d_V inverse volume.
         Vi = 1./d_V[d_idx]
         Vj = 1./s_V[s_idx]
+        Vi2 = Vi * Vi
+        Vj2 = Vj * Vj
 
         # scalar part of the kernel gradient
         Fij = XIJ[0]*DWIJ[0] + XIJ[1]*DWIJ[1] + XIJ[2]*DWIJ[2]
 
         # viscous contribution (third term) from Eq. (8), with VIJ
         # defined appropriately using the ghost values
-        tmp = 2 * (Vi * Vj) * (etaij * Fij/(R2IJ + EPS))
+        tmp = 1./d_m[d_idx] * (Vi2 + Vj2) * (etaij * Fij/(R2IJ + EPS))
 
-        d_au[d_idx] += tmp/d_m[d_idx] * (d_u[d_idx] - s_ug[s_idx])
-        d_av[d_idx] += tmp/d_m[d_idx] * (d_v[d_idx] - s_vg[s_idx])
-        d_aw[d_idx] += tmp/d_m[d_idx] * (d_w[d_idx] - s_wg[s_idx])
+        d_au[d_idx] += tmp * (d_u[d_idx] - s_ug[s_idx])
+        d_av[d_idx] += tmp * (d_v[d_idx] - s_vg[s_idx])
+        d_aw[d_idx] += tmp * (d_w[d_idx] - s_wg[s_idx])
 
-        s_Fwx[s_idx] -= tmp * (d_u[d_idx] - s_ug[s_idx])
-        s_Fwy[s_idx] -= tmp * (d_v[d_idx] - s_vg[s_idx])
-        s_Fwz[s_idx] -= tmp * (d_w[d_idx] - s_wg[s_idx])
+        s_Fwx[s_idx] -= tmp * d_m[d_idx] * (d_u[d_idx] - s_ug[s_idx])
+        s_Fwy[s_idx] -= tmp * d_m[d_idx] * (d_v[d_idx] - s_vg[s_idx])
+        s_Fwz[s_idx] -= tmp * d_m[d_idx] * (d_w[d_idx] - s_wg[s_idx])
+
 
 class FiberViscousTraction(Equation):
     r"""**Fiber boundary condition**
@@ -670,15 +682,18 @@ class FiberViscousTraction(Equation):
         # particle volumes; d_V inverse volume.
         Vi = 1./d_V[d_idx]
         Vj = 1./s_V[s_idx]
+        Vi2 = Vi * Vi
+        Vj2 = Vj * Vj
 
         # scalar part of the kernel gradient
         Fij = XIJ[0]*DWIJ[0] + XIJ[1]*DWIJ[1] + XIJ[2]*DWIJ[2]
 
-        tmp = 2 * (Vi * Vj) * etaij * Fij/(R2IJ + EPS)
+        tmp = 1./d_m[d_idx] * (Vi2 + Vj2) * (etaij * Fij/(R2IJ + EPS))
 
-        d_au[d_idx] += tmp/d_m[d_idx] * (d_ug[d_idx]-s_u[s_idx])
-        d_av[d_idx] += tmp/d_m[d_idx] * (d_vg[d_idx]-s_v[s_idx])
-        d_aw[d_idx] += tmp/d_m[d_idx] * (d_wg[d_idx]-s_w[s_idx])
+        d_au[d_idx] += tmp * (d_ug[d_idx]-s_u[s_idx])
+        d_av[d_idx] += tmp * (d_vg[d_idx]-s_v[s_idx])
+        d_aw[d_idx] += tmp * (d_wg[d_idx]-s_w[s_idx])
+
 
 class SolidWallPressureBC(Equation):
     r"""**Solid wall pressure boundary condition** [Adami2012]_

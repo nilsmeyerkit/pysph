@@ -610,8 +610,7 @@ class TVFScheme(Scheme):
                 dest=fluid, sources=None, p0=self.p0, rho0=self.rho0, b=1.0
             ))
         for solid in self.solids:
-            g2.append(SetWallVelocity(dest=solid, sources=self.fluids,
-                                      dim=self.dim))
+            g2.append(SetWallVelocity(dest=solid, sources=self.fluids))
 
         if len(g2) > 0:
             equations.append(Group(equations=g2, real=False))

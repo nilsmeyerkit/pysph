@@ -1,11 +1,6 @@
-"""
-################################################################################
-3D Flow around a single fixed fiber particle.
-################################################################################
-"""
-import os
+"""3D Flow around a single fixed fiber particle."""
 
-# numpy and scipy
+import os
 import numpy as np
 
 # PySPH imports
@@ -15,19 +10,22 @@ from pysph.base.utils import (get_particle_array_beadchain_fluid,
                               get_particle_array_beadchain_fiber)
 
 from pysph.solver.application import Application
-from pysph.solver.utils import load, remove_irrelevant_files, FloatPBar
+from pysph.solver.utils import load, remove_irrelevant_files
 from pysph.solver.tools import FiberIntegrator
 
 from pysph.sph.scheme import BeadChainScheme
-from pysph.base.kernels import QuinticSpline, CubicSpline
+from pysph.base.kernels import CubicSpline
 
 
 class SingleParticle(Application):
+    """3D Flow around a single fixed fiber particle."""
+
     def create_scheme(self):
-        """The BeadChainScheme is used for this application."""
+        """Use BeadChainScheme is used for this application."""
         return BeadChainScheme(['fluid'], ['channel'], ['fiber'], dim=3)
 
     def add_user_options(self, group):
+        """Add options to aplication."""
         group.add_argument(
             "--d", action="store", type=float, dest="d",
             default=0.0001, help="Fiber diameter"
@@ -58,8 +56,7 @@ class SingleParticle(Application):
         )
 
     def consume_user_options(self):
-        """Initialization of geometry, properties and time stepping."""
-
+        """Initialize geometry, properties and time stepping."""
         # Initial spacing of particles is set to the same value as fiber
         # diameter.
         self.dx = self.options.d
@@ -92,6 +89,7 @@ class SingleParticle(Application):
         self.pb = self.p0
 
     def configure_scheme(self):
+        """Set up solver and scheme."""
         self.scheme.configure(
             rho0=self.rho0, c0=self.c0, nu=self.nu,
             p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=1.0,
@@ -102,10 +100,11 @@ class SingleParticle(Application):
             tf=self.options.t, vtk=self.options.vtk, N=20, kernel=kernel)
 
     def create_particles(self):
-        """Three particle arrays are created: A fluid, representing the polymer
-        matrix, a fiber with additional properties and a channel of dummy
-        particles."""
+        """Three particle arrays are created.
 
+        A fluid, representing the polymer matrix, a fiber with additional
+        properties and a channel of dummy particles.
+        """
         # short notation
         fdx = self.dx
         dx2 = fdx/2
@@ -193,15 +192,16 @@ class SingleParticle(Application):
         return [fluid, channel, fiber]
 
     def create_domain(self):
-        """The channel has periodic boundary conditions in x-direction."""
+        """Create periodic boundary conditions in x-direction."""
         return DomainManager(xmin=0, xmax=self.L, periodic_in_x=True)
 
     def create_tools(self):
+        """Add an integrator for the fiber, even if unused here."""
         return [FiberIntegrator(self.particles, self.scheme, self.domain,
                                 innerloop=False, updates=False)]
 
     def get_meshgrid(self, xx, yy, zz):
-        """This function is just a shorthand for generation of meshgrids."""
+        """Generate meshgrids quickly."""
         x, y, z = np.meshgrid(xx, yy, zz)
         x = x.ravel()
         y = y.ravel()
@@ -209,7 +209,7 @@ class SingleParticle(Application):
         return [x, y, z]
 
     def _plots(self):
-        """This function plots streamlines and the pressure field.
+        """Plot streamlines, pressure and velocity.
 
         It interpolates the properties from particles using the kernel.
         """
@@ -328,9 +328,7 @@ class SingleParticle(Application):
         print("Pressure written to %s." % fig)
 
     def _plot_history(self):
-        """This function create all plots employing a iteration over all time
-        steps. """
-
+        """Plot forces."""
         # empty list for time
         t = []
 
@@ -365,6 +363,7 @@ class SingleParticle(Application):
         np.savetxt(file, np.transpose([t, Fx, Fy, Fz]), delimiter=',')
 
     def post_process(self, info_fname):
+        """Build plots and files as results."""
         if len(self.output_files) == 0:
             return
 
