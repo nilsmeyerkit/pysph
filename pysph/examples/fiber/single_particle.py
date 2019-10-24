@@ -93,11 +93,11 @@ class SingleParticle(Application):
         self.scheme.configure(
             rho0=self.rho0, c0=self.c0, nu=self.nu,
             p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=1.0,
-            Ip=1.0, J=1.0, E=1.0, D=1.0, viscous_fiber=True)
+            Ip=1.0, J=1.0, E=1.0, D=1.0)
 
-        kernel = CubicSpline(dim=3)
+        self.kernel = CubicSpline(dim=3)
         self.scheme.configure_solver(
-            tf=self.options.t, vtk=self.options.vtk, N=20, kernel=kernel)
+            tf=self.options.t, vtk=self.options.vtk, N=20, kernel=self.kernel)
 
     def create_particles(self):
         """Three particle arrays are created.
@@ -273,13 +273,13 @@ class SingleParticle(Application):
         # Interpolate along line
         x, y = np.meshgrid(X, np.array([self.L/2.0]))
         interp = Interpolator(list(data['arrays'].values()),
-                              x=x, y=y, z=self.L/2.0)
+                              x=x, y=y, z=self.L/2.0, kernel=self.kernel)
         interp.update_particle_arrays(list(data['arrays'].values()))
         ux = interp.interpolate('u')
         px = interp.interpolate('p')
         x, y = np.meshgrid(np.array([self.L/2.0]), Y)
         interp = Interpolator(list(data['arrays'].values()),
-                              x=x, y=y, z=self.L/2.0)
+                              x=x, y=y, z=self.L/2.0, kernel=self.kernel)
         interp.update_particle_arrays(list(data['arrays'].values()))
         uy = interp.interpolate('u')
         py = interp.interpolate('p')
