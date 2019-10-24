@@ -44,7 +44,7 @@ class SingleParticle(Application):
         )
         group.add_argument(
             "--size", action="store", type=int, dest="size",
-            default=30, help="Cube size (multiples of fiber diameter)"
+            default=31, help="Cube size (multiples of fiber diameter)"
         )
         group.add_argument(
             "--t", action="store", type=float, dest="t",
@@ -200,6 +200,7 @@ class SingleParticle(Application):
         fluid.u[:] = ur*np.sin(phi)*np.cos(theta)-ut*np.sin(theta)
         fluid.v[:] = ur*np.sin(phi)*np.sin(theta)+ut*np.cos(theta)
         fluid.w[:] = ur*np.cos(phi)
+        fluid.p[:] = -1.5*self.options.mu*self.v*R*(fluid.x-self.x_fiber)/r**3
 
         # Return the particle list.
         return [fluid, channel, fiber]
@@ -207,11 +208,6 @@ class SingleParticle(Application):
     def create_domain(self):
         """Create periodic boundary conditions in x-direction."""
         return DomainManager(xmin=0, xmax=self.L, periodic_in_x=True)
-
-    def create_tools(self):
-        """Add an integrator for the fiber, even if unused here."""
-        return [FiberIntegrator(self.particles, self.scheme, self.domain,
-                                innerloop=False, updates=False)]
 
     def get_meshgrid(self, xx, yy, zz):
         """Generate meshgrids quickly."""
@@ -317,9 +313,11 @@ class SingleParticle(Application):
         plt.subplot(1, 2, 1)
         plt.plot(X/self.dx, ref_ux, X/self.dx, ux/self.v)
         plt.xlabel('X')
+        plt.ylim([0.0, 1.0])
         plt.subplot(1, 2, 2)
         plt.plot(Y/self.dx, ref_uy, Y/self.dx, uy/self.v,)
         plt.xlabel('Y')
+        plt.ylim([0.0, 1.0])
         # save plot
         fig = os.path.join(self.output_dir, 'velocity.pdf')
         plt.savefig(fig, dpi=300, bbox_inches='tight')
