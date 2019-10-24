@@ -117,10 +117,10 @@ class SingleParticle(Application):
         fx, fy, fz = self.get_meshgrid(_x, _y, _z)
 
         # add some random noise
-        noise = fdx/20
-        fx = fx + np.random.normal(0, noise, fx.shape)
-        fy = fy + np.random.normal(0, noise, fy.shape)
-        fz = fz + np.random.normal(0, noise, fz.shape)
+        # noise = fdx/20
+        # fx = fx + np.random.normal(0, noise, fx.shape)
+        # fy = fy + np.random.normal(0, noise, fy.shape)
+        # fz = fz + np.random.normal(0, noise, fz.shape)
 
         # fiber
         fibx, fiby, fibz = self.get_meshgrid(
@@ -185,8 +185,21 @@ class SingleParticle(Application):
         fiber.holdtag[:] = 100
 
         # Setting the initial velocities for a shear flow.
-        fluid.u[:] = self.v
+        # fluid.u[:] = self.v
         channel.u[:] = self.v
+
+        # set anayltical solution
+        R = (3/(4*np.pi))**(1.0/3.0)*self.dx
+        r = np.sqrt((fluid.x-self.x_fiber)**2
+                    + (fluid.y-self.y_fiber)**2
+                    + (fluid.z-self.z_fiber)**2)
+        phi = np.arccos((fluid.z-self.z_fiber)/r)
+        theta = np.arctan2((fluid.y-self.y_fiber), (fluid.x-self.x_fiber))
+        ur = self.v*(R**3/(2.*r**3)-(3.*R)/(2.*r)+1.)*np.cos(theta)
+        ut = self.v*(R**3/(4.*r**3)+(3.*R)/(4.*r)-1.)*np.sin(theta)
+        fluid.u[:] = ur*np.sin(phi)*np.cos(theta)-ut*np.sin(theta)
+        fluid.v[:] = ur*np.sin(phi)*np.sin(theta)+ut*np.cos(theta)
+        fluid.w[:] = ur*np.cos(phi)
 
         # Return the particle list.
         return [fluid, channel, fiber]
