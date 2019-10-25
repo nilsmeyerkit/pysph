@@ -69,11 +69,11 @@ class Channel(Application):
         )
         group.add_argument(
             "--mu", action="store", type=float, dest="mu",
-            default=1, help="Absolute viscosity"
+            default=63, help="Absolute viscosity"
         )
         group.add_argument(
             "--E", action="store", type=float, dest="E",
-            default=2.5E9, help="Young's modulus"
+            default=1E6, help="Young's modulus"
         )
         group.add_argument(
             "--G", action="store", type=float, dest="G",
@@ -123,7 +123,7 @@ class Channel(Application):
 
         # Density from Reynolds number
         self.Vmax = self.options.G*self.Ly/2.
-        self.rho0 = (self.options.mu*self.options.Re)/(self.Vmax*self.dx)
+        self.rho0 = (self.options.mu*self.options.Re)/(self.Vmax*self.Lf)
 
         # The channel length is twice the width + dx to make it symmetric.
         self.Lx = 2.*self.Ly + self.dx
@@ -139,7 +139,7 @@ class Channel(Application):
         self.nu = self.options.mu/self.rho0
 
         # damping from empirical guess
-        self.D = 0.01*0.2*self.options.ar
+        self.D = 0.2*self.options.ar
 
         # mass properties
         R = self.dx/2.
@@ -328,6 +328,7 @@ class Channel(Application):
         y_end = []
         # empty list for orientation angle
         angle = []
+        N = 0
 
         # iteration over all output files
         output_files = remove_irrelevant_files(self.output_files)
@@ -348,7 +349,13 @@ class Channel(Application):
             # computation of orientation angle
             dxx = fiber.x[0] - fiber.x[-1]
             dyy = fiber.y[0] - fiber.y[-1]
-            a = np.arctan(dxx/(dyy + 0.1*self.h0))
+            a = np.arctan(dxx / (dyy + 0.01 * self.h0)) + N * np.pi
+            if len(angle) > 0 and a - angle[-1] > 3:
+                N -= 1
+                a -= np.pi
+            elif len(angle) > 0 and a - angle[-1] < -3:
+                N += 1
+                a += np.pi
             angle.append(a)
 
         # open new plot
