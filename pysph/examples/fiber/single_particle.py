@@ -44,11 +44,11 @@ class SingleParticle(Application):
         )
         group.add_argument(
             "--size", action="store", type=int, dest="size",
-            default=31, help="Cube size (multiples of fiber diameter)"
+            default=50, help="Cube size (multiples of fiber diameter)"
         )
         group.add_argument(
             "--t", action="store", type=float, dest="t",
-            default=0.0005, help="Cube size (multiples of fiber diameter)"
+            default=0.001, help="Cube size (multiples of fiber diameter)"
         )
         group.add_argument(
             "--vtk", action="store_true", dest='vtk',
@@ -93,7 +93,7 @@ class SingleParticle(Application):
         self.scheme.configure(
             rho0=self.rho0, c0=self.c0, nu=self.nu,
             p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=1.0,
-            Ip=1.0, J=1.0, E=1.0, D=1.0)
+            Ip=1.0, J=1.0, E=1.0, D=1.0, fiber_like_solid=True)
 
         self.kernel = CubicSpline(dim=3)
         self.scheme.configure_solver(
@@ -145,12 +145,12 @@ class SingleParticle(Application):
         bx, by, bz = self.get_meshgrid(_x, _y, _z)
 
         # Create the channel particles at the right
-        _z = np.arange(-dx2, -dx2-ghost_extent, -fdx)
+        _x = np.arange(-dx2, -dx2-ghost_extent, -fdx)
         _y = np.arange(dx2-ghost_extent, self.L+ghost_extent, fdx)
         rx, ry, rz = self.get_meshgrid(_x, _y, _z)
 
         # Create the channel particles at the left
-        _z = np.arange(self.L+dx2, self.L+dx2+ghost_extent, fdx)
+        _x = np.arange(self.L+dx2, self.L+dx2+ghost_extent, fdx)
         _y = np.arange(dx2-ghost_extent, self.L+ghost_extent, fdx)
         lx, ly, lz = self.get_meshgrid(_x, _y, _z)
 
@@ -184,30 +184,29 @@ class SingleParticle(Application):
         # Tag particles to be hold, if requested.
         fiber.holdtag[:] = 100
 
-        # Setting the initial velocities for a shear flow.
-        # fluid.u[:] = self.v
-        channel.u[:] = self.v
+        # Setting the initial velocities
+        # fluid.w[:] = self.v
+        channel.w[:] = self.v
 
         # set anayltical solution
         R = (3/(4*np.pi))**(1.0/3.0)*self.dx
         r = np.sqrt((fluid.x-self.x_fiber)**2
                     + (fluid.y-self.y_fiber)**2
                     + (fluid.z-self.z_fiber)**2)
-        phi = np.arccos((fluid.z-self.z_fiber)/r)
-        theta = np.arctan2((fluid.y-self.y_fiber), (fluid.x-self.x_fiber))
-        ur = self.v*(R**3/(2.*r**3)-(3.*R)/(2.*r)+1.)*np.cos(theta)
-        ut = self.v*(R**3/(4.*r**3)+(3.*R)/(4.*r)-1.)*np.sin(theta)
-        fluid.u[:] = ur*np.sin(phi)*np.cos(theta)-ut*np.sin(theta)
-        fluid.v[:] = ur*np.sin(phi)*np.sin(theta)+ut*np.cos(theta)
-        fluid.w[:] = ur*np.cos(phi)
-        fluid.p[:] = -1.5*self.options.mu*self.v*R*(fluid.x-self.x_fiber)/r**3
+        theta = np.arccos((fluid.z-self.z_fiber)/r)
+        phi = np.arctan2(-(fluid.y-self.y_fiber), -(fluid.x-self.x_fiber))
+        ur = self.v*(1. + R**3/(2.*r**3) - (3.*R)/(2.*r))*np.cos(theta)
+        ut = -self.v*(1. - R**3/(4.*r**3) - (3.*R)/(4.*r))*np.sin(theta)
+        fluid.u[:] = ur*np.sin(theta)*np.cos(phi)+ut*np.cos(theta)*np.cos(phi)
+        fluid.v[:] = ur*np.sin(theta)*np.sin(phi)+ut*np.cos(theta)*np.sin(phi)
+        fluid.w[:] = ur*np.cos(theta)-ut*np.sin(theta)
 
         # Return the particle list.
         return [fluid, channel, fiber]
 
     def create_domain(self):
         """Create periodic boundary conditions in x-direction."""
-        return DomainManager(xmin=0, xmax=self.L, periodic_in_x=True)
+        return DomainManager(zmin=0, zmax=self.L, periodic_in_z=True)
 
     def get_meshgrid(self, xx, yy, zz):
         """Generate meshgrids quickly."""
@@ -227,116 +226,121 @@ class SingleParticle(Application):
 
         # Interpolation grid
         X = np.linspace(0, self.L, 100)
-        Y = np.linspace(0, self.L, 100)
-        x, y = np.meshgrid(X, Y)
+        Z = np.linspace(0, self.L, 100)
 
         # Extract positions of fiber particles from last step to plot them
         # on top of velocities.
         last_output = self.output_files[-1]
         data = load(last_output)
-        # fiber = data['arrays']['fiber']
-        # fx = fiber.x
-        # fy = fiber.y
-        #
-        # # Interpolation (precompiled) of velocities
-        # interp = Interpolator(list(data['arrays'].values()),
-        #                       x=x, y=y, z=self.L/2.0)
-        # interp.update_particle_arrays(list(data['arrays'].values()))
-        # u = interp.interpolate('u')
-        # v = interp.interpolate('v')
-        # vmag = np.sqrt(u**2 + v**2)/self.v
-        # # open new figure
-        # plt.figure()
-        # # configuring color map
-        # cmap = plt.cm.Reds
-        # levels = np.linspace(0.0, 1.1, 11)
-        #
-        # # velocity contour
-        # plt.contourf(x, y, vmag, levels=levels, cmap=cmap)
-        # vel = plt.contourf(x, y, vmag, levels=levels, cmap=cmap)
-        # # streamlines
-        # y_start = np.linspace(0.0, self.L, 40)
-        # x_start = np.zeros_like(y_start)
-        # start_points = np.array(list(zip(x_start, y_start)))
-        # plt.streamplot(X, Y, u, v,
-        #                start_points=start_points,
-        #                color='k',
-        #                density=100,
-        #                arrowstyle='-',
-        #                linewidth=1.0)
-        # # fiber
-        # plt.scatter(fx, fy, color='w')
-        # plt.xticks([])
-        # plt.yticks([])
-        #
-        # # set labels
-        # cbar = plt.colorbar(vel, shrink=0.5)
-        # cbar.set_label('Velocity $v/v_0$', labelpad=20.0)
-        # plt.tight_layout()
-        #
-        # # save plot
-        # fig = os.path.join(self.output_dir, 'streamplot.pdf')
-        # plt.savefig(fig, dpi=300, bbox_inches='tight')
-        # print("Streamplot written to %s." % fig)
+        fiber = data['arrays']['fiber']
+        fx = fiber.x
+        fy = fiber.y
+
+        # Interpolation (precompiled) of velocities
+        x, z = np.meshgrid(X, Z)
+        interp = Interpolator(list(data['arrays'].values()),
+                              x=x, y=np.array([self.L/2.0]), z=z,
+                              kernel=self.kernel)
+        interp.update_particle_arrays(list(data['arrays'].values()))
+        u = interp.interpolate('u')
+        w = interp.interpolate('w')
+        vmag = np.sqrt(u**2 + w**2)/self.v
+        # open new figure
+        plt.figure()
+        # configuring color map
+        cmap = plt.cm.Reds
+        levels = np.linspace(0.0, 1.0, 10)
+
+        # velocity contour
+        plt.contourf(x, z, vmag, levels=levels, cmap=cmap)
+        vel = plt.contourf(x, z, vmag, levels=levels, cmap=cmap)
+        # streamlines
+        x_start = np.linspace(0.0, self.L, 40)
+        z_start = np.zeros_like(x_start)
+        start_points = np.array(list(zip(x_start, z_start)))
+        plt.streamplot(X, Z, u, w,
+                       # start_points=start_points,
+                       color='k',
+                       # density=100,
+                       arrowstyle='-',
+                       linewidth=1.0)
+        # fiber
+        plt.scatter(fx, fy, color='w')
+        plt.xticks([])
+        plt.yticks([])
+
+        # set labels
+        cbar = plt.colorbar(vel, shrink=0.5)
+        cbar.set_label('Velocity $v/v_0$', labelpad=20.0)
+        plt.tight_layout()
+
+        # save plot
+        fig = os.path.join(self.output_dir, 'streamplot.pdf')
+        plt.savefig(fig, dpi=300, bbox_inches='tight')
+        print("Streamplot written to %s." % fig)
 
         # Interpolate along line
-        x, y = np.meshgrid(X, np.array([self.L/2.0]))
+        x, y, z = np.meshgrid(np.array([self.L/2.0]),
+                              np.array([self.L/2.0]),
+                              Z)
         interp = Interpolator(list(data['arrays'].values()),
-                              x=x, y=y, z=self.L/2.0, kernel=self.kernel)
+                              x=x, y=y, z=z, kernel=self.kernel)
         interp.update_particle_arrays(list(data['arrays'].values()))
-        ux = interp.interpolate('u')
-        px = interp.interpolate('p')
-        x, y = np.meshgrid(np.array([self.L/2.0]), Y)
+        uz = interp.interpolate('w')
+        pz = interp.interpolate('p')
+        x, y, z = np.meshgrid(X,
+                              np.array([self.L/2.0]),
+                              np.array([self.L/2.0]))
         interp = Interpolator(list(data['arrays'].values()),
-                              x=x, y=y, z=self.L/2.0, kernel=self.kernel)
+                              x=x, y=y, z=z, kernel=self.kernel)
         interp.update_particle_arrays(list(data['arrays'].values()))
-        uy = interp.interpolate('u')
-        py = interp.interpolate('p')
+        ux = interp.interpolate('w')
 
         # reference solution
         R = (3/(4*np.pi))**(1.0/3.0)*self.dx
-        rx = X-self.L/2
-        ry = Y-self.L/2
-        ref_ux = 1.0-3.0*R/(2*np.abs(rx))+R**3/(2*np.abs(rx)**3)
-        ref_uy = 1.0-3.0*R/(4*np.abs(ry))-R**3/(2*np.abs(ry)**3)
-        ref_px = -3.0/2.0*self.options.mu*self.v*R*rx/(np.abs(rx)**3)
-        ref_py = np.zeros_like(ref_px)
+        rz = np.linspace(0, self.L, 500)-self.L/2
+        rx = np.linspace(0, self.L, 500)-self.L/2
+        ref_uz = 1.0-3.0*R/(2*np.abs(rz))+R**3/(2*np.abs(rz)**3)
+        ref_ux = 1.0-3.0*R/(4*np.abs(rx))-R**3/(2*np.abs(rx)**3)
+        ref_pz = -3.0/2.0*self.options.mu*self.v*R*rz/(np.abs(rz)**3)
+        mask = (np.abs(rz) < R)
+        ref_uz[mask] = np.nan
+        ref_pz[mask] = np.nan
         mask = (np.abs(rx) < R)
         ref_ux[mask] = np.nan
-        ref_px[mask] = np.nan
-        mask = (np.abs(ry) < R)
-        ref_uy[mask] = np.nan
-        ref_py[mask] = np.nan
-        pmax = np.nanmax(ref_px)
+        pmax = np.nanmax(ref_pz)
 
         # Velocity plot
         plt.subplot(1, 2, 1)
-        plt.plot(X/self.dx, ref_ux, X/self.dx, ux/self.v)
-        plt.xlabel('X')
+        plt.plot((rz+self.L/2)/self.dx, ref_uz, Z/self.dx, uz/self.v)
+        plt.xlabel('z')
         plt.ylim([0.0, 1.0])
         plt.subplot(1, 2, 2)
-        plt.plot(Y/self.dx, ref_uy, Y/self.dx, uy/self.v,)
-        plt.xlabel('Y')
+        plt.plot((rx+self.L/2)/self.dx, ref_ux, X/self.dx, ux/self.v,)
+        plt.xlabel('X')
         plt.ylim([0.0, 1.0])
         # save plot
-        fig = os.path.join(self.output_dir, 'velocity.pdf')
+        fig = os.path.join(self.output_dir, 'velocity.png')
         plt.savefig(fig, dpi=300, bbox_inches='tight')
-        print("Velocity written to %s." % fig)
+        try:
+            from matplotlib2tikz import save as tikz_save
+            tikz_save(fig.replace('.png', '.tex'))
+        except ImportError:
+            print("Did not write tikz figure.")
 
         # Pressure plot
         plt.figure()
-        plt.subplot(1, 2, 1)
-        plt.plot(X/self.dx, ref_px/pmax, X/self.dx, px/pmax)
-        plt.xlabel('X')
-        plt.ylim([-1.0, 1.0])
-        plt.subplot(1, 2, 2)
-        plt.plot(Y/self.dx, ref_py/pmax, Y/self.dx, py/pmax)
-        plt.xlabel('Y')
+        plt.plot((rz+self.L/2)/self.dx, ref_pz/pmax, Z/self.dx, pz/pmax)
+        plt.xlabel('z')
         plt.ylim([-1.0, 1.0])
         # save plot
-        fig = os.path.join(self.output_dir, 'pressure.pdf')
+        fig = os.path.join(self.output_dir, 'pressure.png')
         plt.savefig(fig, dpi=300, bbox_inches='tight')
-        print("Pressure written to %s." % fig)
+        try:
+            from matplotlib2tikz import save as tikz_save
+            tikz_save(fig.replace('.png', '.tex'))
+        except ImportError:
+            print("Did not write tikz figure.")
 
     def _plot_history(self):
         """Plot forces."""
