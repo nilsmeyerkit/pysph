@@ -3,10 +3,6 @@
 import os
 from math import sqrt
 import numpy as np
-from matplotlib import pyplot as plt
-from matplotlib import rc
-rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
-rc('text', usetex=True)
 
 # PySPH imports
 from pysph.base.utils import get_particle_array_beadchain_fiber
@@ -23,6 +19,7 @@ from pysph.sph.equation import Group
 from pysph.sph.wc.transport_velocity import MomentumEquationPressureGradient
 from pysph.sph.fiber.utils import Damping, HoldPoints, ComputeDistance
 from pysph.sph.fiber.beadchain import Tension, Bending
+
 
 class Beam(Application):
     def add_user_options(self, group):
@@ -44,11 +41,11 @@ class Beam(Application):
         )
         group.add_argument(
             "--gy", action="store", type=float, dest="gy",
-            default=0, help="Body force in y-direction."
+            default=10, help="Body force in y-direction."
         )
         group.add_argument(
             "--gz", action="store", type=float, dest="gz",
-            default=10, help="Body force in z-direction."
+            default=0, help="Body force in z-direction."
         )
 
     def consume_user_options(self):
@@ -121,7 +118,6 @@ class Beam(Application):
             rho=self.rho0, h=self.h, lprev=self.dx, lnext=self.dx, phi0=np.pi,
             phifrac=2.0, fidx=range(self.N), V=1./volume)
 
-
         # tag particles to be hold
         fiber.holdtag[0] = 1
         fiber.holdtag[1] = 2
@@ -138,16 +134,15 @@ class Beam(Application):
             ),
             Group(
                 equations=[
-                    MomentumEquationPressureGradient(dest='fiber',
-                       sources=['fiber'], pb=0.0, gx=self.gx, gy=self.gy,
-                       gz=self.gz),
-                    Tension(dest='fiber', sources=None,
-                        ea=self.E*self.A),
-                    Bending(dest='fiber', sources=None,
-                        ei=self.E*self.Ip),
-                    Damping(dest='fiber',
-                        sources=None,
-                        d = self.D)
+                    MomentumEquationPressureGradient(
+                        dest='fiber', sources=['fiber'], pb=0.0,
+                        gx=self.gx, gy=self.gy, gz=self.gz),
+                    Tension(
+                        dest='fiber', sources=None, ea=self.E*self.A),
+                    Bending(
+                        dest='fiber', sources=None, ei=self.E*self.Ip),
+                    Damping(
+                        dest='fiber', sources=None, d=self.D)
                 ],
             ),
             Group(
@@ -164,50 +159,55 @@ class Beam(Application):
         # Setting up the default integrator for fiber particles
         kernel = QuinticSpline(dim=3)
         integrator = EPECIntegrator(fiber=TransportVelocityStep())
-        solver = Solver(kernel=kernel, dim=3, integrator=integrator, dt=self.dt,
-                         tf=self.tf, N=100,
-                         vtk=True)
+        solver = Solver(
+            kernel=kernel, dim=3, integrator=integrator,
+            dt=self.dt, tf=self.tf, N=100, vtk=True)
         return solver
 
     def _plot_oscillation(self, file):
+        from matplotlib import pyplot as plt
         t, disp_x, disp_y = np.loadtxt(file, delimiter=',')
         plt.figure()
         plt.plot(t, disp_x, '-k')
         plt.plot(t, disp_y, '--k')
-        plt.title("Oscillation (d=%g, w0x=%g, w0y=%g, dt=%g)"%(
-            self.D,self.omega0_tension, self.omega0_bending, self.dt))
-        plt.xlabel('t'); plt.ylabel('Displacement')
+        plt.title("Oscillation (d=%g, w0x=%g, w0y=%g, dt=%g)" % (
+                  self.D, self.omega0_tension, self.omega0_bending, self.dt))
+        plt.xlabel('t')
+        plt.ylabel('Displacement')
         plt.legend(['x-direction', 'y-direction'])
         plt.grid()
-        plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+        plt.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
         fig = os.path.join(self.output_dir, "oscillation.pdf")
         plt.savefig(fig, dpi=300, bbox_inches='tight')
         print("Figure written to %s." % fig)
 
     def _plot_displacement(self, file):
+        from matplotlib import pyplot as plt
         x0, disp_x, exp_x, disp_y, exp_y = np.loadtxt(file, delimiter=',')
         plt.figure()
-        plt.plot(x0, disp_x,'*k')
+        plt.plot(x0, disp_x, '*k')
         plt.plot(x0, exp_x, '-k')
         plt.title("Displacement in x")
         plt.legend(['simulation', 'exact'])
-        plt.xlabel('x'); plt.ylabel('u')
+        plt.xlabel('x')
+        plt.ylabel('u')
         plt.grid()
-        plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+        plt.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
         fig = os.path.join(self.output_dir, "displacement_x.pdf")
         plt.savefig(fig, dpi=300, bbox_inches='tight')
         print("Figure written to %s." % fig)
 
         plt.figure()
-        plt.plot(x0, disp_y,'*k')
+        plt.plot(x0, disp_y, '*k')
         plt.plot(x0, exp_y, '-k')
-        x1,x2,y1,y2 = plt.axis()
-        plt.axis((0,x2,0,y2))
+        x1, x2, y1, y2 = plt.axis()
+        plt.axis((0, x2, 0, y2))
         plt.title("Displacement in y")
         plt.legend(['simulation', 'exact'])
-        plt.xlabel('x'); plt.ylabel('y')
+        plt.xlabel('x')
+        plt.ylabel('y')
         plt.grid()
-        plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+        plt.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
         fig = os.path.join(self.output_dir, "displacement_y.pdf")
         plt.savefig(fig, dpi=300, bbox_inches='tight')
         print("Figure written to %s." % fig)
@@ -223,8 +223,9 @@ class Beam(Application):
             x.append(pa.x[-1])
             w.append(pa.y[-1])
             t.append(data['solver_data']['t'])
-        osc = os.path.join(self.output_dir,"oscillation_%g.csv"%self.options.d)
-        np.savetxt(osc, (t,x-x[0], w-w[0]), delimiter=',')
+        osc = os.path.join(self.output_dir,
+                           "oscillation_%g.csv" % self.options.d)
+        np.savetxt(osc, (t, x-x[0], w-w[0]), delimiter=',')
 
         last_output = self.output_files[-1]
         data = load(last_output)
@@ -240,7 +241,7 @@ class Beam(Application):
         k = self.rho0*self.gy*self.A/(self.E*self.Ip)
         y_exact = k/24*(x0**4-4*self.L*x0**3+6*self.L**2*x0**2)
 
-        disp = os.path.join(self.output_dir, "disp_%d.csv"%self.options.N)
+        disp = os.path.join(self.output_dir, "disp_%d.csv" % self.options.N)
         np.savetxt(disp, (x0, x-x0, x_exact, y, y_exact), delimiter=',')
         return [osc, disp]
 
