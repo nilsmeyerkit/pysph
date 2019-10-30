@@ -7,6 +7,7 @@ Equations for fibers based on bead chain model.
 from math import sqrt, acos, sin
 from pysph.sph.equation import Equation
 
+
 class EBGVelocityReset(Equation):
     r"""** Resets EBG velocities **"""
 
@@ -20,7 +21,8 @@ class EBGVelocityReset(Equation):
         self.velocity_correction = velocity_correction
         super(EBGVelocityReset, self).__init__(dest, sources)
 
-    def loop(self, d_idx, d_eu, d_ev, d_ew, d_ex, d_ey, d_ez, d_u, d_v, d_w, dt):
+    def loop(self, d_idx, d_eu, d_ev, d_ew, d_ex, d_ey, d_ez,
+             d_u, d_v, d_w, dt):
         d_eu[d_idx] = 0
         d_ev[d_idx] = 0
         d_ew[d_idx] = 0
@@ -75,11 +77,12 @@ class Tension(Equation):
             d_av[d_idx] += (t*d_rynext[d_idx]/d_rnext[d_idx])/d_m[d_idx]
             d_aw[d_idx] += (t*d_rznext[d_idx]/d_rnext[d_idx])/d_m[d_idx]
 
+
 class ArtificialDamping(Equation):
     r"""**Damp EBG particle motion**
 
-    EBG Particles are damped based on EBG velocity. Use this in combination with
-    EBGStep and EBGVelocityReset.
+    EBG Particles are damped based on EBG velocity. Use this in combination
+    with EBGStep and EBGVelocityReset.
     """
 
     def __init__(self, dest, sources, d):
@@ -101,6 +104,7 @@ class ArtificialDamping(Equation):
         d_au[d_idx] -= 2*self.d*d_eu[d_idx]/d_m[d_idx]
         d_av[d_idx] -= 2*self.d*d_ev[d_idx]/d_m[d_idx]
         d_aw[d_idx] -= 2*self.d*d_ew[d_idx]/d_m[d_idx]
+
 
 class Bending(Equation):
     r"""**Linear elastic fiber bending**
@@ -125,9 +129,9 @@ class Bending(Equation):
         d_aw[d_idx] = 0.0
 
     def loop(self, d_idx, d_m, d_phi0, d_fractag, d_phifrac,
-                d_rxnext, d_rynext, d_rznext, d_rnext,
-                d_rxprev, d_ryprev, d_rzprev, d_rprev,
-                d_au, d_av, d_aw):
+             d_rxnext, d_rynext, d_rznext, d_rnext,
+             d_rxprev, d_ryprev, d_rzprev, d_rprev,
+             d_au, d_av, d_aw):
         if d_rnext[d_idx] > 1E-14 and d_rprev[d_idx] > 1E-14:
             # vector to previous particle
             xab = d_rxprev[d_idx]
@@ -235,44 +239,44 @@ class Friction(Equation):
                 fac = (2*self.A * self.d/2 * self.mu)/(s2**2+s3**2)
 
                 Mx = fac*((s1*s2**2*s3+s1*s3**3)*d_dvdx[d_idx]
-                    +(-s1**2*s2*s3+s2*s3)*d_dvdy[d_idx]
-                    +(-s1**2*s3**2-s2**2)*d_dvdz[d_idx]
-                    +(-s1*s2**3-s1*s2*s3**2)*d_dwdx[d_idx]
-                    +(s1**2*s2**2+s3**2)*d_dwdy[d_idx]
-                    +(s1**2*s2*s3-s2*s3)*d_dwdz[d_idx])
+                          + (-s1**2*s2*s3+s2*s3)*d_dvdy[d_idx]
+                          + (-s1**2*s3**2-s2**2)*d_dvdz[d_idx]
+                          + (-s1*s2**3-s1*s2*s3**2)*d_dwdx[d_idx]
+                          + (s1**2*s2**2+s3**2)*d_dwdy[d_idx]
+                          + (s1**2*s2*s3-s2*s3)*d_dwdz[d_idx])
                 My = fac*((-s1*s2**2*s3-s1*s3**3)*d_dudx[d_idx]
-                    +(s1**2*s2*s3-s2*s3)*d_dudy[d_idx]
-                    +(s1**2*s3**2+s2**2)*d_dudz[d_idx]
-                    +(-s2**4-2*s2**2*s3**2-s3**4)*d_dwdx[d_idx]
-                    +(s1*s2**3+s1*s2*s3**2)*d_dwdy[d_idx]
-                    +(s1*s2**2*s3+s1*s3**3)*d_dwdz[d_idx])
+                          + (s1**2*s2*s3-s2*s3)*d_dudy[d_idx]
+                          + (s1**2*s3**2+s2**2)*d_dudz[d_idx]
+                          + (-s2**4-2*s2**2*s3**2-s3**4)*d_dwdx[d_idx]
+                          + (s1*s2**3+s1*s2*s3**2)*d_dwdy[d_idx]
+                          + (s1*s2**2*s3+s1*s3**3)*d_dwdz[d_idx])
                 Mz = fac*((s1*s2**3+s1*s2*s3**2)*d_dudx[d_idx]
-                    +(-s1**2*s2**2-s3**2)*d_dudy[d_idx]
-                    +(-s1**2*s2*s3+s2*s3)*d_dudz[d_idx]
-                    +(s2**4+2*s2**2*s3**2+s3**4)*d_dvdx[d_idx]
-                    +(-s1*s2**3-s1*s2*s3**2)*d_dvdy[d_idx]
-                    +(-s1*s2**2*s3-s1*s3**3)*d_dvdz[d_idx])
+                          + (-s1**2*s2**2-s3**2)*d_dudy[d_idx]
+                          + (-s1**2*s2*s3+s2*s3)*d_dudz[d_idx]
+                          + (s2**4+2*s2**2*s3**2+s3**4)*d_dvdx[d_idx]
+                          + (-s1*s2**3-s1*s2*s3**2)*d_dvdy[d_idx]
+                          + (-s1*s2**2*s3-s1*s3**3)*d_dvdz[d_idx])
             else:
                 fac = (2*self.A * self.d/2 * self.mu)/(s1**2+s3**2)
 
                 Mx = fac*((-s1*s2**2*s3+s1*s3)*d_dvdx[d_idx]
-                    +(s1**2*s2*s3+s2*s3**3)*d_dvdy[d_idx]
-                    +(-s2**2*s3**2-s1**2)*d_dvdz[d_idx]
-                    +(-s1**3*s2-s1*s2*s3**2)*d_dwdx[d_idx]
-                    +(s1**4+2*s1**2*s3**2+s3**4)*d_dwdy[d_idx]
-                    +(-s1**2*s2*s3-s2*s3**3)*d_dwdz[d_idx])
+                          + (s1**2*s2*s3+s2*s3**3)*d_dvdy[d_idx]
+                          + (-s2**2*s3**2-s1**2)*d_dvdz[d_idx]
+                          + (-s1**3*s2-s1*s2*s3**2)*d_dwdx[d_idx]
+                          + (s1**4+2*s1**2*s3**2+s3**4)*d_dwdy[d_idx]
+                          + (-s1**2*s2*s3-s2*s3**3)*d_dwdz[d_idx])
                 My = fac*((s1*s2**2*s3-s1*s3)*d_dudx[d_idx]
-                    +(-s1**2*s2*s3-s2*s3**3)*d_dudy[d_idx]
-                    +(s2**2*s3**2+s1**2)*d_dudz[d_idx]
-                    +(-s1**2*s2**2-s3**2)*d_dwdx[d_idx]
-                    +(s1**3*s2+s1*s2*s3**2)*d_dwdy[d_idx]
-                    +(-s1*s2**2*s3+s1*s3)*d_dwdz[d_idx])
+                          + (-s1**2*s2*s3-s2*s3**3)*d_dudy[d_idx]
+                          + (s2**2*s3**2+s1**2)*d_dudz[d_idx]
+                          + (-s1**2*s2**2-s3**2)*d_dwdx[d_idx]
+                          + (s1**3*s2+s1*s2*s3**2)*d_dwdy[d_idx]
+                          + (-s1*s2**2*s3+s1*s3)*d_dwdz[d_idx])
                 Mz = fac*((s1**3*s2+s1*s2*s3**2)*d_dudx[d_idx]
-                    +(-s1**4-2*s1**2*s3**2-s3**4)*d_dudy[d_idx]
-                    +(s1**2*s2*s3+s2*s3**3)*d_dudz[d_idx]
-                    +(s1**2*s2**2+s3**2)*d_dvdx[d_idx]
-                    +(-s1**3*s2-s1*s2*s3**2)*d_dvdy[d_idx]
-                    +(s1*s2**2*s3-s1*s3)*d_dvdz[d_idx])
+                          + (-s1**4-2*s1**2*s3**2-s3**4)*d_dudy[d_idx]
+                          + (s1**2*s2*s3+s2*s3**3)*d_dudz[d_idx]
+                          + (s1**2*s2**2+s3**2)*d_dvdx[d_idx]
+                          + (-s1**3*s2-s1*s2*s3**2)*d_dvdy[d_idx]
+                          + (s1*s2**2*s3-s1*s3)*d_dvdz[d_idx])
 
             d_au[d_idx+1] += (My*d_rznext[d_idx]-Mz*d_rynext[d_idx])/(2*self.J)
             d_av[d_idx+1] += (Mz*d_rxnext[d_idx]-Mx*d_rznext[d_idx])/(2*self.J)

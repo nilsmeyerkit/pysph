@@ -5,16 +5,17 @@ Utitlity equations for fibers
 """
 
 from pysph.sph.equation import Equation
-from math import sqrt, acos, atan, sin, pi, floor
+from math import sqrt
+
 
 class ComputeDistance(Equation):
     r"""** Compute Distances to neighbours**
     The loop saves vectors to previous and next particle only."""
 
     def loop(self, d_idx, s_idx, d_rxnext, d_rynext, d_rznext, d_rnext,
-                d_rxprev, d_ryprev, d_rzprev, d_rprev, s_fractag, d_fidx,
-                s_fidx, d_fractag, s_rxnext, s_rynext, s_rznext, s_rnext,
-                s_rxprev, s_ryprev, s_rzprev, s_rprev, XIJ, RIJ):
+             d_rxprev, d_ryprev, d_rzprev, d_rprev, s_fractag, d_fidx,
+             s_fidx, d_fractag, s_rxnext, s_rynext, s_rznext, s_rnext,
+             s_rxprev, s_ryprev, s_rzprev, s_rprev, XIJ, RIJ):
         if d_fidx[d_idx] == s_fidx[s_idx]+1:
             if s_fractag[s_idx] == 0:
                 d_rxprev[d_idx] = -XIJ[0]
@@ -45,6 +46,7 @@ class ComputeDistance(Equation):
                 d_rynext[d_idx] = 0.0
                 d_rznext[d_idx] = 0.0
                 d_rnext[d_idx] = 0.0
+
 
 class HoldPoints(Equation):
     r"""**Holds flagged points **
@@ -79,9 +81,9 @@ class HoldPoints(Equation):
 
     def loop(self, d_idx, d_holdtag, d_au, d_av, d_aw, d_auhat, d_avhat,
              d_awhat, d_u, d_v, d_w, d_x, d_y, d_z, d_Fx, d_Fy, d_Fz, d_m):
-        if d_holdtag[d_idx] == self.tag :
+        if d_holdtag[d_idx] == self.tag:
             if self.x:
-                d_Fx[d_idx] =  d_m[d_idx] * d_au[d_idx]
+                d_Fx[d_idx] = d_m[d_idx] * d_au[d_idx]
                 d_au[d_idx] = 0
                 d_auhat[d_idx] = 0
                 d_u[d_idx] = 0
@@ -91,7 +93,7 @@ class HoldPoints(Equation):
                 d_u[d_idx+self.mirror] = -d_u[d_idx]
 
             if self.y:
-                d_Fy[d_idx] =  d_m[d_idx] * d_av[d_idx]
+                d_Fy[d_idx] = d_m[d_idx] * d_av[d_idx]
                 d_av[d_idx] = 0
                 d_avhat[d_idx] = 0
                 d_v[d_idx] = 0
@@ -101,7 +103,7 @@ class HoldPoints(Equation):
                 d_v[d_idx+self.mirror] = -d_v[d_idx]
 
             if self.z:
-                d_Fz[d_idx] =  d_m[d_idx] * d_aw[d_idx]
+                d_Fz[d_idx] = d_m[d_idx] * d_aw[d_idx]
                 d_aw[d_idx] = 0
                 d_awhat[d_idx] = 0
                 d_w[d_idx] = 0
@@ -109,6 +111,7 @@ class HoldPoints(Equation):
                 # Copy properties to mirror particle
                 d_z[d_idx+self.mirror] = -d_z[d_idx]
                 d_w[d_idx+self.mirror] = -d_w[d_idx]
+
 
 class Vorticity(Equation):
     r"""** Computes vorticity of velocity field**
@@ -122,18 +125,19 @@ class Vorticity(Equation):
         d_omegaz[d_idx] = 0.0
 
     def loop(self, d_idx, s_idx, d_rho, s_m, d_omegax, d_omegay, d_omegaz,
-            DWIJ, VIJ):
+             DWIJ, VIJ):
         v = s_m[s_idx]/d_rho[d_idx]
         d_omegax[d_idx] += v*(VIJ[1]*DWIJ[2]-VIJ[2]*DWIJ[1])
         d_omegay[d_idx] += v*(VIJ[2]*DWIJ[0]-VIJ[0]*DWIJ[2])
         d_omegaz[d_idx] += v*(VIJ[0]*DWIJ[1]-VIJ[1]*DWIJ[0])
+
 
 class VelocityGradient(Equation):
     r"""** Computes 2nd order tensor representing the velocity gradient**
     """
 
     def initialize(self, d_idx, d_dudx, d_dudy, d_dudz, d_dvdx, d_dvdy, d_dvdz,
-                    d_dwdx, d_dwdy, d_dwdz):
+                   d_dwdx, d_dwdy, d_dwdz):
         d_dudx[d_idx] = 0.0
         d_dudy[d_idx] = 0.0
         d_dudz[d_idx] = 0.0
@@ -160,6 +164,7 @@ class VelocityGradient(Equation):
         d_dwdx[d_idx] -= v*VIJ[2]*DWIJ[0]
         d_dwdy[d_idx] -= v*VIJ[2]*DWIJ[1]
         d_dwdz[d_idx] -= v*VIJ[2]*DWIJ[2]
+
 
 class Damping(Equation):
     r"""**Damp particle motion**
@@ -188,6 +193,7 @@ class Damping(Equation):
         d_av[d_idx] -= 2*self.d*d_v[d_idx]/d_m[d_idx]
         d_aw[d_idx] -= 2*self.d*d_w[d_idx]/d_m[d_idx]
 
+
 class SimpleContact(Equation):
     """This class computes simple fiber repulsion to stop penetration. It
     computes the force between two spheres as Hertz pressure."""
@@ -208,12 +214,12 @@ class SimpleContact(Equation):
         super(SimpleContact, self).__init__(dest, sources)
 
     def initialize(self, d_idx, d_au, d_av, d_aw):
-       d_au[d_idx] = 0.0
-       d_av[d_idx] = 0.0
-       d_aw[d_idx] = 0.0
+        d_au[d_idx] = 0.0
+        d_av[d_idx] = 0.0
+        d_aw[d_idx] = 0.0
 
     def loop(self, d_idx, s_idx, d_fidx, s_fidx, d_m, d_au, d_av, d_aw,
-            XIJ, RIJ):
+             XIJ, RIJ):
         if not s_fidx[s_idx] == d_fidx[d_idx] and RIJ < self.d:
             E_star = 1/(2*((1-self.pois**2)/self.E))
             # effective radius for two spheres of same size
@@ -222,6 +228,7 @@ class SimpleContact(Equation):
             d_au[d_idx] += XIJ[0]/RIJ * F/d_m[d_idx]
             d_av[d_idx] += XIJ[1]/RIJ * F/d_m[d_idx]
             d_aw[d_idx] += XIJ[2]/RIJ * F/d_m[d_idx]
+
 
 class Contact(Equation):
     """This class computes fiber repulsion to stop penetration. It
@@ -259,17 +266,18 @@ class Contact(Equation):
         super(Contact, self).__init__(dest, sources)
 
     def initialize(self, d_idx, d_au, d_av, d_aw, d_Fx, d_Fy, d_Fz):
-       d_au[d_idx] = 0.0
-       d_av[d_idx] = 0.0
-       d_aw[d_idx] = 0.0
-       d_Fx[d_idx] = 0.0
-       d_Fy[d_idx] = 0.0
-       d_Fz[d_idx] = 0.0
+        d_au[d_idx] = 0.0
+        d_av[d_idx] = 0.0
+        d_aw[d_idx] = 0.0
+        d_Fx[d_idx] = 0.0
+        d_Fy[d_idx] = 0.0
+        d_Fz[d_idx] = 0.0
 
     def loop(self, d_idx, s_idx, d_m, d_au, d_av, d_aw, d_rxnext, d_rynext,
-        d_rznext, d_rnext, d_rxprev, d_ryprev, d_rzprev, d_rprev, s_rxnext,
-        s_rynext, s_rznext, s_rnext, s_rxprev, s_ryprev, s_rzprev, s_rprev,
-        d_Fx, d_Fy, d_Fz, d_fractag, d_tag, s_tag, XIJ, VIJ, RIJ):
+             d_rznext, d_rnext, d_rxprev, d_ryprev, d_rzprev, d_rprev,
+             s_rxnext, s_rynext, s_rznext, s_rnext, s_rxprev, s_ryprev,
+             s_rzprev, s_rprev, d_Fx, d_Fy, d_Fz, d_fractag, d_tag, s_tag,
+             XIJ, VIJ, RIJ):
 
         # not contact, if
         # - particle is too far away to cause contact (sqrt(6)*R is max. dist.)
@@ -369,7 +377,7 @@ class Contact(Equation):
                 nr = sqrt(nx**2 + ny**2 + nz**2)
 
                 # 3 vectors not in plane
-                if abs(nx*XIJ[0] + ny*XIJ[1] + nz*XIJ[2]) > 1E-14 and nr > 1E14:
+                if abs(nx*XIJ[0]+ny*XIJ[1]+nz*XIJ[2]) > 1E-14 and nr > 1E14:
                     nx = -nx/nr
                     ny = -ny/nr
                     nz = -nz/nr
@@ -419,7 +427,6 @@ class Contact(Equation):
             d_au[d_idx] += self.Fx/d_m[d_idx]
             d_av[d_idx] += self.Fy/d_m[d_idx]
             d_aw[d_idx] += self.Fz/d_m[d_idx]
-
 
     def compute_force(self, dirx=0.0, diry=0.0, dirz=0.0, vx=0.0, vy=0.0,
                       vz=0.0, d=0.0):
