@@ -93,7 +93,7 @@ class Channel(Application):
         )
         group.add_argument(
             "--Re", action="store", type=float, dest="Re",
-            default=1.0, help="Desired Particle Reynolds number."
+            default=0.1, help="Desired Particle Reynolds number."
         )
         group.add_argument(
             "--frac", action="store", type=float, dest="phifrac",
@@ -123,7 +123,7 @@ class Channel(Application):
 
         # Density from Reynolds number
         self.Vmax = self.options.G*self.Ly/2.
-        self.rho0 = (self.options.mu*self.options.Re)/(self.Vmax*self.Lf)
+        self.rho0 = (self.options.mu*self.options.Re)/(self.Vmax*self.dx)
 
         # The channel length is twice the width + dx to make it symmetric.
         self.Lx = 2.*self.Ly + self.dx
@@ -139,7 +139,7 @@ class Channel(Application):
         self.nu = self.options.mu/self.rho0
 
         # damping from empirical guess
-        self.D = 0.2*self.options.ar
+        self.D = 0.01*0.2*self.options.ar
 
         # mass properties
         R = self.dx/2.
@@ -163,7 +163,8 @@ class Channel(Application):
         if self.options.postonly:
             self.t = 0
         else:
-            lbd = (self.options.ar + 1./self.options.ar)
+            ar = get_zhang_aspect_ratio(self.options.ar)
+            lbd = (ar + 1./ar)
             self.t = self.options.rot*np.pi*lbd/self.options.G
         print("Simulated time is %g s" % self.t)
 
@@ -172,7 +173,8 @@ class Channel(Application):
         self.scheme.configure(
             rho0=self.rho0, c0=self.c0, nu=self.nu,
             p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=self.A,
-            Ip=self.Ip, J=self.J, E=self.options.E, D=self.D)
+            Ip=self.Ip, J=self.J, E=self.options.E, D=self.D,
+            fiber_like_solid=True)
         kernel = CubicSpline(dim=3)
         self.scheme.configure_solver(
             kernel=kernel,
@@ -290,7 +292,7 @@ class Channel(Application):
         # Setting the initial velocities for a shear flow.
         fluid.u[:] = self.options.G*(fluid.y[:] - self.Ly/2.)
         fiber.u[:] = self.options.G*(fiber.y[:] - self.Ly/2.)
-        channel.u[:] = self.options.G*(channel.y[:] - self.Ly/2.)
+        channel.u[:] = self.options.G*np.sign(channel.y[:])*self.Ly/2.
 
         # Return the particle list.
         return [fluid, channel, fiber]
@@ -357,29 +359,6 @@ class Channel(Application):
                 N += 1
                 a += np.pi
             angle.append(a)
-
-        # open new plot
-        plt.figure()
-
-        # plot end points
-        plt.plot(np.array(x_begin)/self.dx,
-                 np.array(y_begin)/self.dx,
-                 '-ok', markersize=3)
-        plt.plot(np.array(x_end)/self.dx,
-                 np.array(y_end)/self.dx,
-                 '-xk', markersize=3)
-
-        # set equally scaled axis to not distort the orbit
-        plt.axis('equal')
-        plt.xlabel('$x_1$')
-        plt.ylabel('$x_2$')
-        plt.grid()
-        plt.tight_layout()
-
-        # save plot of orbit
-        orbfig = os.path.join(self.output_dir, 'orbitplot.pdf')
-        plt.savefig(orbfig, dpi=300, bbox_inches='tight')
-        print("Orbitplot written to %s." % orbfig)
 
         # Integrate Jeffery's solution
         print("Solving Jeffery's ODE")
