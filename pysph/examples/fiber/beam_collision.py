@@ -1,4 +1,4 @@
-"""Tension of a fiber in gravity field (10 seconds)."""
+"""Collision of a fiber in a damped field (10 minutes)."""
 from math import sqrt
 import numpy as np
 
@@ -175,11 +175,11 @@ class Beam(Application):
                     Contact(
                         dest='fiber1',
                         sources=['fiber1', 'fiber2'],
-                        E=self.E, d=self.dx, k=self.options.k),
+                        E=self.E, d=self.dx, dim=3, k=self.options.k),
                     Contact(
                         dest='fiber2',
                         sources=['fiber1', 'fiber2'],
-                        E=self.E, d=self.dx, k=self.options.k),
+                        E=self.E, d=self.dx, dim=3, k=self.options.k),
                     Damping(
                         dest='fiber1',
                         sources=None,
@@ -214,4 +214,3 @@ class Beam(Application):
 if __name__ == '__main__':
     app = Beam()
     app.run()
-    app.post_process(app.info_filename)
