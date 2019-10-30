@@ -146,10 +146,9 @@ class VelocityGradient(Equation):
         d_dwdy[d_idx] = 0.0
         d_dwdz[d_idx] = 0.0
 
-
-    def loop(self, d_idx, s_idx, d_rho, s_m, d_dudx, d_dudy, d_dudz, d_dvdx,
-            d_dvdy, d_dvdz,d_dwdx, d_dwdy, d_dwdz, DWIJ, VIJ):
-        v = s_m[s_idx]/d_rho[d_idx]
+    def loop(self, d_idx, s_idx, s_rho, s_m, d_dudx, d_dudy, d_dudz, d_dvdx,
+             d_dvdy, d_dvdz, d_dwdx, d_dwdy, d_dwdz, DWIJ, VIJ):
+        v = s_m[s_idx]/s_rho[s_idx]
         d_dudx[d_idx] -= v*VIJ[0]*DWIJ[0]
         d_dudy[d_idx] -= v*VIJ[0]*DWIJ[1]
         d_dudz[d_idx] -= v*VIJ[0]*DWIJ[2]
