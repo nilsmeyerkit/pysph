@@ -703,6 +703,7 @@ class BeadChainScheme(Scheme):
         self.Ip = None
         self.J = None
         self.D = None
+        self.d = None
         self.vc = vc
         self.fiber_like_solid = fiber_like_solid
         self.lim = lim
@@ -891,8 +892,8 @@ class BeadChainScheme(Scheme):
                         dest=fiber, sources=self.solids, nu=self.nu))
 
             g5.append(Friction(
-                dest=fiber, sources=None, J=self.J, A=self.A,
-                mu=self.nu * self.rho0, d=self.dx))
+                dest=fiber, sources=None, J=self.J, dx=self.dx,
+                mu=self.nu * self.rho0, d=self.d))
 
         equations.append(Group(equations=g5))
 

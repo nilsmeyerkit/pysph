@@ -25,19 +25,10 @@ from pysph.sph.scheme import BeadChainScheme
 from pysph.base.kernels import CubicSpline
 
 
-def get_cox_aspect_ratio(aspect_ratio):
-    u"""Jeffrey's equivalent aspect ratio.
-
-    Approximation from
-    Cox et al.
-    """
-    return 1.24 * aspect_ratio / np.sqrt(np.log(aspect_ratio))
-
-
 def get_zhang_aspect_ratio(aspect_ratio):
     """Jeffery's equivalent aspect ratio.
 
-    Approximation from
+    Approximation for small aspect ratios from
     Zhang et al. 2011
     """
     return (0.000035*aspect_ratio**3 - 0.00467*aspect_ratio**2 +
@@ -60,8 +51,8 @@ class Channel(Application):
     def add_user_options(self, group):
         """Add options to aplication."""
         group.add_argument(
-            "--d", action="store", type=float, dest="d",
-            default=0.0001, help="Fiber diameter"
+            "--dx", action="store", type=float, dest="dx",
+            default=0.0001, help="Particle Spacing"
         )
         group.add_argument(
             "--ar", action="store", type=int, dest="ar",
@@ -97,22 +88,17 @@ class Channel(Application):
         )
         group.add_argument(
             "--frac", action="store", type=float, dest="phifrac",
-            default=5., help="Critical bending angle for fracture."
+            default=5.0, help="Critical bending angle for fracture."
         )
         group.add_argument(
             "--rot", action="store", type=float, dest="rot",
-            default=1., help="Number of half rotations."
+            default=1.0, help="Number of half rotations."
         )
 
     def consume_user_options(self):
         """Initialize geometry, properties and time stepping."""
-        # Initial spacing of particles is set to the same value as fiber
-        # diameter.
-        self.dx = self.options.d
-
-        # Smoothing radius is set to the same value as particle spacing. This
-        # results for a quintic spline in a radius of influence three times as
-        # large as dx
+        # Initial spacing of particles
+        self.dx = self.options.dx
         self.h0 = self.dx
 
         # The fiber length is the aspect ratio times fiber diameter
@@ -142,7 +128,8 @@ class Channel(Application):
         self.D = 0.01*0.2*self.options.ar
 
         # mass properties
-        R = self.dx/2.
+        R = self.dx/(np.sqrt(np.pi))    # Assuming cylindrical shape
+        self.d = 2.*R
         self.A = np.pi*R**2.
         self.Ip = np.pi*R**4./4.
         mass = 3.*self.rho0*self.dx*self.A
@@ -173,8 +160,8 @@ class Channel(Application):
         self.scheme.configure(
             rho0=self.rho0, c0=self.c0, nu=self.nu,
             p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=self.A,
-            Ip=self.Ip, J=self.J, E=self.options.E, D=self.D,
-            fiber_like_solid=True)
+            Ip=self.Ip, J=self.J, E=self.options.E, D=self.D, d=self.d,
+            fiber_like_solid=True, vc=True)
         kernel = CubicSpline(dim=3)
         self.scheme.configure_solver(
             kernel=kernel,
@@ -365,11 +352,8 @@ class Channel(Application):
         t = np.array(t)
         phi0 = angle[0]
         ar_zhang = get_zhang_aspect_ratio(self.options.ar)
-        ar_cox = get_cox_aspect_ratio(self.options.ar)
         angle_jeffery_zhang = odeint(jeffery_ode, phi0, t, atol=1E-15,
                                      args=(ar_zhang, self.options.G))
-        angle_jeffery_cox = odeint(jeffery_ode, phi0, t, atol=1E-15,
-                                   args=(ar_cox, self.options.G))
 
         # constraint between -pi/2 and pi/2
         # angle_jeffery = (angle_jeffery+np.pi/2.)%np.pi-np.pi/2.
@@ -380,13 +364,11 @@ class Channel(Application):
         # plot computed angle and Jeffery's solution
         plt.plot(t/self.options.G, angle, '-k')
         plt.plot(t/self.options.G, angle_jeffery_zhang, '--k', color='grey')
-        plt.plot(t/self.options.G, angle_jeffery_cox, ':k', color='grey')
 
         # labels
         plt.xlabel('Strains')
         plt.ylabel('Rotation angle')
-        plt.legend(['SPH Simulation', 'Jeffery (Zhang)', 'Jeffery (Cox)',
-                    'Jeffery (Goldsm.)'])
+        plt.legend(['SPH Simulation', 'Jeffery'])
         plt.grid()
         x1, x2, y1, y2 = plt.axis()
         plt.axis((0, x2, 0, y2))

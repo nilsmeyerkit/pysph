@@ -4,7 +4,7 @@ Equations for fibers based on bead chain model.
 
 """
 
-from math import sqrt, acos, sin
+from math import sqrt, acos, sin, pi
 from pysph.sph.equation import Equation
 
 
@@ -193,14 +193,14 @@ class Friction(Equation):
     particles.
     """
 
-    def __init__(self, dest, sources, J, A, mu, d, ar=0.0):
+    def __init__(self, dest, sources, J, dx, mu, d):
         r"""
         Parameters
         ----------
         J : float
             moment of inertia
-        A : float
-            shell surface area (2D: 2*dx and 3D: dx*pi*d/2)
+        dx : float
+            length of segment
         mu : float
             absolute viscosity
         d : float
@@ -209,10 +209,9 @@ class Friction(Equation):
             fiber aspect ratio
         """
         self.J = J
-        self.A = A
+        self.dx = dx
         self.mu = mu
         self.d = d
-        self.ar = ar
         super(Friction, self).__init__(dest, sources)
 
     def initialize(self, d_idx, d_au, d_av, d_aw):
@@ -236,7 +235,7 @@ class Friction(Equation):
 
             # ensuring that [sx sy sz] is not parallel to [1 0 0]
             if abs(s2) > 1E-14 or abs(s3) > 1E-14:
-                fac = (2*self.A * self.d/2 * self.mu)/(s2**2+s3**2)
+                fac = (3.*self.dx*self.d**2/4.*self.mu*pi)/(s2**2+s3**2)
 
                 Mx = fac*((s1*s2**2*s3+s1*s3**3)*d_dvdx[d_idx]
                           + (-s1**2*s2*s3+s2*s3)*d_dvdy[d_idx]
@@ -257,7 +256,7 @@ class Friction(Equation):
                           + (-s1*s2**3-s1*s2*s3**2)*d_dvdy[d_idx]
                           + (-s1*s2**2*s3-s1*s3**3)*d_dvdz[d_idx])
             else:
-                fac = (2*self.A * self.d/2 * self.mu)/(s1**2+s3**2)
+                fac = (3.*self.dx*self.d**2/4.*self.mu*pi)/(s1**2+s3**2)
 
                 Mx = fac*((-s1*s2**2*s3+s1*s3)*d_dvdx[d_idx]
                           + (s1**2*s2*s3+s2*s3**3)*d_dvdy[d_idx]

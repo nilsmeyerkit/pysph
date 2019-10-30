@@ -27,8 +27,8 @@ class SingleParticle(Application):
     def add_user_options(self, group):
         """Add options to aplication."""
         group.add_argument(
-            "--d", action="store", type=float, dest="d",
-            default=0.0001, help="Fiber diameter"
+            "--dx", action="store", type=float, dest="dx",
+            default=0.0001, help="Particle Spacing"
         )
         group.add_argument(
             "--rho", action="store", type=float, dest="rho0",
@@ -57,12 +57,12 @@ class SingleParticle(Application):
 
     def consume_user_options(self):
         """Initialize geometry, properties and time stepping."""
-        # Initial spacing of particles is set to the same value as fiber
-        # diameter.
-        self.dx = self.options.d
-
-        # Smoothing radius is set to the same value as particle spacing.
+        # Initial spacing of particles
+        self.dx = self.options.dx
         self.h0 = self.dx
+
+        # equivalent sphere diameter
+        self.d = 2.*(3/(4*np.pi))**(1.0/3.0)*self.dx
 
         # Cube dimensions
         self.L = self.options.size*self.dx
@@ -93,7 +93,8 @@ class SingleParticle(Application):
         self.scheme.configure(
             rho0=self.rho0, c0=self.c0, nu=self.nu,
             p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=1.0,
-            Ip=1.0, J=1.0, E=1.0, D=1.0, fiber_like_solid=True)
+            Ip=1.0, J=1.0, E=1.0, D=1.0, d=self.d, fiber_like_solid=True,
+            vc=True)
 
         self.kernel = CubicSpline(dim=3)
         self.scheme.configure_solver(
@@ -189,7 +190,7 @@ class SingleParticle(Application):
         channel.w[:] = self.v
 
         # set anayltical solution
-        R = (3/(4*np.pi))**(1.0/3.0)*self.dx
+        R = self.d/2.
         r = np.sqrt((fluid.x-self.x_fiber)**2
                     + (fluid.y-self.y_fiber)**2
                     + (fluid.z-self.z_fiber)**2)
@@ -297,7 +298,7 @@ class SingleParticle(Application):
         ux = interp.interpolate('w')
 
         # reference solution
-        R = (3/(4*np.pi))**(1.0/3.0)*self.dx
+        R = self.d/2.
         rz = np.linspace(0, self.L, 500)-self.L/2
         rx = np.linspace(0, self.L, 500)-self.L/2
         ref_uz = 1.0-3.0*R/(2*np.abs(rz))+R**3/(2*np.abs(rz)**3)
@@ -353,7 +354,7 @@ class SingleParticle(Application):
         Fz = []
 
         # reference solution
-        R = (3/(4*np.pi))**(1.0/3.0)*self.dx
+        R = self.d/2.
         F = 6.0*np.pi*self.options.mu*R*self.v
 
         # iteration over all output files

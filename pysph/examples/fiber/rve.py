@@ -19,6 +19,7 @@ from pysph.solver.utils import load, remove_irrelevant_files
 from pysph.solver.tools import FiberIntegrator
 
 from pysph.sph.scheme import BeadChainScheme
+from pysph.base.kernels import CubicSpline
 
 
 class RVE(Application):
@@ -31,16 +32,12 @@ class RVE(Application):
 
     def add_user_options(self, group):
         group.add_argument(
-            "--d", action="store", type=float, dest="d",
-            default=0.0001, help="Fiber diameter"
+            "--dx", action="store", type=float, dest="dx",
+            default=0.0001, help="Particle Spacing"
         )
         group.add_argument(
             "--ar", action="store", type=int, dest="ar",
             default=5, help="Aspect ratio of fiber"
-        )
-        group.add_argument(
-            "--rho", action="store", type=float, dest="rho0",
-            default=1000, help="Rest density"
         )
         group.add_argument(
             "--mu", action="store", type=float, dest="mu",
@@ -55,10 +52,6 @@ class RVE(Application):
             default=3.3, help="Shear rate"
         )
         group.add_argument(
-            "--D", action="store", type=float, dest="D",
-            default=None, help="Damping coefficient for artificial damping"
-        )
-        group.add_argument(
             "--vtk", action="store_true", dest='vtk',
             default=False, help="Enable vtk-output during solving."
         )
@@ -67,16 +60,12 @@ class RVE(Application):
             default=False, help="Set time to zero and postprocess only."
         )
         group.add_argument(
-            "--massscale", action="store", type=float, dest="scale_factor",
-            default=None, help="Factor of mass scaling"
+            "--Re", action="store", type=float, dest="Re",
+            default=0.1, help="Desired Particle Reynolds number."
         )
         group.add_argument(
             "--volfrac", action="store", type=float, dest="vol_frac",
             default=0.01, help="Volume fraction of fibers in suspension."
-        )
-        group.add_argument(
-            "--k", action="store", type=float, dest="k",
-            default=0.0, help="Friction coefficient between fibers."
         )
         group.add_argument(
             "--rot", action="store", type=float, dest="rot",
@@ -94,13 +83,8 @@ class RVE(Application):
     def consume_user_options(self):
         """Initialization of geometry, properties and time stepping."""
 
-        # Initial spacing of particles is set to the same value as fiber
-        # diameter.
-        self.dx = self.options.d
-
-        # Smoothing radius is set to the same value as particle spacing. This
-        # results for a quintic spline in a radius of influence three times as
-        # large as dx
+        # Initial spacing of particles
+        self.dx = self.options.dx
         self.h0 = self.dx
 
         # The fiber length is the aspect ratio times fiber diameter
@@ -109,41 +93,27 @@ class RVE(Application):
         # Cube size
         self.C = self.options.C*self.dx
 
-        # Computation of a scale factor in a way that dt_cfl exactly matches
-        # dt_viscous.
-        a = self.h0*0.125*11/0.4
-        nu_needed = a*self.options.G*self.C/2
+        # Density from Reynolds number
+        self.Vmax = self.options.G*self.C/2.
+        self.rho0 = (self.options.mu*self.options.Re)/(self.Vmax*self.dx)
 
-        # If there is no other scale scale factor provided, use automatically
-        # computed factor.
-        auto_scale_factor = self.options.mu/(nu_needed*self.options.rho0)
-        self.scale_factor = self.options.scale_factor or auto_scale_factor
-
-        # The density can be scaled using the mass scaling factor.
-        self.rho0 = self.options.rho0*self.scale_factor
-
-        Vmax = self.options.G * self.L / 2.0
-        Re_scaled = self.rho0 * Vmax * self.L / self.options.mu
-        print("Scaled Reynolds number: %g" % Re_scaled)
-
-        # The kinematic viscosity is computed from absolute viscosity and
-        # scaled (!) density.
+        # The kinematic viscosity
         self.nu = self.options.mu/self.rho0
 
         # empirical determination for the damping, which is just enough
-        self.D = self.options.D or 0.2*self.options.ar
+        self.D = 0.2*self.options.ar
 
-        # mechanical properties
-        R = self.dx/2
-        self.A = np.pi*R**2
-        self.Ip = np.pi*R**4/4.0
-        mass = 3.0*self.rho0*self.dx*self.A
-        self.J = 1.0/4.0*mass*R**2 + 1.0/12*mass*(3.0*self.dx)**2
+        # mass properties
+        R = self.dx/(np.sqrt(np.pi))    # Assuming cylindrical shape
+        self.d = 2.*R
+        self.A = np.pi*R**2.
+        self.Ip = np.pi*R**4./4.
+        mass = 3.*self.rho0*self.dx*self.A
+        self.J = 1./4.*mass*R**2. + 1./12.*mass*(3.*self.dx)**2.
 
         # SPH uses weakly compressible fluids. Therefore, the speed of sound c0
         # is computed as 10 times the maximum velocity. This should keep the
         # density change within 1%
-        self.Vmax = self.options.G*self.C/2.0
         self.c0 = 10.0*self.Vmax
         self.p0 = self.c0**2*self.rho0
 
@@ -176,11 +146,15 @@ class RVE(Application):
             J=self.J,
             E=self.options.E,
             D=self.D,
-            k=self.options.k)
+            d=self.d,
+            fiber_like_solid=True,
+            vc=True)
         # in case of very low volume fraction
+        kernel = CubicSpline(dim=3)
         if self.n < 1:
             self.scheme.configure(fibers=[])
-        self.scheme.configure_solver(tf=self.t, vtk=self.options.vtk,
+        self.scheme.configure_solver(kernel=kernel,
+                                     tf=self.t, vtk=self.options.vtk,
                                      N=self.options.rot*100,
                                      # output_only_real=False
                                      )
@@ -199,16 +173,13 @@ class RVE(Application):
 
             # Computation of each particles initial volume.
             volume = fdx**3
-            fiber_volume = self.dx**3
 
             # Mass is set to get the reference density of rho0.
             mass = volume * self.rho0
-            fiber_mass = fiber_volume * self.rho0
 
             # Initial inverse volume (necessary for transport velocity
             # equations)
             V = 1./volume
-            fiber_V = 1./fiber_volume
 
             # Creating grid points for particles
             _x = np.arange(dx2, self.C, fdx)
@@ -284,9 +255,9 @@ class RVE(Application):
                 fibers = get_particle_array_beadchain_fiber(
                     name='fibers', x=np.concatenate(fibx),
                     y=np.concatenate(fiby),
-                    z=np.concatenate(fibz), m=fiber_mass, rho=self.rho0,
+                    z=np.concatenate(fibz), m=mass, rho=self.rho0,
                     h=self.h0, lprev=self.dx, lnext=self.dx, phi0=np.pi,
-                    phifrac=2.0, fidx=range(self.options.ar*self.n), V=fiber_V)
+                    phifrac=2.0, fidx=range(self.options.ar*self.n), V=V)
                 # 'Break' fibers in segments
                 endpoints = [i*self.options.ar-1 for i in range(1, self.n)]
                 fibers.fractag[endpoints] = 1
@@ -402,7 +373,8 @@ if __name__ == '__main__':
     import cProfile
     import pstats
     app = RVE()
-    cProfile.runctx('app.run()', None, locals(), 'stats')
-    p = pstats.Stats('stats')
-    p.sort_stats('tottime').print_stats(20)
+    app.run()
+    # cProfile.runctx('app.run()', None, locals(), 'stats')
+    # p = pstats.Stats('stats')
+    # p.sort_stats('tottime').print_stats(20)
     app.post_process(app.info_filename)
