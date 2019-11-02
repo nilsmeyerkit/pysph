@@ -41,15 +41,15 @@ class RVE(Application):
         )
         group.add_argument(
             "--mu", action="store", type=float, dest="mu",
-            default=63, help="Absolute viscosity"
+            default=1.0, help="Absolute viscosity"
         )
         group.add_argument(
             "--E", action="store", type=float, dest="E",
-            default=2.5E9, help="Young's modulus"
+            default=1E6, help="Young's modulus"
         )
         group.add_argument(
             "--G", action="store", type=float, dest="G",
-            default=3.3, help="Shear rate"
+            default=1.0, help="Shear rate"
         )
         group.add_argument(
             "--vtk", action="store_true", dest='vtk',
@@ -65,7 +65,7 @@ class RVE(Application):
         )
         group.add_argument(
             "--volfrac", action="store", type=float, dest="vol_frac",
-            default=0.01, help="Volume fraction of fibers in suspension."
+            default=0.0014, help="Volume fraction of fibers in suspension."
         )
         group.add_argument(
             "--rot", action="store", type=float, dest="rot",
@@ -101,7 +101,7 @@ class RVE(Application):
         self.nu = self.options.mu/self.rho0
 
         # empirical determination for the damping, which is just enough
-        self.D = 0.2*self.options.ar
+        self.D = 0.002*self.options.ar
 
         # mass properties
         R = self.dx/(np.sqrt(np.pi))    # Assuming cylindrical shape
@@ -155,8 +155,8 @@ class RVE(Application):
             self.scheme.configure(fibers=[])
         self.scheme.configure_solver(kernel=kernel,
                                      tf=self.t, vtk=self.options.vtk,
-                                     N=self.options.rot*100,
-                                     # output_only_real=False
+                                     pfreq=1,  # N=self.options.rot*100,
+                                     output_only_real=False
                                      )
 
     def create_particles(self):
@@ -195,7 +195,11 @@ class RVE(Application):
             fibz = tuple()
 
             positions = list(itertools.product(_x, _y, _z))
-            for xx, yy, zz in random.sample(positions, self.n):
+            random.shuffle(positions)
+            N = 0
+            while N < self.n:
+                xx, yy, zz = positions.pop()
+                idx_list = []
                 for i in range(len(fx)):
                     # periodic extending above
                     if xx+self.L/2 > self.C:
@@ -205,7 +209,7 @@ class RVE(Application):
                             fy[i] > yy-self.dx/2 and
                             fz[i] < zz+self.dx/2 and
                                 fz[i] > zz-self.dx/2):
-                            indices.append(i)
+                            idx_list.append(i)
                     # periodic extending below
                     elif xx-self.L/2 < 0:
                         if ((fx[i] < xx+self.L/2 or
@@ -214,7 +218,7 @@ class RVE(Application):
                             fy[i] > yy-self.dx/2 and
                             fz[i] < zz+self.dx/2 and
                                 fz[i] > zz-self.dx/2):
-                            indices.append(i)
+                            idx_list.append(i)
                     # standard case
                     else:
                         if (fx[i] < xx+self.L/2 and
@@ -223,26 +227,34 @@ class RVE(Application):
                             fy[i] > yy-self.dx/2 and
                             fz[i] < zz+self.dx/2 and
                                 fz[i] > zz-self.dx/2):
-                            indices.append(i)
+                            idx_list.append(i)
 
-                # Generating fiber particle grid. Uncomment proper section for
-                # horizontal or vertical alignment respectivley.
-                if self.options.ar % 2 == 1:
-                    _fibx = np.linspace(xx-self.options.ar//2*self.dx,
-                                        xx+self.options.ar//2*self.dx,
-                                        self.options.ar)
+                idx_set = set(idx_list)
+                if len(idx_set.intersection(set(indices))) == 0:
+                    N = N + 1
+                    indices = indices + idx_list
+
+                    # Generating fiber particles
+                    if self.options.ar % 2 == 1:
+                        _fibx = np.linspace(xx-self.options.ar//2*self.dx,
+                                            xx+self.options.ar//2*self.dx,
+                                            self.options.ar)
+                    else:
+                        _fibx = np.arange(xx-self.L/2,
+                                          xx+self.L/2 - self.dx/4,
+                                          self.dx)
+                    _fiby = np.array([yy])
+                    _fibz = np.array([zz])
+                    _fibx, _fiby, _fibz = self.get_meshgrid(_fibx,
+                                                            _fiby,
+                                                            _fibz)
+                    fibx = fibx + (_fibx,)
+                    fiby = fiby + (_fiby,)
+                    fibz = fibz + (_fibz,)
                 else:
-                    _fibx = np.arange(xx-self.L/2,
-                                      xx+self.L/2 - self.dx/4,
-                                      self.dx)
-                _fiby = np.array([yy])
-                _fibz = np.array([zz])
-                _fibx, _fiby, _fibz = self.get_meshgrid(_fibx, _fiby, _fibz)
-                fibx = fibx + (_fibx,)
-                fiby = fiby + (_fiby,)
-                fibz = fibz + (_fibz,)
+                    print("Found a fiber intersection. Trying again...")
 
-            print("Created %d fibers." % self.n)
+            print("Created %d fibers." % N)
 
             # Finally create all particle arrays. Note that fluid particles are
             # removed in the area, where the fiber is placed.
