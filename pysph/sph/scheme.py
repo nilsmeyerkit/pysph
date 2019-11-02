@@ -864,6 +864,8 @@ class BeadChainScheme(Scheme):
                     g5.append(SolidWallNoSlipBC(
                         dest=fluid, sources=self.solids + self.fibers,
                         nu=self.nu))
+                    g5.append(MomentumEquationArtificialStress(
+                        dest=fluid, sources=self.fluids))
                 else:
                     g5.append(MomentumEquationViscosity(
                         dest=fluid, sources=self.fluids + self.fibers,
@@ -871,9 +873,8 @@ class BeadChainScheme(Scheme):
                     if len(self.solids) > 0:
                         g5.append(SolidWallNoSlipBC(
                             dest=fluid, sources=self.solids, nu=self.nu))
-
-            g5.append(MomentumEquationArtificialStress(
-                dest=fluid, sources=self.fluids + self.fibers))
+                    g5.append(MomentumEquationArtificialStress(
+                        dest=fluid, sources=self.fluids + self.fibers))
 
         for fiber in self.fibers:
             g5.append(MomentumEquationPressureGradient(
@@ -887,9 +888,9 @@ class BeadChainScheme(Scheme):
                     g5.append(MomentumEquationViscosity(
                         dest=fiber, sources=self.fluids + self.fibers,
                         nu=self.nu))
-                if len(self.solids) > 0:
-                    g5.append(SolidWallNoSlipBC(
-                        dest=fiber, sources=self.solids, nu=self.nu))
+                    if len(self.solids) > 0:
+                        g5.append(SolidWallNoSlipBC(
+                            dest=fiber, sources=self.solids, nu=self.nu))
 
             g5.append(Friction(
                 dest=fiber, sources=None, J=self.J, dx=self.dx,
