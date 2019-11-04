@@ -194,7 +194,7 @@ class FiberIntegrator(Tool):
                 gamma_zy = domain.manager.gamma_zy
                 n_layers = domain.manager.n_layers
                 N = self.steps or int(ceil(self.dt/self.fiber_dt))
-                dt = self.dt/N
+                # dt = self.dt/N
                 self.domain = DomainManager(xmin=xmin, xmax=xmax, ymin=ymin,
                                             ymax=ymax, zmin=zmin, zmax=zmax,
                                             periodic_in_x=periodic_in_x,
@@ -204,7 +204,8 @@ class FiberIntegrator(Tool):
                                             gamma_zx=gamma_zx,
                                             gamma_zy=gamma_zy,
                                             n_layers=n_layers,
-                                            dt=2*dt
+                                            dt=self.dt,
+                                            calls_per_step=N
                                             )
             else:
                 self.domain = None

@@ -105,7 +105,7 @@ class Channel(Application):
         self.Lf = self.options.ar*self.dx
 
         # Use fiber aspect ratio to determine the channel width.
-        self.Ly = self.Lf + 2.*int(0.1*self.options.ar)*self.dx
+        self.Ly = self.Lf + 2.*self.dx
 
         # Density from Reynolds number
         self.Vmax = self.options.G*self.Ly/2.
@@ -125,7 +125,8 @@ class Channel(Application):
         self.nu = self.options.mu/self.rho0
 
         # damping from empirical guess
-        self.D = 0.01*0.2*self.options.ar
+        self.D = 0.002*self.options.ar
+        # self.D = 0.1*0.2*self.options.ar
 
         # mass properties
         R = self.dx/(np.sqrt(np.pi))    # Assuming cylindrical shape

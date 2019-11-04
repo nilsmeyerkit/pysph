@@ -245,7 +245,8 @@ cdef class DomainManager:
                  double ymax=0, double zmin=0, double zmax=0,
                  double gamma_yx=0.0, double gamma_zx=0.0,double gamma_zy=0.0,
                  periodic_in_x=False, periodic_in_y=False, periodic_in_z=False,
-                 double n_layers=2.0, backend=None, double dt=0.0):
+                 double n_layers=2.0, backend=None, double dt=0.0,
+                 int calls_per_step=1):
         """Constructor
 
         Parameters
@@ -271,7 +272,8 @@ cdef class DomainManager:
             periodic_in_y=periodic_in_y,
             periodic_in_z=periodic_in_z,
             gamma_yx=gamma_yx, gamma_zx=gamma_zx,gamma_zy=gamma_zy,
-            n_layers=n_layers, backend=self.backend, dt=dt
+            n_layers=n_layers, backend=self.backend, dt=dt,
+            calls_per_step=calls_per_step
         )
 
     def set_pa_wrappers(self, wrappers):
@@ -317,8 +319,9 @@ cdef class CPUDomainManager:
     def __init__(self, double xmin=-1000, double xmax=1000, double ymin=0,
                  double ymax=0, double zmin=0, double zmax=0,
                  periodic_in_x=False, periodic_in_y=False, periodic_in_z=False,
-                 gamma_yx=0.0, gamma_zx=0.0, gamma_zy=0.0,
-                 double n_layers=2.0, backend=None, dt=0.0):
+                 double gamma_yx=0.0, double gamma_zx=0.0, double gamma_zy=0.0,
+                 double n_layers=2.0, backend=None,
+                 double dt=0.0, int calls_per_step=1):
         """Constructor
 
         The n_layers argument specifies the number of ghost layers as multiples
@@ -362,8 +365,9 @@ cdef class CPUDomainManager:
         self.dbl_max = np.finfo(float).max
 
         # time for Lees-Edwards BC
-        self.t = 0   # account for first iterations at compiling.
+        self.t = 0
         self.dt = dt
+        self.calls_per_step = calls_per_step
         self.loops = 0
 
     #### Public protocol ################################################
@@ -415,8 +419,8 @@ cdef class CPUDomainManager:
 
             # update total time (Designed for Transport velocity step)
             # print("Loops: %d" % self.loops)
-            # print("dt : %f" % self.dt )
-            if self.loops > 0 and self.loops % 2 == 1:
+            # print("calls_per_step : %d" % self.calls_per_step)
+            if self.loops > 0 and (self.loops % self.calls_per_step) == 1:
                 self.t = self.t + self.dt
             # print(self.t)
             self.loops =self.loops + 1

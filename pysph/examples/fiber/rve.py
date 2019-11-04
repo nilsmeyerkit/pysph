@@ -155,8 +155,9 @@ class RVE(Application):
             self.scheme.configure(fibers=[])
         self.scheme.configure_solver(kernel=kernel,
                                      tf=self.t, vtk=self.options.vtk,
-                                     pfreq=1,  # N=self.options.rot*100,
-                                     output_only_real=False
+                                     #  pfreq=1,
+                                     N=self.options.rot*100,
+                                     # output_only_real=False
                                      )
 
     def create_particles(self):
@@ -299,7 +300,8 @@ class RVE(Application):
                              zmin=0, zmax=self.C, periodic_in_z=True,
                              gamma_yx=self.options.G,
                              n_layers=1,
-                             dt=self.solver.dt)
+                             dt=self.solver.dt,
+                             calls_per_step=2)
 
     def create_tools(self):
         """Set up fiber integrator."""
