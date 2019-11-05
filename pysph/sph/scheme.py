@@ -762,11 +762,11 @@ class BeadChainScheme(Scheme):
             Any additional keyword args are passed to the solver instance.
 
         """
-        from pysph.base.kernels import QuinticSpline
+        from pysph.base.kernels import CubicSpline
         from pysph.sph.integrator_step import TransportVelocityStep
         from pysph.sph.integrator import EPECIntegrator
         if kernel is None:
-            kernel = QuinticSpline(dim=self.dim)
+            kernel = CubicSpline(dim=self.dim)
         steppers = {}
         if extra_steppers is not None:
             steppers.update(extra_steppers)
@@ -791,7 +791,7 @@ class BeadChainScheme(Scheme):
             SummationDensity, StateEquation, MomentumEquationPressureGradient,
             MomentumEquationViscosity, MomentumEquationArtificialStress,
             SolidWallPressureBC, SolidWallNoSlipBC, SetWallVelocity,
-            VolumeFromMassDensity, FiberViscousTraction)
+            FiberViscousTraction)
         from pysph.sph.fiber.utils import (
             HoldPoints, VelocityGradient, ComputeDistance)
         from pysph.sph.fiber.beadchain import EBGVelocityReset, Friction
@@ -879,18 +879,21 @@ class BeadChainScheme(Scheme):
     def setup_properties(self, particles, clean=True):
         particle_arrays = dict([(p.name, p) for p in particles])
 
-        props = ('V', 'wf', 'uf', 'vf', 'wg', 'wij', 'vg', 'ug', 'phifrac',
+        props = ('V', 'wf', 'uf', 'vf', 'wg', 'wij', 'vg', 'ug',
                  'awhat', 'avhat', 'auhat', 'vhat', 'what', 'uhat', 'vmag2',
-                 'arho', 'phi0', 'fractag', 'rho0', 'holdtag', 'eu', 'ev',
-                 'ew', 'dudx', 'dudy', 'dudz', 'dvdx', 'dvdy', 'dvdz',
-                 'dwdx', 'dwdy', 'dwdz', 'Fx', 'Fy', 'Fz', 'arho', 'ex',
-                 'ey', 'ez')
-        fprops = ('lprev', 'lnext', 'phi0', 'rxnext',
-                  'rynext', 'rznext', 'rnext', 'rxprev',
-                  'ryprev', 'rzprev', 'rprev', 'fidx')
-        output_props = ['x', 'y', 'u', 'v', 'rho', 'm', 'h', 'p',
-                        'pid', 'holdtag', 'gid', 'ug', 'vg', 'wg', 'V', 'Fx',
-                        'Fy', 'Fz']
+                 'arho', 'rho0', 'holdtag')
+        fprops = ('lprev', 'lnext',
+                  'phi0', 'fidx', 'phifrac', 'phi0', 'fractag', 'holdtag',
+                  'rxnext', 'rynext', 'rznext', 'rnext',
+                  'rxprev', 'ryprev', 'rzprev', 'rprev',
+                  'Fx', 'Fy', 'Fz',
+                  'eu', 'ev', 'ew',
+                  'ex', 'ey', 'ez'
+                  'dudx', 'dudy', 'dudz',
+                  'dvdx', 'dvdy', 'dvdz',
+                  'dwdx', 'dwdy', 'dwdz')
+        output_props = ['x', 'y', 'z', 'u', 'v', 'w', 'rho', 'm', 'p',
+                        'pid', 'gid']
 
         for fluid in self.fluids:
             pa = particle_arrays[fluid]

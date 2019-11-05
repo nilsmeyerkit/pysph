@@ -458,6 +458,7 @@ def is_overloaded_method(method):
                 return True
     return False
 
+
 def get_particle_array_beadchain_solid(constants=None, **props):
     """Return a particle array for the BeadChainScheme for a fluid and solid.
 
@@ -476,9 +477,9 @@ def get_particle_array_beadchain_solid(constants=None, **props):
     get_particle_array
 
     """
-    solid_props = ['V', 'vmag2',
+    solid_props = ['V', 'vmag2', 'wij',
                    'ug', 'vg', 'wg',
-                   'wf', 'uf', 'wij', 'vf',
+                   'uf', 'vf', 'wf',
                    'auhat', 'avhat', 'awhat',
                    'uhat', 'vhat', 'what',
                    'dudx', 'dudy', 'dudz',
@@ -517,18 +518,14 @@ def get_particle_array_beadchain_fluid(constants=None, **props):
     fluid_props = ['V', 'vmag2',
                    'ug', 'vg', 'wg',
                    'auhat', 'avhat', 'awhat',
-                   'uhat', 'vhat', 'what',
-                   'dudx', 'dudy', 'dudz',
-                   'dvdx', 'dvdy', 'dvdz',
-                   'dwdx', 'dwdy', 'dwdz']
+                   'uhat', 'vhat', 'what'
+                   ]
 
     pa = get_particle_array(
         constants=constants, additional_props=fluid_props, **props
     )
     pa.set_output_arrays(['x', 'y', 'z', 'u', 'v', 'w', 'rho', 'm', 'h', 'p',
-                          'pid', 'gid', 'V', 'tag', 'dudx', 'dudy', 'dudz',
-                          'dvdx', 'dvdy', 'dvdz',
-                          'dwdx', 'dwdy', 'dwdz'])
+                          'pid', 'gid', 'V', 'tag'])
 
     return pa
 
@@ -553,7 +550,7 @@ def get_particle_array_beadchain_fiber(constants=None, **props):
     """
     fiber_props = ['V', 'wf', 'uf', 'vf', 'wg', 'wij', 'vg', 'ug', 'phifrac',
                    'awhat', 'avhat', 'auhat', 'vhat', 'what', 'uhat', 'vmag2',
-                   'arho', 'phi0', 'fractag', 'rho0', 'holdtag', 'eu', 'ev',
+                   'phi0', 'fractag', 'rho0', 'holdtag', 'eu', 'ev',
                    'ew', 'dudx', 'dudy', 'dudz', 'dvdx', 'dvdy', 'dvdz',
                    'dwdx', 'dwdy', 'dwdz', 'Fx', 'Fy', 'Fz', 'ex',
                    'ey', 'ez', 'lprev', 'lnext',
@@ -563,12 +560,17 @@ def get_particle_array_beadchain_fiber(constants=None, **props):
     pa = get_particle_array(
         constants=constants, additional_props=fiber_props, **props
     )
-    pa.set_output_arrays(['x', 'y', 'z', 'u', 'v', 'w', 'rho', 'm', 'h', 'p',
-                          'holdtag', 'gid', 'ug', 'vg', 'wg', 'V', 'Fx', 'Fy',
-                          'Fz', 'rxnext', 'rynext', 'rznext', 'rnext', 'pid',
-                          'rxprev', 'ryprev', 'rzprev', 'rprev', 'fidx', 'tag',
-                          'fractag', 'lprev', 'lnext', 'dudx', 'dudy', 'dudz',
+    pa.set_output_arrays(['x', 'y', 'z',
+                          'u', 'v', 'w',
+                          'fidx', 'tag', 'rho', 'm', 'h', 'p',
+                          'holdtag', 'fractag', 'gid', 'V', 'pid',
+                          'Fx', 'Fy', 'Fz',
+                          'rxnext', 'rynext', 'rznext', 'rnext',
+                          'rxprev', 'ryprev', 'rzprev', 'rprev',
+                          'lprev', 'lnext',
+                          'dudx', 'dudy', 'dudz',
                           'dvdx', 'dvdy', 'dvdz',
-                          'dwdx', 'dwdy', 'dwdz', 'Fwx', 'Fwy', 'Fwz'])
+                          'dwdx', 'dwdy', 'dwdz',
+                          'Fwx', 'Fwy', 'Fwz'])
 
     return pa
