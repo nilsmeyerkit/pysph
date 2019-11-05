@@ -11,26 +11,15 @@ from pysph.sph.equation import Equation
 class EBGVelocityReset(Equation):
     r"""** Resets EBG velocities **"""
 
-    def __init__(self, dest, sources, velocity_correction=True):
-        r"""
-        Parameters
-        ----------
-        velocity_correction : boolean
-            enables modification of velocity based on inner loop displacement
-        """
-        self.velocity_correction = velocity_correction
-        super(EBGVelocityReset, self).__init__(dest, sources)
-
     def loop(self, d_idx, d_eu, d_ev, d_ew, d_ex, d_ey, d_ez,
              d_u, d_v, d_w, dt):
         d_eu[d_idx] = 0
         d_ev[d_idx] = 0
         d_ew[d_idx] = 0
 
-        if self.velocity_correction:
-            d_u[d_idx] += d_ex[d_idx]/dt
-            d_v[d_idx] += d_ey[d_idx]/dt
-            d_w[d_idx] += d_ez[d_idx]/dt
+        d_u[d_idx] += d_ex[d_idx]/dt
+        d_v[d_idx] += d_ey[d_idx]/dt
+        d_w[d_idx] += d_ez[d_idx]/dt
 
         d_ex[d_idx] = 0
         d_ey[d_idx] = 0

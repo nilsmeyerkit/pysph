@@ -55,16 +55,16 @@ class Channel(Application):
             default=0.0001, help="Particle Spacing"
         )
         group.add_argument(
-            "--ar", action="store", type=int, dest="ar",
-            default=11, help="Aspect ratio of fiber"
+            "--lf", action="store", type=int, dest="lf",
+            default=11, help="Fiber length in multiples of dx"
         )
         group.add_argument(
             "--mu", action="store", type=float, dest="mu",
             default=63, help="Absolute viscosity"
         )
         group.add_argument(
-            "--E", action="store", type=float, dest="E",
-            default=1E6, help="Young's modulus"
+            "--S", action="store", type=float, dest="S",
+            default=10, help="Dimensionless fiber stiffness"
         )
         group.add_argument(
             "--G", action="store", type=float, dest="G",
@@ -102,7 +102,7 @@ class Channel(Application):
         self.h0 = self.dx
 
         # The fiber length is the aspect ratio times fiber diameter
-        self.Lf = self.options.ar*self.dx
+        self.Lf = self.options.lf*self.dx
 
         # Use fiber aspect ratio to determine the channel width.
         self.Ly = self.Lf + 2.*self.dx
@@ -125,16 +125,22 @@ class Channel(Application):
         self.nu = self.options.mu/self.rho0
 
         # damping from empirical guess
-        self.D = 0.002*self.options.ar
-        # self.D = 0.1*0.2*self.options.ar
+        self.D = 0.002*self.options.lf
 
         # mass properties
         R = self.dx/(np.sqrt(np.pi))    # Assuming cylindrical shape
         self.d = 2.*R
+        self.ar = self.Lf/self.d        # Actual fiber aspect ratio
+        print('Aspect ratio is %f' % self.ar)
+
         self.A = np.pi*R**2.
         self.Ip = np.pi*R**4./4.
         mass = 3.*self.rho0*self.dx*self.A
         self.J = 1./4.*mass*R**2. + 1./12.*mass*(3.*self.dx)**2.
+
+        # stiffness from dimensionless stiffness
+        self.E = 4.0/np.pi*(
+            self.options.S*self.options.mu*self.options.G*self.ar)
 
         # SPH uses weakly compressible fluids. Therefore, the speed of sound c0
         # is computed as 10 times the maximum velocity. This should keep the
@@ -151,7 +157,7 @@ class Channel(Application):
         if self.options.postonly:
             self.t = 0
         else:
-            ar = get_zhang_aspect_ratio(self.options.ar)
+            ar = get_zhang_aspect_ratio(self.ar)
             lbd = (ar + 1./ar)
             self.t = self.options.rot*np.pi*lbd/self.options.G
         print("Simulated time is %g s" % self.t)
@@ -161,14 +167,11 @@ class Channel(Application):
         self.scheme.configure(
             rho0=self.rho0, c0=self.c0, nu=self.nu,
             p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=self.A,
-            Ip=self.Ip, J=self.J, E=self.options.E, D=self.D, d=self.d,
-            fiber_like_solid=True, vc=True)
+            Ip=self.Ip, J=self.J, E=self.E, D=self.D, d=self.d)
         kernel = CubicSpline(dim=3)
         self.scheme.configure_solver(
             kernel=kernel,
             tf=self.t, vtk=self.options.vtk, N=self.options.rot*200)
-        # self.scheme.configure_solver(tf=self.t, pfreq=1,
-        #                              vtk = self.options.vtk)
 
     def create_particles(self):
         """Three particle arrays are created.
@@ -187,8 +190,7 @@ class Channel(Application):
         _z = np.arange(dx2, self.Ly, fdx)
         fx, fy, fz = self.get_meshgrid(_x, _y, _z)
 
-        # Remove particles at fiber position. Uncomment proper section for
-        # horizontal or vertical alignment respectivley.
+        # Remove particles at fiber position
         indices = []
         for i in range(len(fx)):
             xx = self.x_fiber
@@ -201,26 +203,11 @@ class Channel(Application):
                     fz[i] < zz + self.dx/2. and fz[i] > zz - self.dx/2.):
                 indices.append(i)
 
-            # horizontal
-            # if (fx[i] < xx+self.Lf/2 and fx[i] > xx-self.Lf/2 and
-            #     fy[i] < yy+self.dx/2 and fy[i] > yy-self.dx/2 and
-            #     fz[i] < zz+self.dx/2 and fz[i] > zz-self.dx/2):
-            #    indices.append(i)
-
-        # Generating fiber particle grid. Uncomment proper section for
-        # horizontal or vertical alignment respectivley.
-
-        # vertical fiber
+        # create vertical fiber
         _fibx = np.array([xx])
         _fiby = np.arange(yy - self.Lf/2. + self.dx/2.,
                           yy + self.Lf/2. + self.dx/4.,
                           self.dx)
-
-        # horizontal fiber
-        # _fibx = np.arange(xx-self.Lf/2+self.dx/2,
-        #                   xx+self.Lf/2+self.dx/4,
-        #                   self.dx)
-        # _fiby = np.array([yy])
 
         _fibz = np.array([zz])
         fibx, fiby, fibz = self.get_meshgrid(_fibx, _fiby, _fibz)
@@ -248,7 +235,7 @@ class Channel(Application):
         mass = volume*self.rho0
 
         # assign unique ID (within fiber) to each fiber particle.
-        fidx = range(0, self.options.ar)
+        fidx = range(0, self.options.lf)
 
         # Initial inverse volume (necessary for transport velocity equations)
         V = 1./volume
@@ -269,12 +256,12 @@ class Channel(Application):
 
         # The number of fiber particles should match the aspect ratio. This
         # assertation fails, if something was wrong in the fiber generation.
-        assert(fiber.get_number_of_particles() == self.options.ar)
+        assert(fiber.get_number_of_particles() == self.options.lf)
 
         # Tag particles to be hold, if requested.
         fiber.holdtag[:] = 0
         if self.options.holdcenter:
-            idx = int(np.floor(self.options.ar/2))
+            idx = int(np.floor(self.options.lf/2))
             fiber.holdtag[idx] = 100
 
         # Setting the initial velocities for a shear flow.
@@ -352,19 +339,16 @@ class Channel(Application):
         print("Solving Jeffery's ODE")
         t = np.array(t)
         phi0 = angle[0]
-        ar_zhang = get_zhang_aspect_ratio(self.options.ar)
+        ar_zhang = get_zhang_aspect_ratio(self.ar)
         angle_jeffery_zhang = odeint(jeffery_ode, phi0, t, atol=1E-15,
                                      args=(ar_zhang, self.options.G))
-
-        # constraint between -pi/2 and pi/2
-        # angle_jeffery = (angle_jeffery+np.pi/2.)%np.pi-np.pi/2.
 
         # open new plot
         plt.figure()
 
         # plot computed angle and Jeffery's solution
-        plt.plot(t/self.options.G, angle, '-k')
-        plt.plot(t/self.options.G, angle_jeffery_zhang, '--k', color='grey')
+        plt.plot(t*self.options.G, angle, '-k')
+        plt.plot(t*self.options.G, angle_jeffery_zhang, '--k', color='grey')
 
         # labels
         plt.xlabel('Strains')

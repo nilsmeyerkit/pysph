@@ -36,16 +36,16 @@ class RVE(Application):
             default=0.0001, help="Particle Spacing"
         )
         group.add_argument(
-            "--ar", action="store", type=int, dest="ar",
-            default=5, help="Aspect ratio of fiber"
+            "--lf", action="store", type=int, dest="lf",
+            default=5, help="Fiber length in multiples of dx"
         )
         group.add_argument(
             "--mu", action="store", type=float, dest="mu",
             default=1.0, help="Absolute viscosity"
         )
         group.add_argument(
-            "--E", action="store", type=float, dest="E",
-            default=1E6, help="Young's modulus"
+            "--S", action="store", type=float, dest="S",
+            default=10, help="Dimensionless fiber stiffness"
         )
         group.add_argument(
             "--G", action="store", type=float, dest="G",
@@ -88,7 +88,7 @@ class RVE(Application):
         self.h0 = self.dx
 
         # The fiber length is the aspect ratio times fiber diameter
-        self.L = self.options.ar*self.dx
+        self.L = self.options.lf*self.dx
 
         # Cube size
         self.C = self.options.C*self.dx
@@ -101,15 +101,22 @@ class RVE(Application):
         self.nu = self.options.mu/self.rho0
 
         # empirical determination for the damping, which is just enough
-        self.D = 0.002*self.options.ar
+        self.D = 0.002*self.options.lf
 
         # mass properties
         R = self.dx/(np.sqrt(np.pi))    # Assuming cylindrical shape
         self.d = 2.*R
+        self.ar = self.Lf/self.d        # Actual fiber aspect ratio
+        print('Aspect ratio is %f' % self.ar)
+
         self.A = np.pi*R**2.
         self.Ip = np.pi*R**4./4.
         mass = 3.*self.rho0*self.dx*self.A
         self.J = 1./4.*mass*R**2. + 1./12.*mass*(3.*self.dx)**2.
+
+        # stiffness from dimensionless stiffness
+        self.E = 4.0/np.pi*(
+            self.options.S*self.options.mu*self.options.G*self.ar)
 
         # SPH uses weakly compressible fluids. Therefore, the speed of sound c0
         # is computed as 10 times the maximum velocity. This should keep the
@@ -124,7 +131,7 @@ class RVE(Application):
         if self.options.postonly:
             self.t = 0.0
         else:
-            lbd = (self.options.ar+1.0/self.options.ar)
+            lbd = (self.ar+1.0/self.ar)
             self.t = self.options.rot*np.pi*lbd/self.options.G
         print("Simulated time is %g s" % self.t)
 
@@ -146,9 +153,7 @@ class RVE(Application):
             J=self.J,
             E=self.options.E,
             D=self.D,
-            d=self.d,
-            fiber_like_solid=True,
-            vc=True)
+            d=self.d)
         # in case of very low volume fraction
         kernel = CubicSpline(dim=3)
         if self.n < 1:
@@ -236,10 +241,10 @@ class RVE(Application):
                     indices = indices + idx_list
 
                     # Generating fiber particles
-                    if self.options.ar % 2 == 1:
-                        _fibx = np.linspace(xx-self.options.ar//2*self.dx,
-                                            xx+self.options.ar//2*self.dx,
-                                            self.options.ar)
+                    if self.options.lf % 2 == 1:
+                        _fibx = np.linspace(xx-self.options.lf//2*self.dx,
+                                            xx+self.options.lf//2*self.dx,
+                                            self.options.lf)
                     else:
                         _fibx = np.arange(xx-self.L/2,
                                           xx+self.L/2 - self.dx/4,
@@ -270,9 +275,9 @@ class RVE(Application):
                     y=np.concatenate(fiby),
                     z=np.concatenate(fibz), m=mass, rho=self.rho0,
                     h=self.h0, lprev=self.dx, lnext=self.dx, phi0=np.pi,
-                    phifrac=2.0, fidx=range(self.options.ar*self.n), V=V)
+                    phifrac=2.0, fidx=range(self.options.lf*self.n), V=V)
                 # 'Break' fibers in segments
-                endpoints = [i*self.options.ar-1 for i in range(1, self.n)]
+                endpoints = [i*self.options.lf-1 for i in range(1, self.n)]
                 fibers.fractag[endpoints] = 1
 
             # Setting the initial velocities for a shear flow.
@@ -354,8 +359,8 @@ class RVE(Application):
                 # extrating all arrays.
                 directions = []
                 fiber = data['arrays']['fibers']
-                startpoints = [i*(self.options.ar-1) for i in range(0, self.n)]
-                endpoints = [i*(self.options.ar-1)-1 for i in range(1,
+                startpoints = [i*(self.options.lf-1) for i in range(0, self.n)]
+                endpoints = [i*(self.options.lf-1)-1 for i in range(1,
                                                                     self.n+1)]
                 for start, end in zip(startpoints, endpoints):
                     px = np.mean(fiber.rxnext[start:end])
