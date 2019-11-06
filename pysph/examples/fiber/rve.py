@@ -89,7 +89,7 @@ class RVE(Application):
 
         # Density from Reynolds number
         self.Vmax = self.options.G*self.C/2.
-        self.rho0 = (self.options.mu*self.options.Re)/(self.Vmax*self.L)
+        self.rho0 = (self.options.mu*self.options.Re)/(self.Vmax*self.C)
 
         # The kinematic viscosity
         self.nu = self.options.mu/self.rho0
