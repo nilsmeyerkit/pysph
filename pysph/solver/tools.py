@@ -96,7 +96,7 @@ class SimpleRemesher(Tool):
 
 class FiberIntegrator(Tool):
     def __init__(self, all_particles, scheme, domain=None, innerloop=True,
-                 updates=True, parallel=False, steps=None):
+                 updates=True, parallel=False, steps=None, D=0):
         """The second integrator is a simple Euler-Integrator (accurate
         enough due to very small time steps; very fast) using EBGSteps.
         EBGSteps are basically the same as EulerSteps, exept for the fact
@@ -106,7 +106,7 @@ class FiberIntegrator(Tool):
         damping in this step. The ebg velocity is initialized for each
         inner loop again and reset in the outer loop."""
         from math import ceil
-        from pysph.base.kernels import QuinticSpline
+        from pysph.base.kernels import CubicSpline
         from pysph.sph.integrator_step import EBGStep
         from compyle.config import get_config
         from pysph.sph.integrator import EulerIntegrator
@@ -128,6 +128,7 @@ class FiberIntegrator(Tool):
         self.fiber_dt = scheme.fiber_dt
         self.domain_updates = updates
         self.steps = steps
+        self.D = D
         self.eta0 = scheme.rho0 * scheme.nu
 
         # if there are more than 1 particles involved, elastic equations are
@@ -141,7 +142,7 @@ class FiberIntegrator(Tool):
             self.fiber_integrator = EulerIntegrator(**steppers)
             # The type of spline has no influence here. It must be large enough
             # to contain the next particle though.
-            kernel = QuinticSpline(dim=scheme.dim)
+            kernel = CubicSpline(dim=scheme.dim)
             equations = []
             g1 = []
             for fiber in scheme.fibers:
@@ -166,7 +167,7 @@ class FiberIntegrator(Tool):
                                   eta0=self.eta0))
                 g2.append(ArtificialDamping(dest=fiber,
                                             sources=None,
-                                            d=scheme.D))
+                                            d=self.D))
             equations.append(Group(equations=g2))
 
             g3 = []

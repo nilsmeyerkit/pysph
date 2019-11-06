@@ -684,7 +684,8 @@ class TVFScheme(Scheme):
 
 class BeadChainScheme(Scheme):
     def __init__(self, fluids, solids, fibers, dim, k=0.0, lim=0.5,
-                 tag=100, gx=0.0, gy=0.0, gz=0.0, alpha=0.0, tdamp=0.0):
+                 tag=100, gx=0.0, gy=0.0, gz=0.0, alpha=0.0, tdamp=0.0,
+                 direct=True):
         self.fluids = fluids
         self.solids = solids
         self.fibers = fibers
@@ -701,7 +702,6 @@ class BeadChainScheme(Scheme):
         self.A = None
         self.Ip = None
         self.J = None
-        self.D = None
         self.d = None
         self.lim = lim
         self.k = k
@@ -711,6 +711,7 @@ class BeadChainScheme(Scheme):
         self.gz = gz
         self.alpha = alpha
         self.tdamp = tdamp
+        self.direct = direct
 
     def add_user_options(self, group):
         group.add_argument(
@@ -739,10 +740,23 @@ class BeadChainScheme(Scheme):
         print("dt_tension: %g" % dt_tension)
         print("dt_bending: %g" % dt_bending)
 
-        dt = min(dt_cfl, dt_viscous, dt_force)
-        # dt = min(dt_cfl, dt_viscous, dt_force, dt_tension, dt_bending)
         fiber_dt = min(dt_tension, dt_bending)
-        print("Time step ratio is %g" % (dt / fiber_dt))
+        dt = min(dt_cfl, dt_viscous, dt_force)
+
+        if self.direct:
+            dt = min(dt_cfl, dt_viscous, dt_force, dt_tension, dt_bending)
+            if (dt / fiber_dt) > 10:
+                print("Time step ratio is %g." % (dt / fiber_dt))
+                print("You might want to speed up the simulation using an")
+                print("inner loop. Set it up as")
+                print("def create_tools(self):")
+                print("return [FiberIntegrator(self.particles,")
+                print("                        self.scheme,")
+                print("                        self.domain,")
+                print("                        D=<extra damping>)]")
+        else:
+            dt = min(dt_cfl, dt_viscous, dt_force)
+            print("Time step ratio is %g" % (dt / fiber_dt))
         return [dt, fiber_dt]
 
     def configure_solver(self, kernel=None, integrator_cls=None,
@@ -793,8 +807,9 @@ class BeadChainScheme(Scheme):
             SolidWallPressureBC, SolidWallNoSlipBC, SetWallVelocity,
             FiberViscousTraction)
         from pysph.sph.fiber.utils import (
-            HoldPoints, VelocityGradient, ComputeDistance)
-        from pysph.sph.fiber.beadchain import EBGVelocityReset, Friction
+            HoldPoints, VelocityGradient, ComputeDistance, Contact)
+        from pysph.sph.fiber.beadchain import (EBGVelocityReset, Friction,
+                                               Tension, Bending)
 
         equations = []
         all = self.fluids + self.solids + self.fibers
@@ -861,6 +876,21 @@ class BeadChainScheme(Scheme):
             if self.nu > 0.0:
                 g5.append(FiberViscousTraction(
                     dest=fiber, sources=self.fluids, nu=self.nu))
+            if self.direct:
+                g5.append(Tension(dest=fiber,
+                                  sources=None,
+                                  ea=self.E*self.A))
+                g5.append(Bending(dest=fiber,
+                                  sources=None,
+                                  ei=self.E*self.Ip))
+                g5.append(Contact(dest=fiber,
+                                  sources=self.fibers,
+                                  E=self.E,
+                                  d=self.d,
+                                  dim=self.dim,
+                                  k=self.k,
+                                  lim=self.lim,
+                                  eta0=self.rho0*self.nu))
 
             g5.append(Friction(
                 dest=fiber, sources=None, J=self.J, dx=self.dx,

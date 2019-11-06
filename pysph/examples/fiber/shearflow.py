@@ -19,10 +19,9 @@ from pysph.base.utils import (get_particle_array_beadchain_fluid,
 
 from pysph.solver.application import Application
 from pysph.solver.utils import load, remove_irrelevant_files
-from pysph.solver.tools import FiberIntegrator
+# from pysph.solver.tools import FiberIntegrator
 
 from pysph.sph.scheme import BeadChainScheme
-from pysph.base.kernels import CubicSpline
 
 
 def get_zhang_aspect_ratio(aspect_ratio):
@@ -56,31 +55,23 @@ class Channel(Application):
         )
         group.add_argument(
             "--lf", action="store", type=int, dest="lf",
-            default=11, help="Fiber length in multiples of dx"
+            default=5, help="Fiber length in multiples of dx"
         )
         group.add_argument(
             "--mu", action="store", type=float, dest="mu",
-            default=63, help="Absolute viscosity"
+            default=1.0, help="Absolute viscosity"
         )
         group.add_argument(
             "--S", action="store", type=float, dest="S",
-            default=10, help="Dimensionless fiber stiffness"
+            default=100, help="Dimensionless fiber stiffness"
         )
         group.add_argument(
             "--G", action="store", type=float, dest="G",
-            default=3.3, help="Shear rate"
-        )
-        group.add_argument(
-            "--holdcenter", action="store_true", dest='holdcenter',
-            default=False, help="Holding center particle in place."
+            default=1.0, help="Shear rate"
         )
         group.add_argument(
             "--vtk", action="store_true", dest='vtk',
             default=False, help="Enable vtk-output during solving."
-        )
-        group.add_argument(
-            "--postonly", action="store_true", dest="postonly",
-            default=False, help="Set time to zero and postprocess only."
         )
         group.add_argument(
             "--Re", action="store", type=float, dest="Re",
@@ -109,7 +100,7 @@ class Channel(Application):
 
         # Density from Reynolds number
         self.Vmax = self.options.G*self.Ly/2.
-        self.rho0 = (self.options.mu*self.options.Re)/(self.Vmax*self.dx)
+        self.rho0 = (self.options.mu*self.options.Re)/(self.Vmax*self.Lf)
 
         # The channel length is twice the width + dx to make it symmetric.
         self.Lx = 2.*self.Ly + self.dx
@@ -124,13 +115,10 @@ class Channel(Application):
         # scaled density.
         self.nu = self.options.mu/self.rho0
 
-        # damping from empirical guess
-        self.D = 0.002*self.options.lf
-
         # mass properties
-        R = self.dx/(np.sqrt(np.pi))    # Assuming cylindrical shape
+        R = self.dx/np.sqrt(np.pi)    # Assuming cylindrical shape
         self.d = 2.*R
-        self.ar = self.Lf/self.d        # Actual fiber aspect ratio
+        self.ar = self.Lf/self.d      # Actual fiber aspect ratio
         print('Aspect ratio is %f' % self.ar)
 
         self.A = np.pi*R**2.
@@ -151,27 +139,31 @@ class Channel(Application):
         # Background pressure in Adami's transport velocity formulation
         self.pb = self.p0
 
-        # The time is set to zero, if only postprocessing is required. For a
-        # shear flow, it is set to the time for a full period of rotation
-        # according to Jeffery's equation.
-        if self.options.postonly:
-            self.t = 0
-        else:
-            ar = get_zhang_aspect_ratio(self.ar)
-            lbd = (ar + 1./ar)
-            self.t = self.options.rot*np.pi*lbd/self.options.G
+        # Time
+        ar = get_zhang_aspect_ratio(self.ar)
+        self.t = self.options.rot*np.pi*(ar + 1./ar)/self.options.G
         print("Simulated time is %g s" % self.t)
 
     def configure_scheme(self):
         """Set up solver and scheme."""
         self.scheme.configure(
-            rho0=self.rho0, c0=self.c0, nu=self.nu,
-            p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=self.A,
-            Ip=self.Ip, J=self.J, E=self.E, D=self.D, d=self.d)
-        kernel = CubicSpline(dim=3)
+            rho0=self.rho0,
+            c0=self.c0,
+            nu=self.nu,
+            p0=self.p0,
+            pb=self.pb,
+            h0=self.h0,
+            dx=self.dx,
+            A=self.A,
+            Ip=self.Ip,
+            J=self.J,
+            E=self.E,
+            d=self.d,
+            direct=True)
         self.scheme.configure_solver(
-            kernel=kernel,
-            tf=self.t, vtk=self.options.vtk, N=self.options.rot*200)
+            tf=self.t,
+            vtk=self.options.vtk,
+            N=self.options.rot*200)
 
     def create_particles(self):
         """Three particle arrays are created.
@@ -258,12 +250,6 @@ class Channel(Application):
         # assertation fails, if something was wrong in the fiber generation.
         assert(fiber.get_number_of_particles() == self.options.lf)
 
-        # Tag particles to be hold, if requested.
-        fiber.holdtag[:] = 0
-        if self.options.holdcenter:
-            idx = int(np.floor(self.options.lf/2))
-            fiber.holdtag[idx] = 100
-
         # Setting the initial velocities for a shear flow.
         fluid.u[:] = self.options.G*(fluid.y[:] - self.Ly/2.)
         fiber.u[:] = self.options.G*(fiber.y[:] - self.Ly/2.)
@@ -277,11 +263,9 @@ class Channel(Application):
         return DomainManager(xmin=0, xmax=self.Lx, zmin=0, zmax=self.Ly,
                              periodic_in_x=True, periodic_in_z=True)
 
-    def create_tools(self):
-        """Add an integrator for the fiber."""
-        ud = not self.options.holdcenter
-        return [FiberIntegrator(self.particles, self.scheme, self.domain,
-                                innerloop=True, updates=ud)]
+    # def create_tools(self):
+    #     """Add an integrator for the fiber."""
+    #     return [FiberIntegrator(self.particles, self.scheme, self.domain)]
 
     def get_meshgrid(self, xx, yy, zz):
         """Generate meshgrids quickly."""
@@ -296,14 +280,8 @@ class Channel(Application):
 
         It is employing a iteration over all time steps.
         """
-        # empty list for time
+        # empty list for time and orientation angle
         t = []
-        # empty lists for orbit
-        x_begin = []
-        y_begin = []
-        x_end = []
-        y_end = []
-        # empty list for orientation angle
         angle = []
         N = 0
 
@@ -311,17 +289,9 @@ class Channel(Application):
         output_files = remove_irrelevant_files(self.output_files)
         for i, fname in enumerate(output_files):
             data = load(fname)
-            # extracting time
+            # extracting time and fiber data
             t.append(data['solver_data']['t'])
-
-            # extrating all arrays.
             fiber = data['arrays']['fiber']
-
-            # extrating end-points
-            x_begin.append(fiber.x[0])
-            y_begin.append(fiber.y[0])
-            x_end.append(fiber.x[-1])
-            y_end.append(fiber.y[-1])
 
             # computation of orientation angle
             dxx = fiber.x[0] - fiber.x[-1]

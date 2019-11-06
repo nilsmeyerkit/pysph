@@ -11,7 +11,6 @@ from pysph.base.utils import (get_particle_array_beadchain_fluid,
 
 from pysph.solver.application import Application
 from pysph.solver.utils import load, remove_irrelevant_files
-from pysph.solver.tools import FiberIntegrator
 
 from pysph.sph.scheme import BeadChainScheme
 from pysph.base.kernels import CubicSpline
@@ -40,7 +39,7 @@ class SingleParticle(Application):
         )
         group.add_argument(
             "--Re", action="store", type=float, dest="Re",
-            default=0.01, help="Velocity at cube borders"
+            default=0.01, help="Re to determine velocity at cube borders"
         )
         group.add_argument(
             "--size", action="store", type=int, dest="size",
@@ -317,7 +316,7 @@ class SingleParticle(Application):
         plt.ylim([0.0, 1.0])
         plt.subplot(1, 2, 2)
         plt.plot((rx+self.L/2)/self.dx, ref_ux, X/self.dx, ux/self.v,)
-        plt.xlabel('X')
+        plt.xlabel('x')
         plt.ylim([0.0, 1.0])
         # save plot
         fig = os.path.join(self.output_dir, 'velocity.png')
