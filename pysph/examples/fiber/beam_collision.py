@@ -44,6 +44,10 @@ class Beam(Application):
             "--k", action="store", type=float, dest="k",
             default=0.0, help="Friction coefficient."
         )
+        group.add_argument(
+            "--eta", action="store", type=float, dest="eta",
+            default=1.0, help="Absolute Viscosity."
+        )
 
     def consume_user_options(self):
         # fiber length
@@ -175,11 +179,15 @@ class Beam(Application):
                     Contact(
                         dest='fiber1',
                         sources=['fiber1', 'fiber2'],
-                        E=self.E, d=self.dx, dim=3, k=self.options.k),
+                        E=self.E, d=self.dx, dim=3,
+                        k=self.options.k,
+                        eta0=self.options.eta),
                     Contact(
                         dest='fiber2',
                         sources=['fiber1', 'fiber2'],
-                        E=self.E, d=self.dx, dim=3, k=self.options.k),
+                        E=self.E, d=self.dx, dim=3,
+                        k=self.options.k,
+                        eta0=self.options.eta),
                     Damping(
                         dest='fiber1',
                         sources=None,

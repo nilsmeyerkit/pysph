@@ -5,7 +5,7 @@ Utitlity equations for fibers
 """
 
 from pysph.sph.equation import Equation
-from math import sqrt
+from math import sqrt, pi, sin, acos
 
 
 class ComputeDistance(Equation):
@@ -293,10 +293,10 @@ class Contact(Equation):
                     (s_rnext[s_idx] < 1E-14 or s_rprev[s_idx] < 1E-14)):
 
                 d = self.d - RIJ
-
-                self.compute_force(
-                    XIJ[0]/RIJ, XIJ[1]/RIJ, XIJ[2]/RIJ, VIJ[0], VIJ[1], VIJ[2],
-                    d)
+                nx = XIJ[0]/RIJ
+                ny = XIJ[1]/RIJ
+                nz = XIJ[2]/RIJ
+                self.compute_force(nx, ny, nz, VIJ[0], VIJ[1], VIJ[2], d, pi/2)
 
             # case for fiber end in destination fiber
             elif d_rnext[d_idx] < 1E-14 or d_rprev[d_idx] < 1E-14:
@@ -307,12 +307,6 @@ class Contact(Equation):
                 sz = s_rzprev[s_idx] - s_rznext[s_idx]
                 sr = sqrt(sx**2 + sy**2 + sz**2)
 
-                # relative velocity for friction term
-                v_rel = sx*VIJ[0] + sy*VIJ[1] + sz*VIJ[2]
-                v_rel_x = v_rel * sx/sr
-                v_rel_y = v_rel * sy/sr
-                v_rel_z = v_rel * sz/sr
-
                 # distance computation
                 dot_prod = (sx*XIJ[0] + sy*XIJ[1] + sz*XIJ[2])/sr
                 tx = XIJ[0] - dot_prod*sx/sr
@@ -320,10 +314,12 @@ class Contact(Equation):
                 tz = XIJ[2] - dot_prod*sz/sr
                 tr = sqrt(tx**2 + ty**2 + tz**2)
 
-                d = self.d - RIJ
+                nx = tx/tr
+                ny = ty/tr
+                nz = tz/tr
 
-                self.compute_force(
-                    tx/tr, ty/tr, tz/tr, v_rel_x, v_rel_y, v_rel_z, d)
+                d = self.d - tr
+                self.compute_force(nx, ny, nz, VIJ[0], VIJ[1], VIJ[2], d, pi/2)
 
             # case for fiber end in source fiber
             elif s_rnext[s_idx] < 1E-14 or s_rprev[s_idx] < 1E-14:
@@ -333,12 +329,6 @@ class Contact(Equation):
                 dz = d_rzprev[d_idx]-d_rznext[d_idx]
                 dr = sqrt(dx**2 + dy**2 + dz**2)
 
-                # relative velocity for friction term
-                v_rel = dx*VIJ[0] + dy*VIJ[1] + dz*VIJ[2]
-                v_rel_x = v_rel * dx/dr
-                v_rel_y = v_rel * dy/dr
-                v_rel_z = v_rel * dz/dr
-
                 # distance computation
                 dot_prod = (dx*XIJ[0] + dy*XIJ[1] + dz*XIJ[2])/dr
                 tx = XIJ[0] - dot_prod*dx/dr
@@ -346,9 +336,12 @@ class Contact(Equation):
                 tz = XIJ[2] - dot_prod*dz/dr
                 tr = sqrt(tx**2 + ty**2 + tz**2)
 
-                d = self.d-RIJ
-                self.compute_force(
-                    tx/tr, ty/tr, tz/tr, v_rel_x, v_rel_y, v_rel_z, d)
+                nx = tx/tr
+                ny = ty/tr
+                nz = tz/tr
+
+                d = self.d - tr
+                self.compute_force(nx, ny, nz, VIJ[0], VIJ[1], VIJ[2], d, pi/2)
             else:
                 # direction of destination fiber
                 dx = d_rxprev[d_idx] - d_rxnext[d_idx]
@@ -377,36 +370,23 @@ class Contact(Equation):
                 nr = sqrt(nx**2 + ny**2 + nz**2)
 
                 # 3 vectors not in plane
-                if abs(nx*XIJ[0]+ny*XIJ[1]+nz*XIJ[2]) > 1E-14 and nr > 1E14:
+                if abs(nx*XIJ[0]+ny*XIJ[1]+nz*XIJ[2]) > 1E-14 and nr > 1E-14:
                     nx = -nx/nr
                     ny = -ny/nr
                     nz = -nz/nr
 
-                    # relative velocity in each fiber direction
-                    v_rel_d = dx*VIJ[0] + dy*VIJ[1] + dz*VIJ[2]
-                    v_rel_s = sx*VIJ[0] + sy*VIJ[1] + sz*VIJ[2]
-                    v_rel_x = v_rel_d * dx/dr + v_rel_s * sx/sr
-                    v_rel_y = v_rel_d * dy/dr + v_rel_s * sy/sr
-                    v_rel_z = v_rel_d * dz/dr + v_rel_s * sz/sr
+                    d = self.d - (nx*XIJ[0]+ny*XIJ[1]+nz*XIJ[2])
 
-                    y = nx*XIJ[0] + ny*XIJ[1] + nz*XIJ[2]
-
-                    d = self.d - RIJ
+                    alpha = acos(dx*sx+dy*sy+dz*sz)
 
                     self.compute_force(
-                        nx, ny, nz, v_rel_x, v_rel_y, v_rel_z, d)
+                        nx, ny, nz, VIJ[0], VIJ[1], VIJ[2], d, alpha)
                 else:
                     # direction of destination fiber
                     dx = d_rxnext[d_idx] - d_rxprev[d_idx]
                     dy = d_rynext[d_idx] - d_ryprev[d_idx]
                     dz = d_rznext[d_idx] - d_rzprev[d_idx]
                     dr = sqrt(dx**2+dy**2+dz**2)
-
-                    # relative velocity for friction term
-                    v_rel = dx*VIJ[0] + dy*VIJ[1] + dz*VIJ[2]
-                    v_rel_x = v_rel * dx/dr
-                    v_rel_y = v_rel * dy/dr
-                    v_rel_z = v_rel * dz/dr
 
                     # distance computation
                     dot_prod = (dx*XIJ[0] + dy*XIJ[1] + dz*XIJ[2])/dr
@@ -415,10 +395,13 @@ class Contact(Equation):
                     tz = XIJ[2] - dot_prod*dz/dr
                     tr = sqrt(tx**2 + ty**2 + tz**2)
 
-                    d = self.d-RIJ
+                    nx = tx/tr
+                    ny = ty/tr
+                    nz = tz/tr
 
+                    d = self.d - tr
                     self.compute_force(
-                        tx/tr, ty/tr, tz/tr, v_rel_x, v_rel_y, v_rel_z, d)
+                        nx, ny, nz, VIJ[0], VIJ[1], VIJ[2], d, pi/2)
 
             d_Fx[d_idx] += self.Fx
             d_Fy[d_idx] += self.Fy
@@ -429,15 +412,17 @@ class Contact(Equation):
             d_aw[d_idx] += self.Fz/d_m[d_idx]
 
     def compute_force(self, dirx=0.0, diry=0.0, dirz=0.0, vx=0.0, vy=0.0,
-                      vz=0.0, d=0.0):
-        '''This force can be either a contact force (d>0) or a lubrication
+                      vz=0.0, d=0.0, alpha=pi/2.):
+        """This force can be either a contact force (d>0) or a lubrication
             force (d<0).
-        '''
+        """
         self.Fx = 0.0
         self.Fy = 0.0
         self.Fz = 0.0
 
-        if d > 0:
+        v_dot_n = vx*dirx + vy*diry + vz*dirz
+
+        if d >= 0:
             # elastic factor from Hertz' pressure in contact
             E_star = 1/(2*((1-self.pois**2)/self.E))
 
@@ -449,9 +434,30 @@ class Contact(Equation):
                 # workaround for 2D contact (2 reactangular surfaces)
                 F = self.E*d
 
-            v_rel = sqrt(vx**2 + vy**2 + vz**2)
+            vrx = vx - v_dot_n*dirx
+            vry = vy - v_dot_n*diry
+            vrz = vz - v_dot_n*dirz
+            v_rel = sqrt(vrx**2 + vry**2 + vrz**2)
             v_rel = v_rel if v_rel > 1E-14 else 1
 
-            self.Fx = (F*dirx - self.k*F*vx/v_rel)
-            self.Fy = (F*diry - self.k*F*vy/v_rel)
-            self.Fz = (F*dirz - self.k*F*vz/v_rel)
+            self.Fx = (F*dirx - self.k*F*vrx/v_rel)
+            self.Fy = (F*diry - self.k*F*vry/v_rel)
+            self.Fz = (F*dirz - self.k*F*vrz/v_rel)
+        else:
+            v_dot_n = min(v_dot_n, 0)
+            # Yamane lubrication forces
+            d = min(d, -0.001*self.d)    # limit extreme forces
+            R = self.d/2
+            if alpha > 0.1:
+                A = R**2/sin(alpha)
+                F = 12.*A*pi*self.eta0*v_dot_n/d
+            else:
+                # Lindstroem limit to treat parallel cylinders (singularity!)
+                A0 = 3.*pi*sqrt(2.)/8.
+                A1 = 207*pi*sqrt(2)/160.
+                L = self.d
+                F = L*self.eta0*v_dot_n*(A0-A1*d/R)*(-d/R)**(-2./3.)
+
+            self.Fx = F*dirx
+            self.Fy = F*diry
+            self.Fz = F*dirz
