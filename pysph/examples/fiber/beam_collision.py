@@ -41,6 +41,10 @@ class Beam(Application):
             default=100, help="Body force in y-direction."
         )
         group.add_argument(
+            "--gz", action="store", type=float, dest="gz",
+            default=0, help="Body force in z-direction."
+        )
+        group.add_argument(
             "--k", action="store", type=float, dest="k",
             default=0.0, help="Friction coefficient."
         )
@@ -81,10 +85,15 @@ class Beam(Application):
         self.D = self.options.d*m*self.omega0
         self.gx = self.options.gx
         self.gy = self.options.gy
+        self.gz = self.options.gz
         print('Damping: %g, Omega0: %g' % (self.D, self.omega0))
 
         # setup time step
-        dt_force = 0.25 * np.sqrt(self.h/(sqrt(self.gx**2+self.gy**2)))
+        if abs(self.gx) > 0.0 or abs(self.gy) > 0.0 or abs(self.gz) > 0.0:
+            dt_force = 0.25 * np.sqrt(
+                self.h/(sqrt(self.gx**2+self.gy**2+self.gz**2)))
+        else:
+            dt_force = 10000
         dt_tension = 0.5*self.h*np.sqrt(self.rho0/self.E)
         dt_bending = 0.5*self.h**2*np.sqrt(self.rho0*self.A/(self.E*2*self.Ip))
 
@@ -99,9 +108,6 @@ class Beam(Application):
         _x = np.linspace(-self.dx, self.reducedL-self.dx, self.N+1)
         _y = np.array([0.0])
         _z = np.array([0.0])
-        # _x = np.array([0.0])
-        # _y = np.linspace(-self.dx, self.reducedL-self.dx, self.N+1)
-        # _z = np.array([0.0])
         x, y, z = np.meshgrid(_x, _y, _z)
         fiber1_x = x.ravel()
         fiber1_y = y.ravel()
@@ -109,9 +115,9 @@ class Beam(Application):
 
         _x = np.array([0.75*self.reducedL])
         _y = np.array([-2*self.dx])
-        _z = np.linspace(-0.25*self.reducedL, 0.75*self.reducedL, self.N+1)
-        # _x = np.array([-self.dx])
-        # _y = np.linspace(-self.dx, self.reducedL-self.dx, self.N+1)
+        _z = -np.linspace(-0.25*self.reducedL, 0.75*self.reducedL, self.N+1)
+        # _x = np.linspace(0.0, self.reducedL, self.N+1)
+        # _y = np.array([-1.5*self.dx])
         # _z = np.array([0.0])
         x, y, z = np.meshgrid(_x, _y, _z)
         fiber2_x = x.ravel()
@@ -154,12 +160,12 @@ class Beam(Application):
                 equations=[
                     MomentumEquationPressureGradient(
                         dest='fiber1',
-                        sources=['fiber1', 'fiber2'], pb=0.0, gx=self.gx,
-                        gy=self.gy),
+                        sources=['fiber1', 'fiber2'], pb=0.0,
+                        gx=self.gx, gy=self.gy, gz=self.gz),
                     MomentumEquationPressureGradient(
                         dest='fiber2',
-                        sources=['fiber1', 'fiber2'], pb=0.0, gx=self.gx,
-                        gy=self.gy),
+                        sources=['fiber1', 'fiber2'], pb=0.0,
+                        gx=self.gx, gy=self.gy, gz=self.gz),
                     Tension(
                         dest='fiber1',
                         sources=None,
@@ -202,6 +208,8 @@ class Beam(Application):
                 equations=[
                     HoldPoints(dest='fiber1', sources=None, tag=2, x=False),
                     HoldPoints(dest='fiber1', sources=None, tag=1, y=False),
+                    HoldPoints(dest='fiber2', sources=None, tag=2, x=False),
+                    HoldPoints(dest='fiber2', sources=None, tag=1, y=False),
                 ],
             ),
         ]

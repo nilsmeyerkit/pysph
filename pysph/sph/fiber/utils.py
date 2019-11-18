@@ -263,6 +263,11 @@ class Contact(Equation):
         self.Fx = 0.0
         self.Fy = 0.0
         self.Fz = 0.0
+        self.nx = 0.0
+        self.ny = 0.0
+        self.nz = 0.0
+        self.proj = 0.0
+        self.dist = 0.0
         super(Contact, self).__init__(dest, sources)
 
     def initialize(self, d_idx, d_au, d_av, d_aw, d_Fx, d_Fy, d_Fz):
@@ -277,131 +282,66 @@ class Contact(Equation):
              d_rznext, d_rnext, d_rxprev, d_ryprev, d_rzprev, d_rprev,
              s_rxnext, s_rynext, s_rznext, s_rnext, s_rxprev, s_ryprev,
              s_rzprev, s_rprev, d_Fx, d_Fy, d_Fz, d_fractag, d_tag, s_tag,
-             XIJ, VIJ, RIJ):
-
-        # not contact, if
-        # - particle is too far away to cause contact (sqrt(6)*R is max. dist.)
-        # - source particle is destination particle
-        # - particle is neighbour
+             XIJ, VIJ, RIJ, EPS):
+        """Loop over all particles and compute interaction forces."""
+        # exclude self and direct neighbors
         if (RIJ > 1E-14
             and RIJ < 1.5*self.d
             and abs(RIJ-d_rprev[d_idx]) > 1E-14
                 and abs(RIJ-d_rnext[d_idx]) > 1E-14):
 
-            # case for two fiber ends
-            if ((d_rnext[d_idx] < 1E-14 or d_rprev[d_idx] < 1E-14) and
-                    (s_rnext[s_idx] < 1E-14 or s_rprev[s_idx] < 1E-14)):
+            # unit direction of destination fiber
+            dx = d_rxprev[d_idx] - d_rxnext[d_idx]
+            dy = d_ryprev[d_idx] - d_rynext[d_idx]
+            dz = d_rzprev[d_idx] - d_rznext[d_idx]
+            dr = sqrt(dx**2 + dy**2 + dz**2)
+            dx = dx/dr
+            dy = dy/dr
+            dz = dz/dr
 
-                d = self.d - RIJ
-                nx = XIJ[0]/RIJ
-                ny = XIJ[1]/RIJ
-                nz = XIJ[2]/RIJ
-                self.compute_force(nx, ny, nz, VIJ[0], VIJ[1], VIJ[2], d, pi/2)
+            # unit direction of source fiber
+            sx = s_rxprev[s_idx] - s_rxnext[s_idx]
+            sy = s_ryprev[s_idx] - s_rynext[s_idx]
+            sz = s_rzprev[s_idx] - s_rznext[s_idx]
+            sr = sqrt(sx**2 + sy**2 + sz**2)
+            sx = sx/sr
+            sy = sy/sr
+            sz = sz/sr
 
-            # case for fiber end in destination fiber
-            elif d_rnext[d_idx] < 1E-14 or d_rprev[d_idx] < 1E-14:
+            # conditions
+            d_prev_tip = (d_rprev[d_idx] < EPS
+                          and dx*XIJ[0]+dy*XIJ[1]+dz*XIJ[2] < EPS)
+            s_prev_tip = (s_rprev[s_idx] < EPS
+                          and sx*XIJ[0]+sy*XIJ[1]+sz*XIJ[2] > EPS)
+            d_next_tip = (d_rnext[d_idx] < EPS
+                          and dx*XIJ[0]+dy*XIJ[1]+dz*XIJ[2] > EPS)
+            s_next_tip = (s_rnext[s_idx] < EPS
+                          and sx*XIJ[0]+sy*XIJ[1]+sz*XIJ[2] < EPS)
 
-                # direction of source fiber
-                sx = s_rxprev[s_idx] - s_rxnext[s_idx]
-                sy = s_ryprev[s_idx] - s_rynext[s_idx]
-                sz = s_rzprev[s_idx] - s_rznext[s_idx]
-                sr = sqrt(sx**2 + sy**2 + sz**2)
+            # default weight and angle for tip interactions
+            w = 1.0
+            alpha = pi/2.
 
-                # distance computation
-                dot_prod = (sx*XIJ[0] + sy*XIJ[1] + sz*XIJ[2])/sr
-                tx = XIJ[0] - dot_prod*sx/sr
-                ty = XIJ[1] - dot_prod*sy/sr
-                tz = XIJ[2] - dot_prod*sz/sr
-                tr = sqrt(tx**2 + ty**2 + tz**2)
-
-                nx = tx/tr
-                ny = ty/tr
-                nz = tz/tr
-
-                d = self.d - tr
-                self.compute_force(nx, ny, nz, VIJ[0], VIJ[1], VIJ[2], d, pi/2)
-
-            # case for fiber end in source fiber
-            elif s_rnext[s_idx] < 1E-14 or s_rprev[s_idx] < 1E-14:
-                # direction of destination fiber
-                dx = d_rxprev[d_idx]-d_rxnext[d_idx]
-                dy = d_ryprev[d_idx]-d_rynext[d_idx]
-                dz = d_rzprev[d_idx]-d_rznext[d_idx]
-                dr = sqrt(dx**2 + dy**2 + dz**2)
-
-                # distance computation
-                dot_prod = (dx*XIJ[0] + dy*XIJ[1] + dz*XIJ[2])/dr
-                tx = XIJ[0] - dot_prod*dx/dr
-                ty = XIJ[1] - dot_prod*dy/dr
-                tz = XIJ[2] - dot_prod*dz/dr
-                tr = sqrt(tx**2 + ty**2 + tz**2)
-
-                nx = tx/tr
-                ny = ty/tr
-                nz = tz/tr
-
-                d = self.d - tr
-                self.compute_force(nx, ny, nz, VIJ[0], VIJ[1], VIJ[2], d, pi/2)
-            else:
-                # direction of destination fiber
-                dx = d_rxprev[d_idx] - d_rxnext[d_idx]
-                dy = d_ryprev[d_idx] - d_rynext[d_idx]
-                dz = d_rzprev[d_idx] - d_rznext[d_idx]
-                dr = sqrt(dx**2 + dy**2 + dz**2)
-
-                dx = dx/dr
-                dy = dy/dr
-                dz = dz/dr
-
-                # direction of source fiber
-                sx = s_rxprev[s_idx] - s_rxnext[s_idx]
-                sy = s_ryprev[s_idx] - s_rynext[s_idx]
-                sz = s_rzprev[s_idx] - s_rznext[s_idx]
-                sr = sqrt(sx**2 + sy**2 + sz**2)
-
-                sx = sx/sr
-                sy = sy/sr
-                sz = sz/sr
-
-                # normal direction at contact
-                nx = dy*sz - dz*sy
-                ny = dz*sx - dx*sz
-                nz = dx*sy - dy*sx
-                nr = sqrt(nx**2 + ny**2 + nz**2)
-
-                # 3 vectors not in plane
-                if abs(nx*XIJ[0]+ny*XIJ[1]+nz*XIJ[2]) > 1E-14 and nr > 1E-14:
-                    nx = -nx/nr
-                    ny = -ny/nr
-                    nz = -nz/nr
-
-                    d = self.d - (nx*XIJ[0]+ny*XIJ[1]+nz*XIJ[2])
-
-                    alpha = acos(dx*sx+dy*sy+dz*sz)
-
-                    self.compute_force(
-                        nx, ny, nz, VIJ[0], VIJ[1], VIJ[2], d, alpha)
+            # determine case
+            if d_prev_tip or d_next_tip or dr < EPS:
+                if s_prev_tip or s_next_tip or sr < EPS:
+                    self.compute_point_point_props(XIJ, RIJ)
                 else:
-                    # direction of destination fiber
-                    dx = d_rxnext[d_idx] - d_rxprev[d_idx]
-                    dy = d_rynext[d_idx] - d_ryprev[d_idx]
-                    dz = d_rznext[d_idx] - d_rzprev[d_idx]
-                    dr = sqrt(dx**2+dy**2+dz**2)
+                    self.compute_center_point_props(XIJ, sx, sy, sz)
+                    w = self.weight(s_rnext[s_idx], s_rprev[s_idx], self.proj)
+            elif s_prev_tip or s_next_tip or sr < EPS:
+                if d_prev_tip or d_next_tip or dr < EPS:
+                    self.compute_point_point_props(XIJ, RIJ)
+                else:
+                    self.compute_center_point_props(XIJ, dx, dy, dz)
+                    w = self.weight(d_rnext[d_idx], d_rprev[d_idx], self.proj)
+            else:
+                # center and center
+                alpha = self.compute_center_center_props(
+                    XIJ, dx, dy, dz, sx, sy, sz)
+                w = self.weight(d_rnext[d_idx], d_rprev[d_idx], self.proj)
 
-                    # distance computation
-                    dot_prod = (dx*XIJ[0] + dy*XIJ[1] + dz*XIJ[2])/dr
-                    tx = XIJ[0] - dot_prod*dx/dr
-                    ty = XIJ[1] - dot_prod*dy/dr
-                    tz = XIJ[2] - dot_prod*dz/dr
-                    tr = sqrt(tx**2 + ty**2 + tz**2)
-
-                    nx = tx/tr
-                    ny = ty/tr
-                    nz = tz/tr
-
-                    d = self.d - tr
-                    self.compute_force(
-                        nx, ny, nz, VIJ[0], VIJ[1], VIJ[2], d, pi/2)
+            self.compute_force(VIJ[0], VIJ[1], VIJ[2], w, alpha)
 
             d_Fx[d_idx] += self.Fx
             d_Fy[d_idx] += self.Fy
@@ -411,16 +351,122 @@ class Contact(Equation):
             d_av[d_idx] += self.Fy/d_m[d_idx]
             d_aw[d_idx] += self.Fz/d_m[d_idx]
 
-    def compute_force(self, dirx=0.0, diry=0.0, dirz=0.0, vx=0.0, vy=0.0,
-                      vz=0.0, d=0.0, alpha=pi/2.):
-        """This force can be either a contact force (d>0) or a lubrication
-            force (d<0).
-        """
-        self.Fx = 0.0
-        self.Fy = 0.0
-        self.Fz = 0.0
+    def compute_center_point_props(self, XIJ, ax=0.0, ay=0.0, az=0.0):
+        """Determine normal, distance and projected length - Center-Point.
 
-        v_dot_n = vx*dirx + vy*diry + vz*dirz
+        The projection looks like this:
+
+                       x (source point )
+                      /|
+                  XIJ/ | distance
+                    /  |
+        dest point o---*----> unit vector a
+                    proj
+        """
+        projection = -(ax*XIJ[0] + ay*XIJ[1] + az*XIJ[2])
+        tx = XIJ[0] + projection*ax
+        ty = XIJ[1] + projection*ay
+        tz = XIJ[2] + projection*az
+        tr = sqrt(tx**2 + ty**2 + tz**2)
+
+        self.nx = tx/tr
+        self.ny = ty/tr
+        self.nz = tz/tr
+        self.proj = projection
+        self.dist = tr
+
+    def compute_point_point_props(self, XIJ, RIJ):
+        """Compute the normal between end points.
+
+        This case is trivial.
+        """
+        self.nx = XIJ[0]/RIJ
+        self.ny = XIJ[1]/RIJ
+        self.nz = XIJ[2]/RIJ
+        self.dist = RIJ
+
+    def compute_center_center_props(self, XIJ, dx=0.0, dy=0.0, dz=0.0,
+                                    sx=0.0, sy=0.0, sz=0.0):
+        """Compute normal direction between two lines.
+
+        The normal is given either by the cross product or by a projection, if
+        both lines are (almost) parallel.
+        """
+        # normal direction at contact
+        nx = dy*sz - dz*sy
+        ny = dz*sx - dx*sz
+        nz = dx*sy - dy*sx
+        nr = sqrt(nx**2 + ny**2 + nz**2)
+
+        # Parallel vectors should be treated with a projection
+        if nr > 0.01:
+            self.nx = nx/nr
+            self.ny = ny/nr
+            self.nz = nz/nr
+            alpha = acos(dx*sx+dy*sy+dz*sz)
+            self.project_center_center(XIJ, dx, dy, dz, sx, sy, sz)
+        else:
+            self.compute_center_point_props(XIJ, dx, dy, dz)
+            alpha = pi/2.
+
+        return alpha
+
+    def project_center_center(self, XIJ, dx=0.0, dy=0.0, dz=0.0,
+                              sx=0.0, sy=0.0, sz=0.0):
+        """Find distance and projection of contact point on fiber line.
+
+        Therefore, solve
+        |dx  nx -sx|   |dest projection |     |XIJ[0]|
+        |dy  ny -sy|   |distance        |  =  |XIJ[1]|
+        |dz  nz -sz|   |src projection  |     |XIJ[2]|
+
+        """
+        nx = self.nx
+        ny = self.ny
+        nz = self.nz
+        det = (dx*ny*(-sz) + nx*(-sy)*dz + (-sx)*dy*nz
+               - (-sx)*ny*dz - dx*(-sy)*nz - nx*dy*(-sz))
+        if abs(det) < 1E-14:
+            print("Determinant is zero. This case should not happen.")
+        self.proj = ((sy*nz - ny*sz)*XIJ[0]
+                     + (nx*sz - sx*nz)*XIJ[1]
+                     + (sx*ny - nx*sy)*XIJ[2])/det
+        self.dist = ((dy*sz - sy*dz)*XIJ[0]
+                     + (sx*dz - dx*sz)*XIJ[1]
+                     + (dx*sy - sx*dy)*XIJ[2])/det
+        if self.dist < 0.0:
+            self.dist = -self.dist
+            self.nx = -nx
+            self.ny = -ny
+            self.nz = -nz
+
+    def weight(self, next=0.0, prev=0.0, proj=0.0):
+        """Weight force contribution among neighboring particles.
+
+        Any projection outside the range between the previous and next particle
+        is weighted with zero. Anything between is linearly distributed with
+        special treating for the edge cases of fiber tips.
+        """
+        w = 0.0
+        if next < 1E-14 and proj > -prev and proj <= 0:
+            w = (prev+proj)/prev
+        elif prev < 1E-14 and proj < next and proj >= 0:
+            w = (next-proj)/next
+        elif proj < prev and proj >= 0:
+            w = (prev-proj)/prev
+        elif proj > -next and proj <= 0:
+            w = (next+proj)/next
+        return w
+
+    def compute_force(self, vx=0.0, vy=0.0, vz=0.0, w=1.0, alpha=pi/2.):
+        """Compute the interaction force at contact point.
+
+        This force can be either a contact force (d>0) or a lubrication
+        force (d<0).
+        """
+        d = self.d - self.dist
+
+        v_dot_n = vx*self.nx + vy*self.ny + vz*self.nz
 
         if d >= 0:
             # elastic factor from Hertz' pressure in contact
@@ -434,15 +480,15 @@ class Contact(Equation):
                 # workaround for 2D contact (2 reactangular surfaces)
                 F = self.E*d
 
-            vrx = vx - v_dot_n*dirx
-            vry = vy - v_dot_n*diry
-            vrz = vz - v_dot_n*dirz
+            vrx = vx - v_dot_n*self.nx
+            vry = vy - v_dot_n*self.ny
+            vrz = vz - v_dot_n*self.nz
             v_rel = sqrt(vrx**2 + vry**2 + vrz**2)
             v_rel = v_rel if v_rel > 1E-14 else 1
 
-            self.Fx = (F*dirx - self.k*F*vrx/v_rel)
-            self.Fy = (F*diry - self.k*F*vry/v_rel)
-            self.Fz = (F*dirz - self.k*F*vrz/v_rel)
+            self.Fx = w*(F*self.nx - self.k*F*vrx/v_rel)
+            self.Fy = w*(F*self.ny - self.k*F*vry/v_rel)
+            self.Fz = w*(F*self.nz - self.k*F*vrz/v_rel)
         else:
             v_dot_n = min(v_dot_n, 0)
             # Yamane lubrication forces
@@ -458,6 +504,6 @@ class Contact(Equation):
                 L = self.d
                 F = L*self.eta0*v_dot_n*(A0-A1*d/R)*(-d/R)**(-2./3.)
 
-            self.Fx = F*dirx
-            self.Fy = F*diry
-            self.Fz = F*dirz
+            self.Fx = 0.0  # w*F*self.nx
+            self.Fy = 0.0  # w*F*self.ny
+            self.Fz = 0.0  # w*F*self.nz
