@@ -56,7 +56,7 @@ class RVE(Application):
         )
         group.add_argument(
             "--Re", action="store", type=float, dest="Re",
-            default=0.1, help="Desired Particle Reynolds number."
+            default=0.5, help="Desired Particle Reynolds number."
         )
         group.add_argument(
             "--volfrac", action="store", type=float, dest="vol_frac",
@@ -147,7 +147,9 @@ class RVE(Application):
         self.scheme.configure_solver(
             tf=self.t,
             vtk=self.options.vtk,
-            N=self.options.rot*100)
+            # pfreq=1,
+            N=self.options.rot*100
+            )
 
     def create_particles(self):
         """Create or load particle arrays."""
