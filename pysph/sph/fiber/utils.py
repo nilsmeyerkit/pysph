@@ -426,8 +426,6 @@ class Contact(Equation):
         nz = self.nz
         det = (dx*ny*(-sz) + nx*(-sy)*dz + (-sx)*dy*nz
                - (-sx)*ny*dz - dx*(-sy)*nz - nx*dy*(-sz))
-        if abs(det) < 1E-14:
-            print("Determinant is zero. This case should not happen.")
         self.proj = ((sy*nz - ny*sz)*XIJ[0]
                      + (nx*sz - sx*nz)*XIJ[1]
                      + (sx*ny - nx*sy)*XIJ[2])/det
