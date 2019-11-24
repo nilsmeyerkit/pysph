@@ -320,7 +320,7 @@ class Contact(Equation):
 
             # default weight and angle for tip interactions
             w = 1.0
-            alpha = pi/2.
+            alpha = 0.0
 
             # determine case
             if d_prev_tip or d_next_tip or dr < EPS:
@@ -456,7 +456,7 @@ class Contact(Equation):
             w = (next+proj)/next
         return w
 
-    def compute_force(self, vx=0.0, vy=0.0, vz=0.0, w=1.0, alpha=pi/2.):
+    def compute_force(self, vx=0.0, vy=0.0, vz=0.0, w=1.0, alpha=0.0):
         """Compute the interaction force at contact point.
 
         This force can be either a contact force (d>0) or a lubrication
@@ -488,19 +488,19 @@ class Contact(Equation):
             self.Fy = w*(F*self.ny - self.k*F*vry/v_rel)
             self.Fz = w*(F*self.nz - self.k*F*vrz/v_rel)
         else:
-            v_dot_n = min(v_dot_n, 0)
+            # v_dot_n = min(v_dot_n, 0)
             # Yamane lubrication forces
             d = min(d, -0.001*self.d)    # limit extreme forces
             R = self.d/2
-            if alpha > 0.1:
-                A = R**2/sin(alpha)
+            if abs(alpha) > 0.1:
+                A = R**2/abs(sin(alpha))
                 F = 12.*A*pi*self.eta0*v_dot_n/d
             else:
                 # Lindstroem limit to treat parallel cylinders (singularity!)
                 A0 = 3.*pi*sqrt(2.)/8.
-                A1 = 207*pi*sqrt(2)/160.
+                A1 = 207*pi*sqrt(2.)/160.
                 L = self.d
-                F = L*self.eta0*v_dot_n*(A0-A1*d/R)*(-d/R)**(-2./3.)
+                F = -L*self.eta0*v_dot_n*(A0-A1*d/R)*(-d/R)**(-3./2.)
 
             self.Fx = 0.0  # w*F*self.nx
             self.Fy = 0.0  # w*F*self.ny
