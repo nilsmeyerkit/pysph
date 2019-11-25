@@ -890,7 +890,8 @@ class BeadChainScheme(Scheme):
                                   dim=self.dim,
                                   k=self.k,
                                   lim=self.lim,
-                                  eta0=self.rho0*self.nu))
+                                  eta0=self.rho0*self.nu,
+                                  dt=self.dt))
 
             g5.append(Friction(
                 dest=fiber, sources=None, J=self.J, dx=self.dx,

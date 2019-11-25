@@ -187,13 +187,15 @@ class Beam(Application):
                         sources=['fiber1', 'fiber2'],
                         E=self.E, d=self.dx, dim=3,
                         k=self.options.k,
-                        eta0=self.options.eta),
+                        eta0=self.options.eta,
+                        dt=self.dt),
                     Contact(
                         dest='fiber2',
                         sources=['fiber1', 'fiber2'],
                         E=self.E, d=self.dx, dim=3,
                         k=self.options.k,
-                        eta0=self.options.eta),
+                        eta0=self.options.eta,
+                        dt=self.dt),
                     Damping(
                         dest='fiber1',
                         sources=None,

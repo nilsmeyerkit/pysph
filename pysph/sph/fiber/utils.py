@@ -236,7 +236,7 @@ class Contact(Equation):
     cylinders. This Equation requires a computation of ditances by the Bending
     equation."""
     def __init__(self, dest, sources, E, d, dim, pois=0.3, k=0.0, lim=0.5,
-                 eta0=0.0):
+                 eta0=0.0, dt=0.0):
         r"""
         Parameters
         ----------
@@ -260,6 +260,7 @@ class Contact(Equation):
         self.dim = dim
         self.lim = lim
         self.eta0 = eta0
+        self.dt = dt
         self.Fx = 0.0
         self.Fy = 0.0
         self.Fz = 0.0
@@ -341,7 +342,8 @@ class Contact(Equation):
                     XIJ, dx, dy, dz, sx, sy, sz)
                 w = self.weight(d_rnext[d_idx], d_rprev[d_idx], self.proj)
 
-            self.compute_force(VIJ[0], VIJ[1], VIJ[2], w, alpha)
+            self.compute_force(VIJ[0], VIJ[1], VIJ[2], w, alpha, self.dt,
+                               d_m[d_idx])
 
             d_Fx[d_idx] += self.Fx
             d_Fy[d_idx] += self.Fy
@@ -456,7 +458,8 @@ class Contact(Equation):
             w = (next+proj)/next
         return w
 
-    def compute_force(self, vx=0.0, vy=0.0, vz=0.0, w=1.0, alpha=0.0):
+    def compute_force(self, vx=0.0, vy=0.0, vz=0.0, w=1.0, alpha=0.0, dt=0.0,
+                      mass=1.0):
         """Compute the interaction force at contact point.
 
         This force can be either a contact force (d>0) or a lubrication
@@ -501,7 +504,13 @@ class Contact(Equation):
                 A1 = 207*pi*sqrt(2.)/160.
                 L = self.d
                 F = -L*self.eta0*v_dot_n*(A0-A1*d/R)*(-d/R)**(-3./2.)
+            # The lubrication force must always be lower than the force needed
+            # to invert the relative velocity
+            if dt > 0.0:
+                F_max = -v_dot_n*mass/dt
+                if (F < 0.0 and F < F_max) or (F > 0.0 and F > F_max):
+                    F = F_max
 
-            self.Fx = 0.0  # w*F*self.nx
-            self.Fy = 0.0  # w*F*self.ny
-            self.Fz = 0.0  # w*F*self.nz
+            self.Fx = w*F*self.nx
+            self.Fy = w*F*self.ny
+            self.Fz = w*F*self.nz
