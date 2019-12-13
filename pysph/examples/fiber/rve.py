@@ -364,6 +364,27 @@ class RVE(Application):
         data = np.hstack((np.matrix(t).T, np.vstack(A)))
         np.savetxt(csv_file, data, delimiter=',')
 
+        # plot results
+        data = np.loadtxt(csv_file, delimiter=',')
+        t = data[:, 0]
+        plt.figure(figsize=(12, 3))
+        for j, i in enumerate([0, 4, 8, 1]):
+            plt.subplot("14"+str(j+1))
+            p = plt.plot(self.options.G*t, data[:, i+1])
+            plt.xlabel("Strains")
+            plt.ylabel("Component %d" % j)
+            if i % 2 == 0:
+                plt.ylim([0, 1])
+            else:
+                plt.ylim([-1, 1])
+        plt.tight_layout()
+        plt.savefig(csv_file.replace('.csv', '.pdf'))
+        try:
+            from matplotlib2tikz import save as tikz_save
+            tikz_save(csv_file.replace('.csv', '.tex'))
+        except ImportError:
+            print("Did not write tikz figure.")
+
 
 if __name__ == '__main__':
     app = RVE()
