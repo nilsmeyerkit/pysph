@@ -43,7 +43,7 @@ class SingleParticle(Application):
         )
         group.add_argument(
             "--size", action="store", type=int, dest="size",
-            default=50, help="Cube size (multiples of fiber diameter)"
+            default=51, help="Cube size (multiples of fiber diameter)"
         )
         group.add_argument(
             "--t", action="store", type=float, dest="t",
@@ -92,7 +92,7 @@ class SingleParticle(Application):
         self.scheme.configure(
             rho0=self.rho0, c0=self.c0, nu=self.nu,
             p0=self.p0, pb=self.pb, h0=self.h0, dx=self.dx, A=1.0,
-            Ip=1.0, J=1.0, E=1.0, D=1.0, d=self.d)
+            Ip=1.0, J=1.0, E=1.0, d=self.d)
 
         self.kernel = CubicSpline(dim=3)
         self.scheme.configure_solver(
@@ -184,21 +184,22 @@ class SingleParticle(Application):
         fiber.holdtag[:] = 100
 
         # Setting the initial velocities
-        # fluid.w[:] = self.v
+        fluid.w[:] = self.v
         channel.w[:] = self.v
 
-        # set anayltical solution
-        R = self.d/2.
-        r = np.sqrt((fluid.x-self.x_fiber)**2
-                    + (fluid.y-self.y_fiber)**2
-                    + (fluid.z-self.z_fiber)**2)
-        theta = np.arccos((fluid.z-self.z_fiber)/r)
-        phi = np.arctan2(-(fluid.y-self.y_fiber), -(fluid.x-self.x_fiber))
-        ur = self.v*(1. + R**3/(2.*r**3) - (3.*R)/(2.*r))*np.cos(theta)
-        ut = -self.v*(1. - R**3/(4.*r**3) - (3.*R)/(4.*r))*np.sin(theta)
-        fluid.u[:] = ur*np.sin(theta)*np.cos(phi)+ut*np.cos(theta)*np.cos(phi)
-        fluid.v[:] = ur*np.sin(theta)*np.sin(phi)+ut*np.cos(theta)*np.sin(phi)
-        fluid.w[:] = ur*np.cos(theta)-ut*np.sin(theta)
+        # # set anayltical solution
+        # R = self.d/2.
+        # r = np.sqrt((fluid.x-self.x_fiber)**2
+        #             + (fluid.y-self.y_fiber)**2
+        #             + (fluid.z-self.z_fiber)**2)
+        # theta = np.arccos((fluid.z-self.z_fiber)/r)
+        # phi = np.arctan2(-(fluid.y-self.y_fiber), -(fluid.x-self.x_fiber))
+        # ur = self.v*(1. + R**3/(2.*r**3) - (3.*R)/(2.*r))*np.cos(theta)
+        # ut = -self.v*(1. - R**3/(4.*r**3) - (3.*R)/(4.*r))*np.sin(theta)
+        # fluid.u[:] = ur*np.sin(theta)*np.cos(phi)+ut*np.cos(theta)*np.cos(phi)
+        # fluid.v[:] = ur*np.sin(theta)*np.sin(phi)+ut*np.cos(theta)*np.sin(phi)
+        # fluid.w[:] = ur*np.cos(theta)-ut*np.sin(theta)
+        # fluid.p[:] = -1.5*self.options.mu*self.v*R/r**3*np.cos(theta)
 
         # Return the particle list.
         return [fluid, channel, fiber]
@@ -310,13 +311,16 @@ class SingleParticle(Application):
         pmax = np.nanmax(ref_pz)
 
         # Velocity plot
+        plt.figure(figsize=(10, 5))
         plt.subplot(1, 2, 1)
         plt.plot((rz+self.L/2)/self.dx, ref_uz, Z/self.dx, uz/self.v)
         plt.xlabel('z')
+        plt.ylabel('u/u_0')
         plt.ylim([0.0, 1.0])
         plt.subplot(1, 2, 2)
-        plt.plot((rx+self.L/2)/self.dx, ref_ux, X/self.dx, ux/self.v,)
+        plt.plot((rx+self.L/2)/self.dx, ref_ux, X/self.dx, ux/self.v)
         plt.xlabel('x')
+        plt.ylabel('u/u_0')
         plt.ylim([0.0, 1.0])
         # save plot
         fig = os.path.join(self.output_dir, 'velocity.png')
