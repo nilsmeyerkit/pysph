@@ -163,7 +163,9 @@ class Channel(Application):
         self.scheme.configure_solver(
             tf=self.t,
             vtk=self.options.vtk,
-            N=self.options.rot*200)
+            # pfreq=1,
+            N=self.options.rot*200
+            )
 
     def create_particles(self):
         """Three particle arrays are created.
@@ -204,16 +206,11 @@ class Channel(Application):
         _fibz = np.array([zz])
         fibx, fiby, fibz = self.get_meshgrid(_fibx, _fiby, _fibz)
 
-        # Determine the size of dummy region
-        ghost_extent = 3.*fdx
-
         # Create the channel particles at the top
-        _y = np.arange(self.Ly + dx2, self.Ly + dx2 + ghost_extent, fdx)
-        tx, ty, tz = self.get_meshgrid(_x, _y, _z)
+        tx, ty, tz = self.get_meshgrid(_x, self.Ly + dx2, _z)
 
         # Create the channel particles at the bottom
-        _y = np.arange(-dx2, -dx2 - ghost_extent, -fdx)
-        bx, by, bz = self.get_meshgrid(_x, _y, _z)
+        bx, by, bz = self.get_meshgrid(_x, -dx2, _z)
 
         # Concatenate the top and bottom arrays
         cx = np.concatenate((tx, bx))

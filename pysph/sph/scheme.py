@@ -804,8 +804,8 @@ class BeadChainScheme(Scheme):
         from pysph.sph.wc.transport_velocity import (
             SummationDensity, StateEquation, MomentumEquationPressureGradient,
             MomentumEquationViscosity, MomentumEquationArtificialStress,
-            SolidWallPressureBC, SolidWallNoSlipBC, SetWallVelocity,
-            FiberViscousTraction)
+            PressureOnFluid, PressureOnBody, SolidWallNoSlipBC,
+            SetWallVelocity, SummationDensityBoundary, VolumeSummation)
         from pysph.sph.fiber.utils import (
             HoldPoints, VelocityGradient, ComputeDistance, Contact)
         from pysph.sph.fiber.beadchain import (EBGVelocityReset, Friction,
@@ -813,10 +813,20 @@ class BeadChainScheme(Scheme):
 
         equations = []
         all = self.fluids + self.solids + self.fibers
+        bodies = self.solids + self.fibers
+
+        g0 = []
+        for fiber in self.fibers:
+            g0.append(VolumeSummation(dest=fiber, sources=bodies))
+        for solid in self.solids:
+            g0.append(VolumeSummation(dest=solid, sources=bodies))
+        equations.append(Group(equations=g0, real=False))
 
         g1 = []
         for fluid in self.fluids:
-            g1.append(SummationDensity(dest=fluid, sources=all))
+            g1.append(SummationDensity(dest=fluid, sources=self.fluids))
+            g1.append(SummationDensityBoundary(dest=fluid, sources=bodies,
+                                               fluid_rho=self.rho0))
         for fiber in self.fibers:
             g1.append(EBGVelocityReset(dest=fiber, sources=None))
         equations.append(Group(equations=g1, real=False))
@@ -834,20 +844,6 @@ class BeadChainScheme(Scheme):
 
         equations.append(Group(equations=g2, real=False))
 
-        g3 = []
-        for solid in self.solids:
-            g3.append(SolidWallPressureBC(
-                dest=solid, sources=self.fluids, b=1.0,
-                rho0=self.rho0, p0=self.p0, gx=self.gx, gy=self.gy,
-                gz=self.gz))
-        for fiber in self.fibers:
-            g3.append(SolidWallPressureBC(
-                dest=fiber, sources=self.fluids, b=1.0,
-                rho0=self.rho0, p0=self.p0, gx=self.gx, gy=self.gy,
-                gz=self.gz))
-
-        equations.append(Group(equations=g3, real=False))
-
         g4 = []
         for fiber in self.fibers:
             g4.append(ComputeDistance(dest=fiber, sources=[fiber]))
@@ -858,24 +854,29 @@ class BeadChainScheme(Scheme):
         g5 = []
         for fluid in self.fluids:
             g5.append(MomentumEquationPressureGradient(
-                dest=fluid, sources=all, pb=self.pb, gx=self.gx, gy=self.gy,
+                dest=fluid, sources=self.fluids,
+                pb=self.pb, gx=self.gx, gy=self.gy,
                 gz=self.gz, tdamp=self.tdamp))
+            g5.append(PressureOnFluid(dest=fluid, sources=bodies,
+                      rho0=self.rho0, pb=self.pb))
             if self.nu > 0.0:
                 g5.append(MomentumEquationViscosity(
                     dest=fluid, sources=self.fluids, nu=self.nu))
                 g5.append(SolidWallNoSlipBC(
-                    dest=fluid, sources=self.solids + self.fibers,
-                    nu=self.nu))
-                g5.append(MomentumEquationArtificialStress(
-                    dest=fluid, sources=self.fluids))
+                    dest=fluid, sources=bodies, nu=self.nu))
+            g5.append(MomentumEquationArtificialStress(
+                dest=fluid, sources=self.fluids))
+
+        for solid in self.solids:
+            g5.append(PressureOnBody(dest=solid, sources=self.fluids,
+                      rho0=self.rho0))
 
         for fiber in self.fibers:
-            g5.append(MomentumEquationPressureGradient(
-                dest=fiber, sources=all, pb=0.0, gx=self.gx, gy=self.gy,
-                gz=self.gz, tdamp=self.tdamp))
-            if self.nu > 0.0:
-                g5.append(FiberViscousTraction(
-                    dest=fiber, sources=self.fluids, nu=self.nu))
+            # g5.append(MomentumEquationPressureGradient(
+            #     dest=fiber, sources=all, pb=0.0, gx=self.gx, gy=self.gy,
+            #     gz=self.gz, tdamp=self.tdamp))
+            g5.append(PressureOnBody(dest=fiber, sources=self.fluids,
+                      rho0=self.rho0))
             if self.direct:
                 g5.append(Tension(dest=fiber,
                                   sources=None,

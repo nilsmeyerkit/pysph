@@ -58,6 +58,22 @@ class SummationDensity(Equation):
         d_rho[d_idx] += d_m[d_idx]*WIJ
 
 
+class SummationDensityBoundary(Equation):
+    r"""Equation to find the density of the
+    fluid particle due to any boundary or a rigid body
+
+    :math:`\rho_a = \sum_b {\rho}_fluid V_b W_{ab}`
+
+    """
+    def __init__(self, dest, sources, fluid_rho):
+        self.fluid_rho = fluid_rho
+        super(SummationDensityBoundary, self).__init__(dest, sources)
+
+    def loop(self, d_idx, d_rho, s_idx, s_m, s_V, d_V, WIJ):
+        d_V[d_idx] += WIJ
+        d_rho[d_idx] += self.fluid_rho / s_V[s_idx] * WIJ
+
+
 class VolumeSummation(Equation):
     r"""**Number density for volume computation**
 
@@ -98,7 +114,8 @@ class SetWallVelocity(Equation):
 
     """
 
-    def initialize(self, d_idx, d_uf, d_vf, d_wf, d_wij, d_Fwx, d_Fwy, d_Fwz):
+    def initialize(self, d_idx, d_uf, d_vf, d_wf, d_wij, d_Fwx, d_Fwy, d_Fwz,
+                   d_au, d_av, d_aw):
         d_uf[d_idx] = 0.0
         d_vf[d_idx] = 0.0
         d_wf[d_idx] = 0.0
@@ -106,6 +123,9 @@ class SetWallVelocity(Equation):
         d_Fwx[d_idx] = 0.0
         d_Fwy[d_idx] = 0.0
         d_Fwz[d_idx] = 0.0
+        d_au[d_idx] = 0.0
+        d_av[d_idx] = 0.0
+        d_aw[d_idx] = 0.0
 
     def loop(self, d_idx, s_idx, d_uf, d_vf, d_wf,
              s_u, s_v, s_w, d_wij, WIJ):
@@ -616,14 +636,10 @@ class SolidWallNoSlipBC(Equation):
              d_u, d_v, d_w,
              s_Fwx, s_Fwy, s_Fwz,
              d_au, d_av, d_aw,
+             s_au, s_av, s_aw,
              s_ug, s_vg, s_wg,
              DWIJ, R2IJ, EPS, XIJ):
-
-        # averaged shear viscosity Eq. (6).
-        etai = self.nu * d_rho[d_idx]
-        etaj = self.nu * s_rho[s_idx]
-
-        etaij = 2 * (etai * etaj)/(etai + etaj)
+        etaij = self.nu * d_rho[d_idx]
 
         # particle volumes; d_V inverse volume.
         Vi = 1./d_V[d_idx]
@@ -642,57 +658,77 @@ class SolidWallNoSlipBC(Equation):
         d_av[d_idx] += tmp * (d_v[d_idx] - s_vg[s_idx])
         d_aw[d_idx] += tmp * (d_w[d_idx] - s_wg[s_idx])
 
-        s_Fwx[s_idx] -= tmp * d_m[d_idx] * (d_u[d_idx] - s_ug[s_idx])
-        s_Fwy[s_idx] -= tmp * d_m[d_idx] * (d_v[d_idx] - s_vg[s_idx])
-        s_Fwz[s_idx] -= tmp * d_m[d_idx] * (d_w[d_idx] - s_wg[s_idx])
+        s_au[s_idx] -= tmp * (d_u[d_idx] - s_ug[s_idx])
+        s_av[s_idx] -= tmp * (d_v[d_idx] - s_vg[s_idx])
+        s_aw[s_idx] -= tmp * (d_w[d_idx] - s_wg[s_idx])
 
 
-class FiberViscousTraction(Equation):
-    r"""**Fiber boundary condition**
+class PressureOnFluid(Equation):
+    """The pressure acceleration on the fluid/solid due to a boundary.
+    Implemented from Akinci et al. http://dx.doi.org/10.1145/2185520.2185558
+
+    Use this with the fluid as a destination and body as source.
     """
-
-    def __init__(self, dest, sources, nu):
-        r"""
-        Parameters
-        ----------
-        nu : float
-            kinematic viscosity
-        """
-
-        self.nu = nu
-        super(FiberViscousTraction, self).__init__(dest, sources)
+    def __init__(self, dest, sources, rho0, pb):
+        self.rho0 = rho0
+        self.pb = pb
+        super(PressureOnFluid, self).__init__(dest, sources)
 
     def initialize(self, d_idx, d_au, d_av, d_aw):
         d_au[d_idx] = 0.0
         d_av[d_idx] = 0.0
         d_aw[d_idx] = 0.0
 
-    def loop(self, d_idx, s_idx, d_m, s_m, d_rho, s_rho, d_V, s_V,
-             s_u, s_v, s_w,
-             d_au, d_av, d_aw,
-             d_ug, d_vg, d_wg,
-             DWIJ, R2IJ, EPS, XIJ):
+    def loop(self, d_idx, s_idx, d_m, d_rho, d_p, d_V, s_V,
+             d_au, d_av, d_aw, d_auhat, d_avhat, d_awhat, DWIJ):
+        rho1 = 1.0/d_rho[d_idx]
+        fac = -d_p[d_idx]*rho1*rho1*self.rho0/s_V[s_idx]
 
-        # averaged shear viscosity Eq. (6).
-        etai = self.nu * d_rho[d_idx]
-        etaj = self.nu * s_rho[s_idx]
+        d_au[d_idx] += fac*DWIJ[0]
+        d_av[d_idx] += fac*DWIJ[1]
+        d_aw[d_idx] += fac*DWIJ[2]
 
-        etaij = 2 * (etai * etaj)/(etai + etaj)
-
-        # particle volumes; d_V inverse volume.
+        # particle volumes; d_V is inverse volume
         Vi = 1./d_V[d_idx]
         Vj = 1./s_V[s_idx]
         Vi2 = Vi * Vi
         Vj2 = Vj * Vj
 
-        # scalar part of the kernel gradient
-        Fij = XIJ[0]*DWIJ[0] + XIJ[1]*DWIJ[1] + XIJ[2]*DWIJ[2]
+        # inverse mass of destination particle
+        mi1 = 1.0/d_m[d_idx]
 
-        tmp = 1./d_m[d_idx] * (Vi2 + Vj2) * (etaij * Fij/(R2IJ + EPS))
+        # contribution due to the background pressure Eq. (13)
+        tmp = -self.pb * mi1 * (Vi2 + Vj2)
 
-        d_au[d_idx] += tmp * (d_ug[d_idx]-s_u[s_idx])
-        d_av[d_idx] += tmp * (d_vg[d_idx]-s_v[s_idx])
-        d_aw[d_idx] += tmp * (d_wg[d_idx]-s_w[s_idx])
+        d_auhat[d_idx] += tmp * DWIJ[0]
+        d_avhat[d_idx] += tmp * DWIJ[1]
+        d_awhat[d_idx] += tmp * DWIJ[2]
+
+
+class PressureOnBody(Equation):
+    """The pressure acceleration on the fluid/solid due to a boundary.
+    Implemented from Akinci et al. http://dx.doi.org/10.1145/2185520.2185558
+
+    Use this with the fluid as a destination and body as source.
+    """
+
+    def __init__(self, dest, sources, rho0):
+        self.rho0 = rho0
+        super(PressureOnBody, self).__init__(dest, sources)
+
+    def initialize(self, d_idx, d_au, d_av, d_aw):
+        d_au[d_idx] = 0.0
+        d_av[d_idx] = 0.0
+        d_aw[d_idx] = 0.0
+
+    def loop(self, d_idx, d_m, s_rho, d_au, d_av, d_aw, s_p,
+             s_idx, d_V, DWIJ):
+        rho1 = 1.0/s_rho[s_idx]
+        fac = -s_p[s_idx]*rho1*rho1*self.rho0/d_V[d_idx]
+
+        d_au[d_idx] += fac*DWIJ[0]
+        d_av[d_idx] += fac*DWIJ[1]
+        d_aw[d_idx] += fac*DWIJ[2]
 
 
 class SolidWallPressureBC(Equation):
