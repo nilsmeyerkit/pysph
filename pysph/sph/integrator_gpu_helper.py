@@ -7,16 +7,16 @@ import types
 from mako.template import Template
 import numpy as np
 
-from compyle.opencl import profile_kernel
 from compyle.config import get_config
-from compyle.translator import OpenCLConverter
 from .equation import get_array_names
 from .integrator_cython_helper import IntegratorCythonHelper
-from .acceleration_eval_opencl_helper import (get_kernel_definition,
-                                              wrap_code)
+from .acceleration_eval_gpu_helper import (
+    get_kernel_definition, get_converter, profile_kernel, wrap_code,
+    get_helper_code
+)
 
 
-class OpenCLIntegrator(object):
+class GPUIntegrator(object):
     """Does the actual work of calling the kernels for integration.
     """
     def __init__(self, helper, c_acceleration_eval):
@@ -57,15 +57,18 @@ class OpenCLIntegrator(object):
         py_call_info = self.helper.py_calls['py_' + method]
         dtype = np.float64 if self._use_double else np.float32
         extra_args = [np.asarray(self.t, dtype=dtype),
-                      np.asarray(self.dt, dtype=dtype)]
+                      np.asarray(self.dt, dtype=dtype),
+                      np.asarray(0, dtype=np.uint32)]
         # Call the py_{method} for each destination.
         for name, (py_meth, dest) in py_call_info.items():
-            py_meth(dest, *extra_args)
+            py_meth(dest, *(extra_args[:-1]))
 
         # Call the stage* method for each destination.
         for name, (call, args, dest) in call_info.items():
             n = dest.get_number_of_particles(real=True)
             args[1] = (n,)
+            # For NP_MAX
+            extra_args[-1][...] = n - 1
             # Compute the remaining arguments.
             rest = [x() for x in args[3:]]
             call(*(args[:3] + rest + extra_args))
@@ -81,6 +84,9 @@ class OpenCLIntegrator(object):
 
     def compute_accelerations(self, index=0, update_nnps=True):
         self.integrator.compute_accelerations(index, update_nnps)
+
+    def update_domain(self):
+        self.integrator.update_domain()
 
     def do_post_stage(self, stage_dt, stage):
         """This is called after every stage of the integrator.
@@ -108,11 +114,44 @@ class OpenCLIntegrator(object):
         self.one_timestep(t, dt)
 
 
-class IntegratorOpenCLHelper(IntegratorCythonHelper):
+class CUDAIntegrator(GPUIntegrator):
+    """Does the actual work of calling the kernels for integration.
+    """
+    def _do_stage(self, method):
+        from pycuda.gpuarray import splay
+        import pycuda.driver as drv
+        # Call the appropriate kernels for either initialize/stage computation.
+        call_info = self.helper.calls[method]
+        py_call_info = self.helper.py_calls['py_' + method]
+        dtype = np.float64 if self._use_double else np.float32
+        extra_args = [np.asarray(self.t, dtype=dtype),
+                      np.asarray(self.dt, dtype=dtype)]
+        # Call the py_{method} for each destination.
+        for name, (py_meth, dest) in py_call_info.items():
+            py_meth(dest, *extra_args)
+
+        # Call the stage* method for each destination.
+        for name, (call, args, dest) in call_info.items():
+            n = dest.get_number_of_particles(real=True)
+
+            gs, ls = splay(n)
+            gs, ls = int(gs[0]), int(ls[0])
+
+            num_blocks = (n + ls - 1) // ls
+            num_tpb = ls
+
+            # Compute the remaining arguments.
+            args = [x() for x in args[3:]]
+            call(*(args + extra_args),
+                 block=(num_tpb, 1, 1), grid=(num_blocks, 1))
+
+
+class IntegratorGPUHelper(IntegratorCythonHelper):
     def __init__(self, integrator, acceleration_eval_helper):
-        super(IntegratorOpenCLHelper, self).__init__(
+        super(IntegratorGPUHelper, self).__init__(
             integrator, acceleration_eval_helper
         )
+        self.backend = acceleration_eval_helper.backend
         self.py_data = defaultdict(dict)
         self.data = defaultdict(dict)
         self.py_calls = defaultdict(dict)
@@ -139,8 +178,12 @@ class IntegratorOpenCLHelper(IntegratorCythonHelper):
                 # just directly storing the dest.gpu.x, we compute it on
                 # the fly as the number of particles and the actual buffer
                 # may change.
-                def _getter(dest_gpu, x):
-                    return getattr(dest_gpu, x).dev.data
+                if self.backend == 'opencl':
+                    def _getter(dest_gpu, x):
+                        return getattr(dest_gpu, x).dev.data
+                elif self.backend == 'cuda':
+                    def _getter(dest_gpu, x):
+                        return getattr(dest_gpu, x).dev
 
                 _args = [
                     functools.partial(_getter, dest.gpu, x[2:])
@@ -148,7 +191,7 @@ class IntegratorOpenCLHelper(IntegratorCythonHelper):
                 ]
                 all_args = [q, None, None] + _args
                 call = getattr(self.program, kernel)
-                call = profile_kernel(call, call.function_name)
+                call = profile_kernel(call, self.backend)
                 calls[method][dest] = (call, all_args, dest)
 
     def get_code(self):
@@ -179,9 +222,12 @@ class IntegratorOpenCLHelper(IntegratorCythonHelper):
         # Create the compiled module.
         self.program = module
         self._setup_call_data()
-        opencl_integrator = OpenCLIntegrator(self, acceleration_eval)
+        if self.backend == 'opencl':
+            gpu_integrator = GPUIntegrator(self, acceleration_eval)
+        elif self.backend == 'cuda':
+            gpu_integrator = CUDAIntegrator(self, acceleration_eval)
         # Setup the integrator to use this compiled module.
-        self.object.set_compiled_object(opencl_integrator)
+        self.object.set_compiled_object(gpu_integrator)
 
     def get_py_stage_code(self, dest, method):
         stepper = self.object.steppers[dest]
@@ -195,14 +241,21 @@ class IntegratorOpenCLHelper(IntegratorCythonHelper):
 
     def get_stepper_code(self):
         classes = {}
-        for dest, stepper in self.object.steppers.items():
+        helpers = []
+        for stepper in self.object.steppers.values():
             cls = stepper.__class__.__name__
             classes[cls] = stepper
+            if hasattr(stepper, '_get_helpers_'):
+                for helper in stepper._get_helpers_():
+                    if helper not in helpers:
+                        helpers.append(helper)
 
         known_types = dict(self.acceleration_eval_helper.known_types)
-        code_gen = OpenCLConverter(known_types=known_types)
 
-        wrappers = []
+        Converter = get_converter(self.acceleration_eval_helper.backend)
+        code_gen = Converter(known_types=known_types)
+
+        wrappers = get_helper_code(helpers, code_gen, self.backend)
         for cls in sorted(classes.keys()):
             wrappers.append(code_gen.parse_instance(classes[cls]))
         return '\n'.join(wrappers)
@@ -219,12 +272,15 @@ class IntegratorOpenCLHelper(IntegratorCythonHelper):
         all_args = self.acceleration_eval_helper._get_typed_args(
             list(d) + ['t', 'dt']
         )
+        all_args.append('unsigned int NP_MAX')
 
         # All the steppers are essentially empty structs so we just pass 0 as
         # the stepper struct as it is not used at all. This simplifies things
         # as we do not need to generate structs and pass them around.
         code = [
-            'int d_idx = get_global_id(0);',
+            'int d_idx = GID_0 * LDIM_0 + LID_0;',
+            '/* Guard for padded threads. */',
+            'if (d_idx > NP_MAX) {return;};'
         ] + wrap_code(
             '{cls}_{method}({args});'.format(
                 cls=cls, method=method,

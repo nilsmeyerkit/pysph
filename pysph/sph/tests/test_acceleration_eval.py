@@ -556,7 +556,8 @@ class TestAccelerationEval1DGPU(unittest.TestCase):
         comp = SPHCompiler(a_eval, integrator=None)
         comp.compile()
         self.sph_compiler = comp
-        nnps = GPUNNPS(dim=kernel.dim, particles=arrays, cache=cache_nnps)
+        nnps = GPUNNPS(dim=kernel.dim, particles=arrays, cache=cache_nnps,
+                       backend='opencl')
         nnps.update()
         a_eval.set_nnps(nnps)
         return a_eval
@@ -629,7 +630,7 @@ class TestAccelerationEval1DGPU(unittest.TestCase):
         print(pa.au, expect)
         self.assertTrue(np.allclose(expect, pa.au))
 
-    def test_update_nnps_is_called_for_opencl(self):
+    def test_update_nnps_is_called_on_gpu(self):
         # Given
         equations = [
             Group(
@@ -720,6 +721,9 @@ class TestAccelerationEval1DGPU(unittest.TestCase):
                     self.conv = 1
 
             def converged(self):
+                if hasattr(self, '_pull'):
+                    # _pull is not available on CPU.
+                    self._pull('conv')
                 return self.conv
 
         equations = [Group(
@@ -823,7 +827,7 @@ class TestAccelerationEval1DGPU(unittest.TestCase):
 
     def test_get_equations_with_converged(self):
         pytest.importorskip('pysph.base.gpu_nnps')
-        from pysph.sph.acceleration_eval_opencl_helper import \
+        from pysph.sph.acceleration_eval_gpu_helper import \
             get_equations_with_converged
         # Given
         se = SimpleEquation(dest='fluid', sources=['fluid'])
@@ -920,3 +924,65 @@ class TestAccelerationEval1DGPUOctreeNonCached(
     @pytest.mark.skip("Loop all not supported with non-cached NNPS")
     def test_should_support_loop_all_and_loop_on_gpu(self):
         pass
+
+
+class TestAccelerationEval1DCUDA(TestAccelerationEval1DGPU):
+
+    def _make_accel_eval(self, equations, cache_nnps=True):
+        pytest.importorskip('pycuda')
+        pytest.importorskip('pysph.base.gpu_nnps')
+        GPUNNPS = self._get_nnps_cls()
+        arrays = [self.pa]
+        kernel = CubicSpline(dim=self.dim)
+        a_eval = AccelerationEval(
+            particle_arrays=arrays, equations=equations, kernel=kernel,
+            backend='cuda'
+        )
+        comp = SPHCompiler(a_eval, integrator=None)
+        comp.compile()
+        self.sph_compiler = comp
+        nnps = GPUNNPS(dim=kernel.dim, particles=arrays, cache=cache_nnps,
+                       backend='cuda')
+        nnps.update()
+        a_eval.set_nnps(nnps)
+        return a_eval
+
+    def test_update_nnps_is_called_on_gpu(self):
+        # Given
+        equations = [
+            Group(
+                equations=[
+                    SummationDensity(dest='fluid', sources=['fluid']),
+                ],
+                update_nnps=True
+            ),
+            Group(
+                equations=[EqWithTime(dest='fluid', sources=['fluid'])]
+            ),
+        ]
+
+        # When
+        a_eval = self._make_accel_eval(equations)
+
+        # Then
+        h = a_eval.c_acceleration_eval.helper
+        assert len(h.calls) == 5
+        call = h.calls[0]
+        assert call['type'] == 'kernel'
+        assert call['loop'] is False
+
+        call = h.calls[1]
+        assert call['type'] == 'kernel'
+        assert call['loop'] is True
+
+        call = h.calls[2]
+        assert call['type'] == 'method'
+        assert call['method'] == 'update_nnps'
+
+        call = h.calls[3]
+        assert call['type'] == 'kernel'
+        assert call['loop'] is False
+
+        call = h.calls[4]
+        assert call['type'] == 'kernel'
+        assert call['loop'] is True

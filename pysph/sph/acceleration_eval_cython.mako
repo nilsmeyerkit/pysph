@@ -139,9 +139,9 @@ ${indent(helper.get_post_call(group), 0)}
 from libc.stdio cimport printf
 from libc.math cimport *
 from libc.math cimport fabs as abs
-from libc.math cimport M_PI as pi
 cimport numpy
 import numpy
+from cython import address
 % if not helper.config.use_openmp:
 from cython.parallel import threadid
 prange = range

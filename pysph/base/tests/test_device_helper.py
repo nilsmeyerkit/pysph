@@ -234,12 +234,15 @@ class TestDeviceHelper(object):
         self.setup()
         # Given
         pa = self.pa
+        pa.add_property('force', stride=3)
         h = DeviceHelper(pa, backend=backend)
 
         # When
         pa.set_device_helper(h)
-        h.resize(5)
+        n = 5
+        h.resize(n)
         h.x.set(np.array([2.0, 3.0, 4.0, 5.0, 6.0], h.x.dtype))
+        h.force.set(np.arange(n*3, dtype=h.force.dtype))
 
         indices = array.arange(4, -1, -1, dtype=np.int32,
                                backend=backend)
@@ -248,6 +251,10 @@ class TestDeviceHelper(object):
 
         # Then
         assert np.all(h.x.get() == np.array([6., 5., 4., 3., 2.]))
+        x = np.arange(n*3)
+        x.shape = (n, 3)
+        expect = x[::-1, :].ravel()
+        assert np.all(h.force.get() == expect)
 
     @test_all_backends
     def test_align_particles(self, backend):
@@ -359,6 +366,23 @@ class TestDeviceHelper(object):
         assert h.get_number_of_particles() == 4
 
     @test_all_backends
+    def test_empty_clone(self, backend):
+        check_import(backend)
+        self.setup()
+        # Given
+        pa = get_particle_array(name='f', x=[0.0, 1.0, 2.0, 3.0],
+                                m=1.0, rho=2.0)
+        h = DeviceHelper(pa, backend=backend)
+        pa.set_device_helper(h)
+
+        # When
+        result_pa = h.empty_clone()
+
+        # Then
+        assert result_pa.gpu.get_number_of_particles() == 0
+        assert result_pa.name == 'f'
+
+    @test_all_backends
     def test_extract_particles(self, backend):
         check_import(backend)
         self.setup()
@@ -372,7 +396,81 @@ class TestDeviceHelper(object):
         indices = np.array([1, 2], dtype=np.uint32)
         indices = array.to_device(indices, backend=backend)
 
-        result_pa = h.extract_particles(indices)
+        result_pa = h.empty_clone()
+        h.extract_particles(indices, result_pa)
 
         # Then
         assert result_pa.gpu.get_number_of_particles() == 2
+
+    def test_update_minmax_cl(self):
+        backend = 'opencl'
+        check_import(backend)
+        self.setup()
+
+        # Given
+        x = [0.0, -1.0, 2.0, 3.0]
+        y = [0.0, 1.0, -2.0, 3.0]
+        z = [0.0, 1.0, 2.0, -3.0]
+        h = [4.0, 1.0, 2.0, 3.0]
+
+        pa = get_particle_array(x=x, y=y, z=z, h=h)
+        h = DeviceHelper(pa, backend=backend)
+        pa.set_device_helper(h)
+
+        # When
+        h.update_minmax_cl(['x', 'y', 'z', 'h'])
+
+        # Then
+        assert h.x.minimum == -1.0
+        assert h.x.maximum == 3.0
+
+        assert h.y.minimum == -2.0
+        assert h.y.maximum == 3.0
+
+        assert h.z.minimum == -3.0
+        assert h.z.maximum == 2.0
+
+        assert h.h.minimum == 1.0
+        assert h.h.maximum == 4.0
+
+        # When
+        h.x.maximum, h.x.minimum = 100., 100.
+        h.y.maximum, h.y.minimum = 100., 100.
+        h.z.maximum, h.z.minimum = 100., 100.
+        h.h.maximum, h.h.minimum = 100., 100.
+
+        h.update_minmax_cl(['x', 'y', 'z', 'h'], only_min=True)
+
+        # Then
+        assert h.x.minimum == -1.0
+        assert h.x.maximum == 100.0
+
+        assert h.y.minimum == -2.0
+        assert h.y.maximum == 100.0
+
+        assert h.z.minimum == -3.0
+        assert h.z.maximum == 100.0
+
+        assert h.h.minimum == 1.0
+        assert h.h.maximum == 100.0
+
+        # When
+        h.x.maximum, h.x.minimum = 100., 100.
+        h.y.maximum, h.y.minimum = 100., 100.
+        h.z.maximum, h.z.minimum = 100., 100.
+        h.h.maximum, h.h.minimum = 100., 100.
+
+        h.update_minmax_cl(['x', 'y', 'z', 'h'], only_max=True)
+
+        # Then
+        assert h.x.minimum == 100.0
+        assert h.x.maximum == 3.0
+
+        assert h.y.minimum == 100.0
+        assert h.y.maximum == 3.0
+
+        assert h.z.minimum == 100.0
+        assert h.z.maximum == 2.0
+
+        assert h.h.minimum == 100.0
+        assert h.h.maximum == 4.0

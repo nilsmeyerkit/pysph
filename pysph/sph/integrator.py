@@ -11,6 +11,7 @@ from numpy import sqrt
 # Local imports.
 from .integrator_step import IntegratorStep
 
+
 ###############################################################################
 # `Integrator` class
 ###############################################################################
@@ -40,6 +41,8 @@ class Integrator(object):
         # This is set later when the underlying compiled integrator is created
         # by the SPHCompiler.
         self.c_integrator = None
+        self._has_dt_adapt = None
+        self.fixed_h = False
 
     def __repr__(self):
         name = self.__class__.__name__
@@ -51,15 +54,58 @@ class Integrator(object):
         a_eval = self.acceleration_evals[0]
         factors = [-1.0, -1.0, -1.0]
         for pa in a_eval.particle_arrays:
+            prop_names = []
             for i, name in enumerate(('dt_cfl', 'dt_force', 'dt_visc')):
                 if name in pa.properties:
                     if pa.gpu:
-                        max_val = pa.gpu.max(name)
+                        prop_names.append(name)
                     else:
                         max_val = np.max(pa.get(name))
-                    factors[i] = max(factors[i], max_val)
+                        factors[i] = max(factors[i], max_val)
+            if pa.gpu:
+                pa.gpu.update_minmax_cl(prop_names, only_max=True)
+                for i, name in enumerate(('dt_cfl', 'dt_force', 'dt_visc')):
+                    if name in pa.properties:
+                        max_val = getattr(pa.gpu, name).maximum
+                        factors[i] = max(factors[i], max_val)
         cfl_f, force_f, visc_f = factors
         return cfl_f, force_f, visc_f
+
+    def _get_explicit_dt_adapt(self):
+        """Checks if the user is defining a 'dt_adapt' property where the
+        timestep is directly specified.
+
+        This returns None if no such parameter is found, else it returns the
+        allowed timestep.
+        """
+        a_eval = self.acceleration_evals[0]
+        if self._has_dt_adapt is None:
+            self._has_dt_adapt = any(
+                'dt_adapt' in pa.properties for pa in a_eval.particle_arrays
+            )
+        if self._has_dt_adapt:
+            dt_min = np.inf
+            for pa in a_eval.particle_arrays:
+                if 'dt_adapt' in pa.properties:
+                    if pa.gpu is not None:
+                        if pa.gpu.get_number_of_particles() > 0:
+                            from compyle.array import minimum
+                            min_val = minimum(pa.gpu.dt_adapt)
+                        else:
+                            min_val = np.inf
+                    else:
+                        if pa.get_number_of_particles() > 0:
+                            min_val = np.min(pa.dt_adapt)
+                        else:
+                            min_val = np.inf
+                    dt_min = min(dt_min, min_val)
+
+            if dt_min > 0.0:
+                return dt_min
+            else:
+                return None
+        else:
+            return None
 
     ##########################################################################
     # Public interface.
@@ -98,8 +144,6 @@ class Integrator(object):
             else:
                 h = pa.get_carray('h')
 
-            h.update_min_max()
-
             if h.minimum < hmin:
                 hmin = h.minimum
 
@@ -125,7 +169,7 @@ class Integrator(object):
         hmin = self.h_minimum
 
         # default time steps set to some large value
-        dt_cfl = dt_force = dt_viscous = 1e20
+        dt_cfl = dt_force = dt_viscous = np.inf
 
         # stable time step based on courant condition
         if dt_cfl_factor > 0:
@@ -144,7 +188,7 @@ class Integrator(object):
 
         # return the computed time steps. If dt factors aren't
         # defined, the default dt is returned
-        if dt_min <= 0.0:
+        if dt_min <= 0.0 or np.isinf(dt_min):
             return None
         else:
             return cfl*dt_min
@@ -164,8 +208,9 @@ class Integrator(object):
                 - self.stage1(), self.stage2() etc. depending on the number of
                   stages available.
 
-                - self.compute_accelerations(t, dt)
+                - self.compute_accelerations(index=0, update_nnps=True)
                 - self.do_post_stage(stage_dt, stage_count_from_1)
+                - self.update_domain()
 
         Please see any of the concrete implementations of the Integrator class
         to study.  By default the Integrator implements a
@@ -176,6 +221,7 @@ class Integrator(object):
 
         # Predict
         self.stage1()
+        self.update_domain()
 
         # Call any post-stage functions.
         self.do_post_stage(0.5*dt, 1)
@@ -184,6 +230,7 @@ class Integrator(object):
 
         # Correct
         self.stage2()
+        self.update_domain()
 
         # Call any post-stage functions.
         self.do_post_stage(dt, 2)
@@ -240,6 +287,21 @@ class Integrator(object):
         """
         self.acceleration_evals[0].compute(t, dt)
 
+    def update_domain(self):
+        """Update the domain of the simulation.
+
+        This is to be called when particles move so the ghost particles
+        (periodicity, mirror boundary conditions) can be reset. Further, this
+        also recalculates the appropriate cell size based on the particle
+        kernel radius, `h`. This should be called explicitly when desired but
+        usually this is done when the particles are moved or the `h` is
+        changed.
+
+        The integrator should explicitly call this when needed in the
+        `one_timestep` method.
+        """
+        self.nnps.update_domain()
+
 
 ###############################################################################
 # `EulerIntegrator` class
@@ -248,6 +310,7 @@ class EulerIntegrator(Integrator):
     def one_timestep(self, t, dt):
         self.compute_accelerations()
         self.stage1()
+        self.update_domain()
         self.do_post_stage(dt, 1)
 
 
@@ -272,6 +335,7 @@ class PECIntegrator(Integrator):
 
         # Predict
         self.stage1()
+        self.update_domain()
 
         # Call any post-stage functions.
         self.do_post_stage(0.5*dt, 1)
@@ -280,6 +344,7 @@ class PECIntegrator(Integrator):
 
         # Correct
         self.stage2()
+        self.update_domain()
 
         # Call any post-stage functions.
         self.do_post_stage(dt, 2)
@@ -325,6 +390,7 @@ class EPECIntegrator(Integrator):
 
         # Predict
         self.stage1()
+        self.update_domain()
 
         # Call any post-stage functions.
         self.do_post_stage(0.5*dt, 1)
@@ -333,6 +399,7 @@ class EPECIntegrator(Integrator):
 
         # Correct
         self.stage2()
+        self.update_domain()
 
         # Call any post-stage functions.
         self.do_post_stage(dt, 2)
@@ -359,16 +426,19 @@ class TVDRK3Integrator(Integrator):
         # stage 1
         self.compute_accelerations()
         self.stage1()
+        self.update_domain()
         self.do_post_stage(1./3*dt, 1)
 
         # stage 2
         self.compute_accelerations()
         self.stage2()
+        self.update_domain()
         self.do_post_stage(2./3*dt, 2)
 
         # stage 3 and end
         self.compute_accelerations()
         self.stage3()
+        self.update_domain()
         self.do_post_stage(dt, 3)
 
 
@@ -380,10 +450,12 @@ class LeapFrogIntegrator(PECIntegrator):
     def one_timestep(self, t, dt):
 
         self.stage1()
+        self.update_domain()
         self.do_post_stage(0.5*dt, 1)
 
         self.compute_accelerations()
         self.stage2()
+        self.update_domain()
         self.do_post_stage(dt, 2)
 
 
@@ -403,20 +475,25 @@ class PEFRLIntegrator(Integrator):
     def one_timestep(self, t, dt):
 
         self.stage1()
+        self.update_domain()
         self.do_post_stage(0.1786178958448091*dt, 1)
 
         self.compute_accelerations()
         self.stage2()
+        self.update_domain()
         self.do_post_stage(0.1123533131749906*dt, 2)
 
         self.compute_accelerations()
         self.stage3()
+        self.update_domain()
         self.do_post_stage(0.8876466868250094*dt, 3)
 
         self.compute_accelerations()
         self.stage4()
+        self.update_domain()
         self.do_post_stage(0.8213821041551909*dt, 4)
 
         self.compute_accelerations()
         self.stage5()
+        self.update_domain()
         self.do_post_stage(dt, 5)

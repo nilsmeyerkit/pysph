@@ -18,9 +18,9 @@ import itertools
 import numpy
 from textwrap import dedent
 
-# Local imports.
-from compyle.api import (CythonGenerator, KnownType, OpenCLConverter,
-                         get_symbols)
+from compyle.api import (CythonGenerator, KnownType,
+                         OpenCLConverter, get_symbols)
+from compyle.translator import CUDAConverter
 from compyle.config import get_config
 
 
@@ -37,6 +37,11 @@ def camel_to_underscore(name):
     # http://stackoverflow.com/questions/1175208/elegant-python-function-to-convert-camelcase-to-camel-case
     s1 = re.sub(r'(.)([A-Z][a-z]+)', r'\1_\2', name)
     return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+
+
+def indent(text, prefix='    '):
+    """Prepend prefix to every line in the text"""
+    return ''.join(prefix + line for line in text.splitlines(True))
 
 
 ##############################################################################
@@ -413,6 +418,21 @@ class Equation(object):
         """
         return 1.0
 
+    def _pull(self, *args):
+        """Pull attributes from the GPU if needed.
+
+        The GPU reduce and converged methods run on the host and not on
+        the device and this is useful to call there.  This is not useful
+        on the CPU as this does not matter which is why this is a
+        private method.
+        """
+        if hasattr(self, '_gpu'):
+            ary = self._gpu.get()
+            if len(args) == 0:
+                args = ary.dtype.names
+            for arg in args:
+                setattr(self, arg, ary[arg][0])
+
 
 ###############################################################################
 # `Group` class.
@@ -505,11 +525,11 @@ class Group(object):
     ##########################################################################
     def __repr__(self):
         cls = self.__class__.__name__
-        eqs = [repr(eq) for eq in self.equations]
+        eqs = ', \n'.join(repr(eq) for eq in self.equations)
         ignore = ['equations']
         kws = ', '.join(get_init_args(self, self.__init__, ignore))
-        return '%s(equations=[\n%s\n    ],\n    %s)' % (
-            cls, ',\n'.join(eqs), kws
+        return '%s(equations=[\n%s\n],\n    %s)' % (
+            cls, indent(eqs), kws
         )
 
     def _has_code(self, kind='loop'):
@@ -820,6 +840,8 @@ class CythonGroup(Group):
 
 
 class OpenCLGroup(Group):
+    _Converter_Class = OpenCLConverter
+
     # #### Private interface  #####
     def _update_for_local_memory(self, predefined, eqs):
         modified_classes = []
@@ -828,9 +850,10 @@ class OpenCLGroup(Group):
             if 's_' in k:
                 # TODO: Make each argument have their own KnownType
                 # right from the start
-                loop_ann[k] = KnownType(
-                    loop_ann[k].type.replace('__global', '__local')
-                )
+                new_type = loop_ann[k].type.replace(
+                    'GLOBAL_MEM', 'LOCAL_MEM'
+                ).replace('__global', 'LOCAL_MEM')
+                loop_ann[k] = KnownType(new_type)
         for eq in eqs.values():
             cls = eq.__class__
             loop = getattr(cls, 'loop', None)
@@ -862,15 +885,15 @@ class OpenCLGroup(Group):
         wrappers = []
         predefined = dict(get_predefined_types(self.pre_comp))
         predefined.update(known_types)
-        predefined['NBRS'] = KnownType('__global unsigned int*')
+        predefined['NBRS'] = KnownType('GLOBAL_MEM unsigned int*')
 
         use_local_memory = get_config().use_local_memory
         modified_classes = []
         if use_local_memory:
             modified_classes = self._update_for_local_memory(predefined, eqs)
 
-        code_gen = OpenCLConverter(known_types=predefined)
-        ignore = ['reduce']
+        code_gen = self._Converter_Class(known_types=predefined)
+        ignore = ['reduce', 'converged']
         for cls in sorted(classes.keys()):
             src = code_gen.parse_instance(eqs[cls], ignore_methods=ignore)
             wrappers.append(src)
@@ -881,6 +904,10 @@ class OpenCLGroup(Group):
                 self._set_loop_annotation(cls.loop, {})
 
         return '\n'.join(wrappers)
+
+
+class CUDAGroup(OpenCLGroup):
+    _Converter_Class = CUDAConverter
 
 
 class MultiStageEquations(object):
@@ -906,7 +933,13 @@ class MultiStageEquations(object):
 
     def __repr__(self):
         name = self.__class__.__name__
-        kw = [', \n'.join(str(grps) for grps in stg) for stg in self.groups]
-        return '%s(groups=[[\n%s\n    ]]\n)' % (
-            name, '], [\n'.join(kw)
+        groups = [', \n'.join(str(stg_grps) for stg_grps in stg)
+                  for stg in self.groups]
+        kw = indent('\n], [\n'.join(groups))
+        s = '%s(groups=[\n[\n%s\n    ]\n])' % (
+            name, kw,
         )
+        return s
+
+    def __len__(self):
+        return len(self.groups)
