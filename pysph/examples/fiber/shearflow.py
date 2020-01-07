@@ -21,7 +21,6 @@ from scipy.integrate import odeint
 # from pysph.solver.tools import FiberIntegrator
 
 
-
 def get_zhang_aspect_ratio(aspect_ratio):
     """Jeffery's equivalent aspect ratio.
 
