@@ -4,24 +4,22 @@
 3D shearflow with a single fiber
 ################################################################################
 """
-# general imports
+
 import os
+
 import numpy as np
-from scipy.integrate import odeint
-from matplotlib import pyplot as plt
 
-
-# PySPH imports
 from pysph.base.nnps import DomainManager
-from pysph.base.utils import (get_particle_array_beadchain_fluid,
-                              get_particle_array_beadchain_solid,
-                              get_particle_array_beadchain_fiber)
-
+from pysph.base.utils import (get_particle_array_beadchain_fiber,
+                              get_particle_array_beadchain_fluid,
+                              get_particle_array_beadchain_solid)
 from pysph.solver.application import Application
 from pysph.solver.utils import load, remove_irrelevant_files
+from pysph.sph.scheme import BeadChainScheme
+from scipy.integrate import odeint
+
 # from pysph.solver.tools import FiberIntegrator
 
-from pysph.sph.scheme import BeadChainScheme
 
 
 def get_zhang_aspect_ratio(aspect_ratio):
@@ -277,6 +275,7 @@ class Channel(Application):
 
         It is employing a iteration over all time steps.
         """
+        from matplotlib import pyplot as plt
         # empty list for time and orientation angle
         t = []
         angle = []
