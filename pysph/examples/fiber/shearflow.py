@@ -203,11 +203,16 @@ class Channel(Application):
         _fibz = np.array([zz])
         fibx, fiby, fibz = self.get_meshgrid(_fibx, _fiby, _fibz)
 
+        # Determine the size of dummy region
+        ghost_extent = 3.*fdx
+
         # Create the channel particles at the top
-        tx, ty, tz = self.get_meshgrid(_x, self.Ly + dx2, _z)
+        _y = np.arange(self.Ly + dx2, self.Ly + dx2 + ghost_extent, fdx)
+        tx, ty, tz = self.get_meshgrid(_x, _y, _z)
 
         # Create the channel particles at the bottom
-        bx, by, bz = self.get_meshgrid(_x, -dx2, _z)
+        _y = np.arange(-dx2, -dx2 - ghost_extent, -fdx)
+        bx, by, bz = self.get_meshgrid(_x, _y, _z)
 
         # Concatenate the top and bottom arrays
         cx = np.concatenate((tx, bx))
