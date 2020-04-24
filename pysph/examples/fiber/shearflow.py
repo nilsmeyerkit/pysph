@@ -337,7 +337,7 @@ class Channel(Application):
         plt.savefig(angfig, dpi=300, bbox_inches='tight')
         try:
             tex_fig = os.path.join(self.output_dir, "angleplot.tex")
-            from matplotlib2tikz import save as tikz_save
+            from tikzplotlib import save as tikz_save
             tikz_save(tex_fig)
         except ImportError:
             print("Did not write tikz figure.")
