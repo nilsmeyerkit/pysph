@@ -286,6 +286,7 @@ class Contact(Equation):
              s_rzprev, s_rprev, d_Fx, d_Fy, d_Fz, d_fractag, d_tag, s_tag,
              XIJ, VIJ, RIJ, EPS):
         """Loop over all particles and compute interaction forces."""
+
         # exclude self and direct neighbors
         if (RIJ > 1E-14
             and RIJ < 1.5*self.d
@@ -320,22 +321,21 @@ class Contact(Equation):
             s_next_tip = (s_rnext[s_idx] < EPS
                           and sx*XIJ[0]+sy*XIJ[1]+sz*XIJ[2] < EPS)
 
-            # default weight and angle for tip interactions
-            w = 1.0
-            alpha = 0.0
-
             # determine case
             if d_prev_tip or d_next_tip or dr < EPS:
                 if s_prev_tip or s_next_tip or sr < EPS:
-                    self.compute_point_point_props(XIJ, RIJ)
+                    alpha = self.compute_point_point_props(XIJ, RIJ)
+                    w = 1.0
                 else:
-                    self.compute_center_point_props(XIJ, sx, sy, sz)
+                    alpha = self.compute_center_point_props(XIJ, sx, sy, sz)
+                    alpha = 0.0
                     w = self.weight(s_rnext[s_idx], s_rprev[s_idx], self.proj)
             elif s_prev_tip or s_next_tip or sr < EPS:
                 if d_prev_tip or d_next_tip or dr < EPS:
-                    self.compute_point_point_props(XIJ, RIJ)
+                    alpha = self.compute_point_point_props(XIJ, RIJ)
+                    w = 1.0
                 else:
-                    self.compute_center_point_props(XIJ, dx, dy, dz)
+                    alpha = self.compute_center_point_props(XIJ, dx, dy, dz)
                     w = self.weight(d_rnext[d_idx], d_rprev[d_idx], self.proj)
             else:
                 # center and center
@@ -343,8 +343,15 @@ class Contact(Equation):
                     XIJ, dx, dy, dz, sx, sy, sz)
                 w = self.weight(d_rnext[d_idx], d_rprev[d_idx], self.proj)
 
-            self.compute_force(VIJ[0], VIJ[1], VIJ[2], w, alpha, self.dt,
-                               d_m[d_idx])
+            d = self.d - self.dist
+            if d >= 0.0:
+                self.compute_contact_force(VIJ[0], VIJ[1], VIJ[2], w, d)
+            elif alpha > 0.0:
+                self.compute_lubrication_force(VIJ[0], VIJ[1], VIJ[2], w, d, alpha)
+            else:
+                self.Fx = 0.0
+                self.Fy = 0.0
+                self.Fz = 0.0
 
             d_Fx[d_idx] += self.Fx
             d_Fy[d_idx] += self.Fy
@@ -378,6 +385,8 @@ class Contact(Equation):
         self.proj = projection
         self.dist = tr
 
+        return 0.0
+
     def compute_point_point_props(self, XIJ, RIJ):
         """Compute the normal between end points.
 
@@ -387,6 +396,8 @@ class Contact(Equation):
         self.ny = XIJ[1]/RIJ
         self.nz = XIJ[2]/RIJ
         self.dist = RIJ
+
+        return 0.0
 
     def compute_center_center_props(self, XIJ, dx=0.0, dy=0.0, dz=0.0,
                                     sx=0.0, sy=0.0, sz=0.0):
@@ -459,59 +470,51 @@ class Contact(Equation):
             w = (next+proj)/next
         return w
 
-    def compute_force(self, vx=0.0, vy=0.0, vz=0.0, w=1.0, alpha=0.0, dt=0.0,
-                      mass=1.0):
-        """Compute the interaction force at contact point.
-
-        This force can be either a contact force (d>0) or a lubrication
-        force (d<0).
-        """
-        d = self.d - self.dist
+    def compute_contact_force(self, vx=0.0, vy=0.0, vz=0.0, w=0.0, d=1.0):
+        """Compute the contact force at interaction point."""
 
         v_dot_n = vx*self.nx + vy*self.ny + vz*self.nz
 
-        if d >= 0:
-            # elastic factor from Hertz' pressure in contact
-            E_star = 1/(2*((1-self.pois**2)/self.E))
+        # elastic factor from Hertz' pressure in contact
+        E_star = 1/(2*((1-self.pois**2)/self.E))
 
-            d = min(self.lim*self.d, d)
+        d = min(self.lim*self.d, d)
 
-            if self.dim == 3:
-                F = 4/3 * d**1.5 * sqrt(self.d/2) * E_star
-            else:
-                # workaround for 2D contact (2 reactangular surfaces)
-                F = self.E*d
-
-            vrx = vx - v_dot_n*self.nx
-            vry = vy - v_dot_n*self.ny
-            vrz = vz - v_dot_n*self.nz
-            v_rel = sqrt(vrx**2 + vry**2 + vrz**2)
-            v_rel = v_rel if v_rel > 1E-14 else 1
-
-            self.Fx = w*(F*self.nx - self.k*F*vrx/v_rel)
-            self.Fy = w*(F*self.ny - self.k*F*vry/v_rel)
-            self.Fz = w*(F*self.nz - self.k*F*vrz/v_rel)
+        if self.dim == 3:
+            F = 4/3 * d**1.5 * sqrt(self.d/2) * E_star
         else:
-            # v_dot_n = min(v_dot_n, 0)
-            # Yamane lubrication forces
-            d = min(d, -0.001*self.d)    # limit extreme forces
-            R = self.d/2
-            if abs(alpha) > 0.1:
-                A = R**2/abs(sin(alpha))
-                F = 12.*A*pi*self.eta0*v_dot_n/d
-            else:
-                # Lindstroem limit to treat parallel cylinders (singularity!)
-                A0 = 3.*pi*sqrt(2.)/8.
-                A1 = 207*pi*sqrt(2.)/160.
-                L = self.d
-                F = -L*self.eta0*v_dot_n*(A0-A1*d/R)*(-d/R)**(-3./2.)
-            # The lubrication force must always be lower than the force needed
-            # to invert the relative velocity
-            if dt > 0.0:
-                F_max = -v_dot_n*mass/dt
-                if (F < 0.0 and F < F_max) or (F > 0.0 and F > F_max):
-                    F = F_max
+            # workaround for 2D contact (2 reactangular surfaces)
+            F = self.E*d
 
-            self.Fx = w*F*self.nx
-            self.Fy = w*F*self.ny
-            self.Fz = w*F*self.nz
+        vrx = vx - v_dot_n*self.nx
+        vry = vy - v_dot_n*self.ny
+        vrz = vz - v_dot_n*self.nz
+        v_rel = sqrt(vrx**2 + vry**2 + vrz**2)
+        v_rel = v_rel if v_rel > 1E-14 else 1
+
+        self.Fx = w*(F*self.nx - self.k*F*vrx/v_rel)
+        self.Fy = w*(F*self.ny - self.k*F*vry/v_rel)
+        self.Fz = w*(F*self.nz - self.k*F*vrz/v_rel)
+
+    def compute_lubrication_force(self, vx=0.0, vy=0.0, vz=0.0, w=0.0, d=1.0,
+                                  alpha=pi/2):
+        """Compute the lubrication force at interaction point."""
+        # limit extreme forces
+        d = min(d, -0.01*self.d)
+        R = self.d/2
+
+        v_dot_n = vx*self.nx + vy*self.ny + vz*self.nz
+
+        if abs(alpha) > 0.1:
+            A = R**2/abs(sin(alpha))
+            F = 12.*A*pi*self.eta0*v_dot_n/d
+        else:
+            # Lindstroem limit to treat parallel cylinders (singularity!)
+            A0 = 3.*pi*sqrt(2.)/8.
+            A1 = 207*pi*sqrt(2.)/160.
+            L = self.d
+            F = -L*self.eta0*v_dot_n*(A0-A1*d/R)*(-d/R)**(-3./2.)
+
+        self.Fx = w*F*self.nx
+        self.Fy = w*F*self.ny
+        self.Fz = w*F*self.nz
