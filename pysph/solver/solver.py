@@ -705,7 +705,7 @@ class Solver(object):
         # dump output if the iteration number is a multiple of the printing
         # frequency.
         if self.N > 0:
-            self.pfreq=int(self.tf/(self.N*self.dt))
+            self.pfreq = int(self.tf/(self.N*self.dt))
         dump = self.count % self.pfreq == 0
 
         # Consider the other cases if user has requested output at a specified
