@@ -321,9 +321,9 @@ class Channel(Application):
         plt.plot(t*self.options.G, angle_jeffery_zhang, '--k', color='grey')
 
         # labels
-        plt.xlabel('Strains')
-        plt.ylabel('Rotation angle')
-        plt.legend(['SPH Simulation', 'Jeffery'])
+        plt.xlabel('Strains $tG$')
+        plt.ylabel('Rotation angle $\phi$')
+        plt.legend(['SPH Simulation', 'Jeffery (Zhang)'])
         plt.grid()
         x1, x2, y1, y2 = plt.axis()
         plt.axis((0, x2, 0, y2))
