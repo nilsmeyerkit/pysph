@@ -4,8 +4,9 @@ Utitlity equations for fibers
 
 """
 
+from math import acos, pi, sin, sqrt
+
 from pysph.sph.equation import Equation
-from math import sqrt, pi, sin, acos
 
 
 class ComputeDistance(Equation):

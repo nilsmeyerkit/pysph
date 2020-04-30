@@ -2,23 +2,21 @@
 """
 import os
 from math import sqrt
+
 import numpy as np
 
+from pysph.base.kernels import QuinticSpline
 # PySPH imports
 from pysph.base.utils import get_particle_array_beadchain_fiber
-from pysph.base.kernels import QuinticSpline
-
 from pysph.solver.application import Application
-from pysph.solver.utils import load
 from pysph.solver.solver import Solver
-
+from pysph.solver.utils import load
+from pysph.sph.equation import Group
+from pysph.sph.fiber.beadchain import Bending, Tension
+from pysph.sph.fiber.utils import ComputeDistance, Damping, HoldPoints
 from pysph.sph.integrator import EPECIntegrator
 from pysph.sph.integrator_step import TransportVelocityStep
-
-from pysph.sph.equation import Group
 from pysph.sph.wc.transport_velocity import MomentumEquationPressureGradient
-from pysph.sph.fiber.utils import Damping, HoldPoints, ComputeDistance
-from pysph.sph.fiber.beadchain import Tension, Bending
 
 
 class Beam(Application):
