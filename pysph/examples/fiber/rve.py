@@ -71,13 +71,6 @@ class RVE(Application):
             help="Shear rate applied to the cube",
         )
         group.add_argument(
-            "--vtk",
-            action="store_true",
-            dest="vtk",
-            default=False,
-            help="Enable VTK output during solving.",
-        )
-        group.add_argument(
             "--Re",
             action="store",
             type=float,
@@ -202,7 +195,6 @@ class RVE(Application):
             self.scheme.configure(fibers=[])
         self.scheme.configure_solver(
             tf=self.t,
-            vtk=self.options.vtk,
             # pfreq=1,
             N=self.options.rot * 100,
         )

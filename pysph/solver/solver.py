@@ -10,7 +10,6 @@ import numpy
 # PySPH imports
 from pysph.base.kernels import CubicSpline
 from pysph.solver.utils import ProgressBar, dump, load
-from pysph.solver.vtk_output import dump_vtk
 from pysph.sph.acceleration_eval import make_acceleration_evals
 from pysph.sph.sph_compiler import SPHCompiler
 
@@ -27,7 +26,7 @@ class Solver(object):
                  adaptive_timestep=False, cfl=0.3,
                  output_at_times=(),
                  fixed_h=False,
-                 vtk=False,**kwargs):
+                 **kwargs):
         """**Constructor**
 
         Any additional keyword args are used to set the values of any
@@ -74,10 +73,6 @@ class Solver(object):
 
         fixed_h : bint
             Flag for constant smoothing lengths `h`
-
-
-        vtk: bool
-            Flag indicating wether VTK files should be dumped as well
 
         reorder_freq : int
             The number of iterations after which particles should
@@ -181,9 +176,6 @@ class Solver(object):
 
         # flag for constant smoothing lengths
         self.fixed_h = fixed_h
-
-        # flag indicating VTK output
-        self.vtk = vtk
 
         self.reorder_freq = 0
 
@@ -580,8 +572,6 @@ class Solver(object):
              detailed_output=self.detailed_output,
              only_real=self.output_only_real, mpi_comm=comm,
              compress=self.compress_output)
-        if self.vtk:
-            dump_vtk(fname, self.particles)
 
     def load_output(self, count):
         """Load particle data from dumped output file.

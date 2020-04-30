@@ -159,7 +159,7 @@ class Beam(Application):
         integrator = EPECIntegrator(fiber=TransportVelocityStep())
         solver = Solver(
             kernel=kernel, dim=3, integrator=integrator,
-            dt=self.dt, tf=self.tf, N=100, vtk=True)
+            dt=self.dt, tf=self.tf, N=100)
         return solver
 
     def _plot_oscillation(self, file):
@@ -244,7 +244,7 @@ class Beam(Application):
         return [osc, disp]
 
     def post_process(self, info_fname):
-        # dump vtk files after run
+        """Extract and plot results."""
         if len(self.output_files) == 0:
             return
 

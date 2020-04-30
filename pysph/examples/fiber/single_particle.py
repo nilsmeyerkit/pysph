@@ -48,10 +48,6 @@ class SingleParticle(Application):
             "--t", action="store", type=float, dest="t",
             default=0.001, help="Cube size (multiples of fiber diameter)"
         )
-        group.add_argument(
-            "--vtk", action="store_true", dest='vtk',
-            default=False, help="Enable vtk-output during solving."
-        )
 
     def consume_user_options(self):
         """Initialize geometry, properties and time stepping."""
@@ -95,7 +91,7 @@ class SingleParticle(Application):
 
         self.kernel = CubicSpline(dim=3)
         self.scheme.configure_solver(
-            tf=self.options.t, vtk=self.options.vtk, N=20, kernel=self.kernel)
+            tf=self.options.t, N=20, kernel=self.kernel)
 
     def create_particles(self):
         """Three particle arrays are created.

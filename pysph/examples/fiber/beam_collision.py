@@ -216,14 +216,14 @@ class Beam(Application):
         return equations
 
     def create_solver(self):
-        # Setting up the default integrator for fiber particles
+        """Set up the default integrator for fiber particles."""
         kernel = QuinticSpline(dim=3)
         integrator = EPECIntegrator(
             fiber1=TransportVelocityStep(),
             fiber2=TransportVelocityStep())
         solver = Solver(
             kernel=kernel, dim=3, integrator=integrator, dt=self.dt,
-            tf=self.tf, N=200, vtk=True)
+            tf=self.tf, N=200)
         return solver
 
 
