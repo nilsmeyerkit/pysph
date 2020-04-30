@@ -1,21 +1,19 @@
 """Collision of a fiber in a damped field (10 minutes)."""
 from math import sqrt
+
 import numpy as np
 
+from pysph.base.kernels import QuinticSpline
 # PySPH imports
 from pysph.base.utils import get_particle_array_beadchain_fiber
-from pysph.base.kernels import QuinticSpline
-
 from pysph.solver.application import Application
 from pysph.solver.solver import Solver
-
+from pysph.sph.equation import Group
+from pysph.sph.fiber.beadchain import Bending, Tension
+from pysph.sph.fiber.utils import ComputeDistance, Contact, Damping, HoldPoints
 from pysph.sph.integrator import EPECIntegrator
 from pysph.sph.integrator_step import TransportVelocityStep
-
-from pysph.sph.equation import Group
 from pysph.sph.wc.transport_velocity import MomentumEquationPressureGradient
-from pysph.sph.fiber.utils import Damping, HoldPoints, Contact, ComputeDistance
-from pysph.sph.fiber.beadchain import Tension, Bending
 
 
 class Beam(Application):
@@ -218,14 +216,14 @@ class Beam(Application):
         return equations
 
     def create_solver(self):
-        # Setting up the default integrator for fiber particles
+        """Set up the default integrator for fiber particles."""
         kernel = QuinticSpline(dim=3)
         integrator = EPECIntegrator(
             fiber1=TransportVelocityStep(),
             fiber2=TransportVelocityStep())
         solver = Solver(
             kernel=kernel, dim=3, integrator=integrator, dt=self.dt,
-            tf=self.tf, N=200, vtk=True)
+            tf=self.tf, N=200)
         return solver
 
 

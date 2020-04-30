@@ -26,6 +26,9 @@ from cpython.list cimport PyList_GetItem, PyList_SetItem, PyList_GET_ITEM
 cimport cython
 
 from compyle.config import get_config
+from compyle.array import get_backend, Array
+from compyle.parallel import Elementwise
+from compyle.types import annotate
 
 
 IF OPENMP:
@@ -42,7 +45,7 @@ ELSE:
     cpdef int get_number_of_threads():
         return 1
     cpdef set_number_of_threads(int n):
-        print "OpenMP not available, cannot set number of threads."
+        print("OpenMP not available, cannot set number of threads.")
 
 
 IF UNAME_SYSNAME == "Windows":
@@ -246,7 +249,8 @@ cdef class DomainManager:
                  double gamma_yx=0.0, double gamma_zx=0.0,double gamma_zy=0.0,
                  periodic_in_x=False, periodic_in_y=False, periodic_in_z=False,
                  double n_layers=2.0, backend=None, double dt=0.0,
-                 int calls_per_step=1):
+                 int calls_per_step=2, props=None,
+                 mirror_in_x=False, mirror_in_y=False, mirror_in_z=False):
         """Constructor
 
         Parameters
@@ -254,15 +258,27 @@ cdef class DomainManager:
 
         xmin, xmax, ymin, ymax, zmin, zmax: double: extents of the domain.
         periodic_in_x, periodic_in_y, periodic_in_z: bool: axis periodicity.
+        mirror_in_x, mirror_in_y, mirror_in_z: bool: axis mirror.
 
         n_layers: double: number of ghost layers as a multiple of
             h_max*radius_scale
+
+        props: list/dict: properties to copy.
+            Provide a list or dict with the keys as particle array names.
+            Only the specified properties are copied.  If not specified,
+            all props are copied.
         """
-        self.backend = backend
+        self.backend = get_backend(backend)
         is_periodic = periodic_in_x or periodic_in_y or periodic_in_z
-        if self.backend and not is_periodic:
-            from pysph.base.gpu_domain_manager import GPUDomainManager
-            domain_manager = GPUDomainManager
+        is_mirror = mirror_in_x or mirror_in_y or mirror_in_z
+        if (self.backend is 'opencl' or self.backend is 'cuda'):
+            if not is_mirror:
+                from pysph.base.gpu_domain_manager import GPUDomainManager
+                domain_manager = GPUDomainManager
+            else:
+                print("warning: mirrored boundary conditions not "
+                "supported with GPU backend, using CPUDomainManager")
+                domain_manager = CPUDomainManager
         else:
             domain_manager = CPUDomainManager
         self.manager = domain_manager(
@@ -272,8 +288,10 @@ cdef class DomainManager:
             periodic_in_y=periodic_in_y,
             periodic_in_z=periodic_in_z,
             gamma_yx=gamma_yx, gamma_zx=gamma_zx,gamma_zy=gamma_zy,
-            n_layers=n_layers, backend=self.backend, dt=dt,
-            calls_per_step=calls_per_step
+            n_layers=n_layers, backend=self.backend, props=props,
+            dt=dt, calls_per_step=calls_per_step,
+            mirror_in_x=mirror_in_x, mirror_in_y=mirror_in_y,
+            mirror_in_z=mirror_in_z
         )
 
     def set_pa_wrappers(self, wrappers):
@@ -304,29 +322,23 @@ cdef class DomainManager:
 
 
 ##############################################################################
-cdef class CPUDomainManager:
-    """This class determines the limits of the solution domain.
-
-    We expect all simulations to have well defined domain limits
-    beyond which we are either not interested or the solution is
-    invalid to begin with. Thus, if a particle leaves the domain,
-    the solution should be considered invalid (at least locally).
-
-    The initial domain limits could be given explicitly or asked to be
-    computed from the particle arrays. The domain could be periodic.
-
-    """
+cdef class DomainManagerBase(object):
     def __init__(self, double xmin=-1000, double xmax=1000, double ymin=0,
                  double ymax=0, double zmin=0, double zmax=0,
                  periodic_in_x=False, periodic_in_y=False, periodic_in_z=False,
                  double gamma_yx=0.0, double gamma_zx=0.0, double gamma_zy=0.0,
-                 double n_layers=2.0, backend=None,
-                 double dt=0.0, int calls_per_step=1):
+                 double n_layers=2.0, backend=None, props=None,
+                 double dt=0.0, int calls_per_step=2,
+                 mirror_in_x=False, mirror_in_y=False, mirror_in_z=False):
         """Constructor
 
         The n_layers argument specifies the number of ghost layers as multiples
         of hmax*radius_scale.
 
+        props: list/dict: properties to copy.
+            Provide a list or dict with the keys as particle array names.
+            Only the specified properties are copied.  If not specified,
+            all props are copied.
         """
         self._check_limits(xmin, xmax, ymin, ymax, zmin, zmax)
 
@@ -334,11 +346,19 @@ cdef class CPUDomainManager:
         self.ymin = ymin; self.ymax = ymax
         self.zmin = zmin; self.zmax = zmax
 
+        self.props = props
         # Indicates if the domain is periodic
         self.periodic_in_x = periodic_in_x
         self.periodic_in_y = periodic_in_y
         self.periodic_in_z = periodic_in_z
+
+        # Indicates if the domain is mirrored
+        self.mirror_in_x = mirror_in_x
+        self.mirror_in_y = mirror_in_y
+        self.mirror_in_z = mirror_in_z
+
         self.is_periodic = periodic_in_x or periodic_in_y or periodic_in_z
+        self.is_mirror = mirror_in_x or mirror_in_y or mirror_in_z
         self.n_layers = n_layers
 
         # get the translates in each coordinate direction
@@ -362,18 +382,32 @@ cdef class CPUDomainManager:
         # default DomainManager in_parallel is set to False
         self.in_parallel = False
 
-        self.dbl_max = np.finfo(float).max
-
         # time for Lees-Edwards BC
         self.t = 0
         self.dt = dt
         self.calls_per_step = calls_per_step
         self.loops = 0
 
+    def _check_limits(self, xmin, xmax, ymin, ymax, zmin, zmax):
+        """Sanity check on the limits"""
+        if ( (xmax < xmin) or (ymax < ymin) or (zmax < zmin) ):
+            raise ValueError("Invalid domain limits!")
+
     #### Public protocol ################################################
     def set_pa_wrappers(self, wrappers):
         self.pa_wrappers = wrappers
         self.narrays = len(wrappers)
+        copy_props = []
+        props = self.props
+        for i in range(self.narrays):
+            if props is None:
+                copy_props.append(None)
+            elif isinstance(props, dict):
+                name = wrappers[i].pa.name
+                copy_props.append(props[name])
+            else:
+                copy_props.append(props)
+        self.copy_props = copy_props
 
     def set_cell_size(self, cell_size):
         self.cell_size = cell_size
@@ -387,7 +421,75 @@ cdef class CPUDomainManager:
     def compute_cell_size_for_binning(self):
         self._compute_cell_size_for_binning()
 
-    def update(self, *args, **kwargs):
+    cpdef _remove_ghosts(self):
+        """Remove all ghost particles from a previous step
+
+        While creating periodic neighbors, we create new particles and
+        give them the tag utils.ParticleTAGS.Ghost. Before repeating
+        this step in the next iteration, all current particles with
+        this tag are removed.
+
+        """
+        cdef list pa_wrappers = self.pa_wrappers
+        cdef int narrays = self.narrays
+
+        cdef int array_index
+        cdef NNPSParticleArrayWrapper pa_wrapper
+
+        for array_index in range(narrays):
+            pa_wrapper = <NNPSParticleArrayWrapper> pa_wrappers[array_index]
+            pa_wrapper.remove_tagged_particles(Ghost)
+
+
+##############################################################################
+cdef class CPUDomainManager(DomainManagerBase):
+    """This class determines the limits of the solution domain.
+
+    We expect all simulations to have well defined domain limits
+    beyond which we are either not interested or the solution is
+    invalid to begin with. Thus, if a particle leaves the domain,
+    the solution should be considered invalid (at least locally).
+
+    The initial domain limits could be given explicitly or asked to be
+    computed from the particle arrays. The domain could be periodic.
+
+    """
+    def __init__(self, double xmin=-1000, double xmax=1000, double ymin=0,
+                 double ymax=0, double zmin=0, double zmax=0,
+                 periodic_in_x=False, periodic_in_y=False, periodic_in_z=False,
+                 double gamma_yx=0.0, double gamma_zx=0.0, double gamma_zy=0.0,
+                 double n_layers=2.0, backend=None, props=None,
+                 double dt=0.0, int calls_per_step=2,
+                 mirror_in_x=False, mirror_in_y=False, mirror_in_z=False):
+
+        """Constructor
+
+        The n_layers argument specifies the number of ghost layers as multiples
+        of hmax*radius_scale.
+
+        props: list/dict: properties to copy.
+            Provide a list or dict with the keys as particle array names.
+            Only the specified properties are copied.  If not specified,
+            all props are copied.
+        """
+        DomainManagerBase.__init__(
+            self, xmin=xmin, xmax=xmax,
+            ymin=ymin, ymax=ymax, zmin=zmin, zmax=zmax,
+            periodic_in_x=periodic_in_x, periodic_in_y=periodic_in_y,
+            periodic_in_z=periodic_in_z, gamma_yx=gamma_yx, gamma_zx=gamma_zx,
+            gamma_zy=gamma_zy, n_layers=n_layers, props=props, dt=dt,
+            calls_per_step=calls_per_step,
+            mirror_in_x=mirror_in_x, mirror_in_y=mirror_in_y,
+            mirror_in_z=mirror_in_z
+        )
+
+        self.use_double = True
+        self.dtype = float
+        self.dtype_max = np.finfo(self.dtype).max
+        self.ghosts = None
+
+    #### Public protocol ################################################
+    def update(self):
         """General method that is called before NNPS can bin particles.
 
         This method is responsible for the computation of cell sizes
@@ -402,17 +504,22 @@ cdef class CPUDomainManager:
         # given cubic domain box. In parallel, it is expected that the
         # appropriate parallel NNPS is responsible for the creation of
         # ghost particles.
-        if self.is_periodic and not self.in_parallel:
+        if (self.is_periodic or self.is_mirror) and not self.in_parallel:
             self._update_from_gpu()
 
-            # remove periodic ghost particles from a previous step
+            # remove periodic/mirror ghost particles from a previous step
             self._remove_ghosts()
 
-            # box-wrap current particles for periodicity
-            self._box_wrap_periodic()
+            if self.is_periodic:
+                # box-wrap current particles for periodicity
+                self._box_wrap_periodic()
 
-            # create new periodic ghosts
-            self._create_ghosts_periodic()
+                # create new periodic ghosts
+                self._create_ghosts_periodic()
+
+            if self.is_mirror:
+                # create new mirrored ghosts
+                self._create_ghosts_mirror()
 
             # Update GPU.
             self._update_gpu()
@@ -420,32 +527,238 @@ cdef class CPUDomainManager:
             # update total time (Designed for Transport velocity step)
             # print("Loops: %d" % self.loops)
             # print("calls_per_step : %d" % self.calls_per_step)
-            if self.loops > 0 and (self.loops % self.calls_per_step) == 1:
+            if self.loops > 0 and (self.loops % self.calls_per_step) == 0:
                 self.t = self.t + self.dt
             # print(self.t)
             self.loops =self.loops + 1
 
     #### Private protocol ###############################################
-    @cython.wraparound (False) #turn off negative indexing
-    @cython.boundscheck(False) #turn off bounds-checking
-    cdef _add_to_array(self, DoubleArray arr, double disp):
+    cdef _add_to_array(self, DoubleArray arr, double disp, int start=0):
+        cdef int i
+        for i in range(arr.length - start):
+            arr.data[start + i] += disp
+
+    cdef _change_velocity(self, DoubleArray arr, double disp):
         cdef int i
         for i in range(arr.length):
-            arr.data[i] += disp
+            arr.data[i] += -1.0 * disp
 
-    @cython.wraparound (False) #turn off negative indexing
-    @cython.boundscheck(False) #turn off bounds-checking
-    @cython.cdivision(True)
+    cdef _add_array_to_array(self, DoubleArray arr, DoubleArray translate):
+        cdef int i
+        for i in range(arr.length):
+            arr.data[i] += translate.data[i]
+
+    cdef _mul_to_array(self, DoubleArray arr, double val):
+        cdef int i
+        for i in range(arr.length):
+            arr.data[i] *= val
+
     cdef _shift_periodic(self, DoubleArray arr, double disp, double min_pos,
-                         double max_pos):
+                         double max_pos, int start=0):
         cdef int i
         cdef double L = max_pos-min_pos
-        for i in range(arr.length):
-            arr.data[i] += disp % L
-            if arr.data[i] < min_pos:
-                arr.data[i] += L
-            elif arr.data[i] > max_pos:
-                arr.data[i] -= L
+        for i in range(arr.length - start):
+            if disp > 0.0:
+              arr.data[start + i] += disp % L
+            else:
+              arr.data[start + i] -= (-disp) % L
+            if arr.data[start + i] < min_pos:
+                arr.data[start + i] += L
+            elif arr.data[start + i] > max_pos:
+                arr.data[start + i] -= L
+
+    cdef _create_ghosts_mirror(self):
+        """Identify boundary particles and create images.
+
+        We need to find all particles that are within a specified
+        distance from the boundaries and place image copies on the
+        other side of the boundary. Corner reflections need to be
+        accounted for when using domains with multiple periodicity.
+
+        The periodic domain is specified using the DomainManager object
+
+        """
+        cdef list pa_wrappers = self.pa_wrappers
+        cdef int narrays = self.narrays
+
+        # cell size used to check for periodic ghosts. For summation density
+        # like operations, we need to create two layers of ghost images, this
+        # is configurable via the n_layers argument to the constructor.
+        cdef double cell_size = self.n_layers * self.cell_size
+
+        # mirror domain values
+        cdef double xmin = self.xmin, xmax = self.xmax
+        cdef double ymin = self.ymin, ymax = self.ymax,
+        cdef double zmin = self.zmin, zmax = self.zmax
+
+        # mirror boundary condition flags
+        cdef bint mirror_in_x = self.mirror_in_x
+        cdef bint mirror_in_y = self.mirror_in_y
+        cdef bint mirror_in_z = self.mirror_in_z
+
+        # locals
+        cdef NNPSParticleArrayWrapper pa_wrapper
+        cdef ParticleArray pa, added
+        cdef DoubleArray x, y, z
+        cdef double xi, yi, zi
+        cdef int array_index, i, np
+
+        # temporary indices for particles to be replicated
+        cdef LongArray x_low, x_high, y_high, y_low, z_high, z_low, low, high
+
+        x_low = LongArray(); x_high = LongArray()
+        y_high = LongArray(); y_low = LongArray()
+        z_high = LongArray(); z_low = LongArray()
+
+        xt_low = DoubleArray(); xt_high = DoubleArray()
+        yt_high = DoubleArray(); yt_low = DoubleArray()
+        zt_high = DoubleArray(); zt_low = DoubleArray()
+        low = LongArray(); high = LongArray()
+        low_translate = DoubleArray(); high_translate = DoubleArray()
+
+        for array_index in range(narrays):
+            pa_wrapper = pa_wrappers[ array_index ]
+            pa = pa_wrapper.pa
+            x = pa_wrapper.x; y = pa_wrapper.y; z = pa_wrapper.z
+
+            # reset the length of the arrays
+            x_low.reset(); x_high.reset(); y_high.reset(); y_low.reset()
+            z_low.reset(); z_high.reset()
+
+            np = x.length
+            for i in range(np):
+                xi = x.data[i]; yi = y.data[i]; zi = z.data[i]
+
+                if mirror_in_x:
+                    if ((xi - xmin) <= cell_size):
+                        x_low.append(i)
+                        xt_low.append(-2*(xi - xmin))
+                    if ( (xmax - xi) <= cell_size):
+                        x_high.append(i)
+                        xt_high.append(2*(xmax - xi))
+
+                if mirror_in_y:
+                    if ((yi - ymin) <= cell_size):
+                        y_low.append(i)
+                        yt_low.append(-2*(yi - ymin))
+                    if ( (ymax - yi) <= cell_size ):
+                        y_high.append(i)
+                        yt_high.append(2*(ymax - yi))
+
+                if mirror_in_z:
+                    if ((zi - zmin) <= cell_size):
+                        z_low.append(i)
+                        zt_low.append(-2*(zi - zmin))
+                    if ((zmax - zi) <= cell_size ):
+                        z_high.append(i)
+                        zt_high.append(2*(zmax - zi))
+
+
+            # now treat each case separately and append to the main array
+            added = ParticleArray(x=None, y=None, z=None)
+            x = added.get_carray('x')
+            y = added.get_carray('y')
+            z = added.get_carray('z')
+            if mirror_in_x:
+                # x_low
+                copy = pa.extract_particles( x_low )
+                if copy.get_number_of_particles() > 0:
+                    self._add_array_to_array(copy.get_carray('x'), xt_low)
+                    self._mul_to_array(copy.get_carray('u'), -1)
+                    added.append_parray(copy)
+
+                # x_high
+                copy = pa.extract_particles( x_high )
+                if copy.get_number_of_particles() > 0:
+                    self._add_array_to_array(copy.get_carray('x'), xt_high)
+                    self._mul_to_array(copy.get_carray('u'), -1)
+                    added.append_parray(copy)
+
+            if mirror_in_y:
+                # Now do the corners from the previous.
+                low.reset(); high.reset()
+                low_translate.reset(); high_translate.reset()
+                np = x.length
+                for i in range(np):
+                    yi = y.data[i]
+                    if ( (yi - ymin) <= cell_size ):
+                        low.append(i)
+                        low_translate.append(-2*(yi - ymin))
+                    if ( (ymax - yi) <= cell_size ):
+                        high.append(i)
+                        high_translate.append(2*(ymax - yi))
+
+                copy = added.extract_particles(low)
+                if copy.get_number_of_particles() > 0:
+                    self._add_array_to_array(copy.get_carray('y'), low_translate)
+                    self._mul_to_array(copy.get_carray('v'), -1)
+                    added.append_parray(copy)
+
+                copy = added.extract_particles(high)
+                if copy.get_number_of_particles() > 0:
+                    self._add_array_to_array(copy.get_carray('y'), high_translate)
+                    self._mul_to_array(copy.get_carray('v'), -1)
+                    added.append_parray(copy)
+
+                # Add the actual y_high and y_low now.
+                # y_high
+                copy = pa.extract_particles( y_high )
+                if copy.get_number_of_particles() > 0:
+                    self._add_array_to_array(copy.get_carray('y'), yt_high)
+                    self._mul_to_array(copy.get_carray('v'), -1)
+                    added.append_parray(copy)
+
+                # y_low
+                copy = pa.extract_particles( y_low )
+                if copy.get_number_of_particles() > 0:
+                    self._add_array_to_array(copy.get_carray('y'), yt_low)
+                    self._mul_to_array(copy.get_carray('v'), -1)
+                    added.append_parray(copy)
+
+            if mirror_in_z:
+                # Now do the corners from the previous.
+                low.reset(); high.reset()
+                low_translate.reset(); high_translate.reset()
+                np = x.length
+                for i in range(np):
+                    zi = z.data[i]
+                    if ((zi - zmin) <= cell_size):
+                        low.append(i)
+                        low_translate.append(-2*(zi - zmin))
+                    if ((zmax - zi) <= cell_size):
+                        high.append(i)
+                        high_translate.append(2*(zmax - zi))
+
+                copy = added.extract_particles(low)
+                if copy.get_number_of_particles() > 0:
+                    self._add_array_to_array(copy.get_carray('z'), low_translate)
+                    self._mul_to_array(copy.get_carray('w'), -1)
+                    added.append_parray(copy)
+
+                copy = added.extract_particles(high)
+                if copy.get_number_of_particles() > 0:
+                    self._add_array_to_array(copy.get_carray('z'), high_translate)
+                    self._mul_to_array(copy.get_carray('w'), -1)
+                    added.append_parray(copy)
+
+                # Add the actual z_high and z_low now.
+                # z_high
+                copy = pa.extract_particles( z_high )
+                if copy.get_number_of_particles() > 0:
+                    self._add_array_to_array(copy.get_carray('z'), zt_high)
+                    self._mul_to_array(copy.get_carray('w'), -1)
+                    added.append_parray(copy)
+
+                # z_low
+                copy = pa.extract_particles( z_low )
+                if copy.get_number_of_particles() > 0:
+                    self._add_array_to_array(copy.get_carray('z'), zt_low)
+                    self._mul_to_array(copy.get_carray('w'), -1)
+                    added.append_parray(copy)
+
+
+            added.tag[:] = Ghost
+            pa.append_parray(added)
 
     @cython.wraparound (False) #turn off negative indexing
     @cython.boundscheck(False) #turn off bounds-checking
@@ -463,7 +776,7 @@ cdef class CPUDomainManager:
         """
         # minimum and maximum values of the domain
         cdef double xmin = self.xmin, xmax = self.xmax
-        cdef double ymin = self.ymin, ymax = self.ymax,
+        cdef double ymin = self.ymin, ymax = self.ymax
         cdef double zmin = self.zmin, zmax = self.zmax
 
         # translations along each coordinate direction
@@ -494,30 +807,42 @@ cdef class CPUDomainManager:
                     if x.data[i] < xmin :
                         x.data[i] = x.data[i] + xtranslate
                         if periodic_in_y:
-                            y.data[i] = y.data[i] + (xtranslate*self.gamma_yx*self.t) % ytranslate
+                            y.data[i] = (
+                              y.data[i] + (xtranslate*self.gamma_yx*self.t) % ytranslate
+                            )
                             v.data[i] = v.data[i] + xtranslate*self.gamma_yx
                         if periodic_in_z:
-                            z.data[i] = z.data[i] + (xtranslate*self.gamma_zx*self.t) % ztranslate
+                            z.data[i] = (
+                              z.data[i] + (xtranslate*self.gamma_zx*self.t) % ztranslate
+                            )
                             w.data[i] = w.data[i] + xtranslate*self.gamma_zx
                     if x.data[i] > xmax :
                         x.data[i] = x.data[i] - xtranslate
                         if periodic_in_y:
-                            y.data[i] = y.data[i] - (xtranslate*self.gamma_yx*self.t) % ytranslate
+                            y.data[i] = (
+                              y.data[i] - (xtranslate*self.gamma_yx*self.t) % ytranslate
+                            )
                             v.data[i] = v.data[i] - xtranslate*self.gamma_yx
                         if periodic_in_z:
-                            z.data[i] = z.data[i] - (xtranslate*self.gamma_zx*self.t) % ztranslate
+                            z.data[i] = (
+                              z.data[i] - (xtranslate*self.gamma_zx*self.t) % ztranslate
+                            )
                             w.data[i] = w.data[i] - xtranslate*self.gamma_zx
 
                 if periodic_in_y:
                     if y.data[i] < ymin :
                         y.data[i] = y.data[i] + ytranslate
                         if periodic_in_z:
-                            z.data[i] = z.data[i] + (ytranslate*self.gamma_zy*self.t) % ztranslate
+                            z.data[i] = (
+                              z.data[i] + (ytranslate*self.gamma_zy*self.t) % ztranslate
+                              )
                             w.data[i] = w.data[i] + ytranslate*self.gamma_zy
                     if y.data[i] > ymax :
                         y.data[i] = y.data[i] - ytranslate
                         if periodic_in_z:
-                            z.data[i] = z.data[i] - (ytranslate*self.gamma_zy*self.t) % ztranslate
+                            z.data[i] = (
+                              z.data[i] - (ytranslate*self.gamma_zy*self.t) % ztranslate
+                              )
                             w.data[i] = w.data[i] - ytranslate*self.gamma_zy
 
                 if periodic_in_z:
@@ -531,9 +856,6 @@ cdef class CPUDomainManager:
         if ( (xmax < xmin) or (ymax < ymin) or (zmax < zmin) ):
             raise ValueError("Invalid domain limits!")
 
-    @cython.wraparound (False) #turn off negative indexing
-    @cython.boundscheck(False) #turn off bounds-checking
-    @cython.cdivision(True)
     cdef _create_ghosts_periodic(self):
         """Identify boundary particles and create images.
 
@@ -547,6 +869,7 @@ cdef class CPUDomainManager:
         """
         cdef list pa_wrappers = self.pa_wrappers
         cdef int narrays = self.narrays
+        cdef list copy_props = self.copy_props
 
         # cell size used to check for periodic ghosts. For summation density
         # like operations, we need to create two layers of ghost images, this
@@ -569,11 +892,11 @@ cdef class CPUDomainManager:
 
         # locals
         cdef NNPSParticleArrayWrapper pa_wrapper
-        cdef ParticleArray pa, added
+        cdef ParticleArray pa, ghost_pa
         cdef DoubleArray x, y, z, xt, yt, zt
         cdef double xi, yi, zi
         cdef double shift, L
-        cdef int array_index, i, np
+        cdef int array_index, i, np, start
 
         # temporary indices for particles to be replicated
         cdef LongArray x_low, x_high, y_high, y_low, z_high, z_low, low, high
@@ -583,8 +906,20 @@ cdef class CPUDomainManager:
         z_high = LongArray(); z_low = LongArray()
         low = LongArray(); high = LongArray()
 
+        if not self.ghosts:
+            self.ghosts = [paw.pa.empty_clone(props=copy_props[i])
+                           for i, paw in enumerate(pa_wrappers)]
+        else:
+            for ghost_pa in self.ghosts:
+                ghost_pa.resize(0)
+            for i in range(narrays):
+                self.ghosts[i].ensure_properties(
+                    pa_wrappers[i].pa, props=copy_props[i]
+                )
+
         for array_index in range(narrays):
-            pa_wrapper = pa_wrappers[ array_index ]
+            ghost_pa = self.ghosts[array_index]
+            pa_wrapper = pa_wrappers[array_index]
             pa = pa_wrapper.pa
             x = pa_wrapper.x; y = pa_wrapper.y; z = pa_wrapper.z
 
@@ -611,44 +946,53 @@ cdef class CPUDomainManager:
                     if ( (zmax - zi) <= cell_size ): z_high.append(i)
 
             # now treat each case separately and append to the main array
-            added = ParticleArray(x=None, y=None, z=None)
-            x = added.get_carray('x')
-            y = added.get_carray('y')
-            z = added.get_carray('z')
+            x = ghost_pa.get_carray('x')
+            y = ghost_pa.get_carray('y')
+            z = ghost_pa.get_carray('z')
             if periodic_in_x:
                 # x_low
-                copy = pa.extract_particles( x_low )
-                self._add_to_array(copy.get_carray('x'), xtranslate)
+                start = ghost_pa.get_number_of_particles()
+                pa.extract_particles(
+                    x_low, ghost_pa, align=False, props=copy_props[array_index]
+                )
+                self._add_to_array(ghost_pa.get_carray('x'), xtranslate,
+                                   start=start)
                 if periodic_in_y and self.gamma_yx:
                     shift = xtranslate*self.gamma_yx
                     L = self.ymin
                     U = self.ymax
-                    self._shift_periodic(copy.get_carray('y'), shift*self.t, L, U)
-                    self._add_to_array(copy.get_carray('v'), shift)
+                    self._shift_periodic(ghost_pa.get_carray('y'),
+                      shift*self.t, L, U, start=start)
+                    self._add_to_array(ghost_pa.get_carray('v'), shift, start=start)
                 if periodic_in_z and self.gamma_zx:
                     shift = xtranslate*self.gamma_zx
                     L = self.zmin
                     U = self.zmax
-                    self._shift_periodic(copy.get_carray('z'), shift*self.t, L, U)
-                    self._add_to_array(copy.get_carray('w'), shift)
-                added.append_parray(copy)
+                    self._shift_periodic(ghost_pa.get_carray('z'),
+                      shift*self.t, L, U, start=start)
+                    self._add_to_array(ghost_pa.get_carray('w'), shift, start=start)
 
                 # x_high
-                copy = pa.extract_particles( x_high )
-                self._add_to_array(copy.get_carray('x'), -xtranslate)
+                start = ghost_pa.get_number_of_particles()
+                pa.extract_particles(
+                    x_high, ghost_pa, align=False, props=copy_props[array_index]
+                )
+                self._add_to_array(ghost_pa.get_carray('x'), -xtranslate,
+                                   start=start)
                 if periodic_in_y and self.gamma_yx:
-                    shift = xtranslate*self.gamma_yx
+                    shift = -xtranslate*self.gamma_yx
                     L = self.ymin
                     U = self.ymax
-                    self._shift_periodic(copy.get_carray('y'), -shift*self.t, L, U)
-                    self._add_to_array(copy.get_carray('v'), -shift)
+                    self._shift_periodic(ghost_pa.get_carray('y'),
+                      shift*self.t, L, U, start=start)
+                    self._add_to_array(ghost_pa.get_carray('v'), shift, start=start)
                 if periodic_in_z and self.gamma_zx:
-                    shift = xtranslate*self.gamma_zx
+                    shift = -xtranslate*self.gamma_zx
                     L = self.zmin
                     U = self.zmax
-                    self._shift_periodic(copy.get_carray('z'), -shift*self.t, L, U)
-                    self._add_to_array(copy.get_carray('w'), -shift)
-                added.append_parray(copy)
+                    self._shift_periodic(ghost_pa.get_carray('z'),
+                      shift*self.t, L, U, start=start)
+                    self._add_to_array(ghost_pa.get_carray('w'), shift, start=start)
 
             if periodic_in_y:
                 # Now do the corners from the previous.
@@ -658,50 +1002,69 @@ cdef class CPUDomainManager:
                     yi = y.data[i]
                     if ( (yi - ymin) <= cell_size ): low.append(i)
                     if ( (ymax - yi) <= cell_size ): high.append(i)
-
                 if np > 0:
-                    copy = added.extract_particles(low)
-                    self._add_to_array(copy.get_carray('y'), ytranslate)
+                    start = ghost_pa.get_number_of_particles()
+                    ghost_pa.extract_particles(
+                        low, ghost_pa, align=False, props=copy_props[array_index]
+                    )
+                    self._add_to_array(ghost_pa.get_carray('y'), ytranslate,
+                                       start=start)
                     if periodic_in_z and self.gamma_zy:
                         shift = ytranslate*self.gamma_zy
                         L = self.zmin
                         U = self.zmax
-                        self._shift_periodic(copy.get_carray('z'), shift*self.t, L, U)
-                        self._add_to_array(copy.get_carray('w'), shift)
-                    added.append_parray(copy)
+                        self._shift_periodic(ghost_pa.get_carray('z'),
+                          shift*self.t, L, U, start=start)
+                        self._add_to_array(ghost_pa.get_carray('w'),
+                          shift, start=start)
 
-                    copy = added.extract_particles(high)
-                    self._add_to_array(copy.get_carray('y'), -ytranslate)
+                    start = ghost_pa.get_number_of_particles()
+                    ghost_pa.extract_particles(
+                        high, ghost_pa, align=False, props=copy_props[array_index]
+                    )
+                    self._add_to_array(ghost_pa.get_carray('y'), -ytranslate,
+                                       start=start)
                     if periodic_in_z and self.gamma_zy:
                         shift = ytranslate*self.gamma_zy
                         L = self.zmin
                         U = self.zmax
-                        self._shift_periodic(copy.get_carray('z'), -shift*self.t, L, U)
-                        self._add_to_array(copy.get_carray('w'), -shift)
-                    added.append_parray(copy)
+                        self._shift_periodic(ghost_pa.get_carray('z'),
+                          -shift*self.t, L, U, start=start)
+                        self._add_to_array(ghost_pa.get_carray('w'),
+                          -shift, start=start)
+
 
                 # Add the actual y_high and y_low now.
                 # y_high
-                copy = pa.extract_particles(y_high)
-                self._add_to_array(copy.get_carray('y'), -ytranslate)
+                start = ghost_pa.get_number_of_particles()
+                pa.extract_particles(
+                    y_high, ghost_pa, align=False, props=copy_props[array_index]
+                )
+                self._add_to_array(ghost_pa.get_carray('y'), -ytranslate,
+                                   start=start)
                 if periodic_in_z and self.gamma_zy:
                     shift = ytranslate*self.gamma_zy
                     L = self.zmin
                     U = self.zmax
-                    self._shift_periodic(copy.get_carray('z'), -shift*self.t, L, U)
-                    self._add_to_array(copy.get_carray('w'), -shift)
-                added.append_parray(copy)
+                    self._shift_periodic(ghost_pa.get_carray('z'),
+                                         -shift*self.t, L, U, start=start)
+                    self._add_to_array(ghost_pa.get_carray('w'),
+                                       -shift, start=start)
+                # added.append_parray(copy)
 
                 # y_low
-                copy = pa.extract_particles( y_low )
-                self._add_to_array(copy.get_carray('y'), ytranslate)
+                start = ghost_pa.get_number_of_particles()
+                pa.extract_particles(
+                    y_low, ghost_pa, align=False, props=copy_props[array_index]
+                )
+                self._add_to_array(ghost_pa.get_carray('y'), ytranslate,
+                                   start=start)
                 if periodic_in_z and self.gamma_zy:
                     shift = ytranslate*self.gamma_zy
                     L = self.zmin
                     U = self.zmax
-                    self._shift_periodic(copy.get_carray('z'), shift*self.t, L, U)
-                    self._add_to_array(copy.get_carray('w'), shift)
-                added.append_parray(copy)
+                    self._shift_periodic(ghost_pa.get_carray('z'), shift*self.t, L, U, start=start)
+                    self._add_to_array(ghost_pa.get_carray('w'), shift, start=start)
 
             if periodic_in_z:
                 # Now do the corners from the previous.
@@ -713,27 +1076,40 @@ cdef class CPUDomainManager:
                     if ( (zmax - zi) <= cell_size ): high.append(i)
 
                 if np > 0:
-                    copy = added.extract_particles(low)
-                    self._add_to_array(copy.get_carray('z'), ztranslate)
-                    added.append_parray(copy)
+                    start = ghost_pa.get_number_of_particles()
+                    ghost_pa.extract_particles(
+                        low, ghost_pa, align=False, props=copy_props[array_index]
+                    )
+                    self._add_to_array(ghost_pa.get_carray('z'), ztranslate,
+                                       start=start)
 
-                    copy = added.extract_particles(high)
-                    self._add_to_array(copy.get_carray('z'), -ztranslate)
-                    added.append_parray(copy)
+                    start = ghost_pa.get_number_of_particles()
+                    ghost_pa.extract_particles(
+                        high, ghost_pa, align=False, props=copy_props[array_index]
+                    )
+                    self._add_to_array(ghost_pa.get_carray('z'), -ztranslate,
+                                       start=start)
 
                 # Add the actual z_high and z_low now.
                 # z_high
-                copy = pa.extract_particles( z_high )
-                self._add_to_array(copy.get_carray('z'), -ztranslate)
-                added.append_parray(copy)
+                start = ghost_pa.get_number_of_particles()
+                pa.extract_particles(
+                    z_high, ghost_pa, align=False, props=copy_props[array_index]
+                )
+                self._add_to_array(ghost_pa.get_carray('z'), -ztranslate,
+                                   start=start)
 
                 # z_low
-                copy = pa.extract_particles( z_low )
-                self._add_to_array(copy.get_carray('z'), ztranslate)
-                added.append_parray(copy)
+                start = ghost_pa.get_number_of_particles()
+                pa.extract_particles(
+                    z_low, ghost_pa, align=False, props=copy_props[array_index]
+                )
+                self._add_to_array(ghost_pa.get_carray('z'), ztranslate,
+                                   start=start)
 
-            added.tag[:] = Ghost
-            pa.append_parray(added)
+            ghost_pa.set_num_real_particles(ghost_pa.get_number_of_particles())
+            ghost_pa.tag[:] = Ghost
+            pa.append_parray(ghost_pa, align=False)
 
     cdef _compute_cell_size_for_binning(self):
         """Compute the cell size for the binning.
@@ -749,7 +1125,7 @@ cdef class CPUDomainManager:
         cdef DoubleArray h
         cdef double cell_size
         cdef double _hmax, hmax = -1.0
-        cdef double _hmin, hmin = self.dbl_max
+        cdef double _hmin, hmin = self.dtype_max
 
         for pa_wrapper in pa_wrappers:
             h = pa_wrapper.h
@@ -772,25 +1148,6 @@ cdef class CPUDomainManager:
 
         # set the cell size for the DomainManager
         self.set_cell_size(cell_size)
-
-    cdef _remove_ghosts(self):
-        """Remove all ghost particles from a previous step
-
-        While creating periodic neighbors, we create new particles and
-        give them the tag utils.ParticleTAGS.Ghost. Before repeating
-        this step in the next iteration, all current particles with
-        this tag are removed.
-
-        """
-        cdef list pa_wrappers = self.pa_wrappers
-        cdef int narrays = self.narrays
-
-        cdef int array_index
-        cdef NNPSParticleArrayWrapper pa_wrapper
-
-        for array_index in range(narrays):
-            pa_wrapper = <NNPSParticleArrayWrapper>PyList_GetItem(pa_wrappers, array_index)
-            pa_wrapper.remove_tagged_particles(Ghost)
 
     def _update_gpu(self):
         # FIXME: this is just done for correctness.  We should really
@@ -1039,8 +1396,11 @@ cdef class NeighborCache:
         # This is an upper limit for the number of neighbors in a worst
         # case scenario.
         cdef size_t safety = 1024
+        cdef UIntArray arr
         for i in range(n_threads):
-            (<UIntArray>self._neighbors[i]).c_reserve(
+            arr = <UIntArray>self._neighbors[i]
+            arr.c_reset()
+            arr.c_reserve(
                 self._last_avg_nbr_size*np/n_threads + safety
             )
 
@@ -1271,7 +1631,13 @@ cdef class NNPS(NNPSBase):
     def set_in_parallel(self, bint in_parallel):
         self.domain.manager.in_parallel = in_parallel
 
-    def update_domain(self, *args, **kwargs):
+    def set_use_cache(self, bint use_cache):
+        self.use_cache = use_cache
+        if use_cache:
+            for cache in self.cache:
+                cache.update()
+
+    def update_domain(self):
         self.domain.update()
 
     cpdef update(self):
@@ -1407,7 +1773,7 @@ cdef class NNPS(NNPSBase):
                 _entry.second = gids[_id]
                 _data[i] = _entry
             # Sort it.
-            sort(_data.begin(), _data.end(), _compare_gids)
+            sort(_data.begin(), _data.end(), &_compare_gids)
             # Set the sorted neighbors.
             for i in range(length):
                 nbrs[i] = _data[i].first
@@ -1430,5 +1796,6 @@ cdef class NNPS(NNPSBase):
         self.get_spatially_ordered_indices(pa_index, indices)
         cdef BaseArray arr
 
-        for arr in pa.properties.values():
-            arr.c_align_array(indices)
+        for name, arr in pa.properties.items():
+            stride = pa.stride.get(name, 1)
+            arr.c_align_array(indices, stride)

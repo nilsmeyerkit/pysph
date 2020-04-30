@@ -1,19 +1,18 @@
 """3D Flow around a single fixed fiber particle."""
 
 import os
+
 import numpy as np
 
+from pysph.base.kernels import CubicSpline
 # PySPH imports
 from pysph.base.nnps import DomainManager
-from pysph.base.utils import (get_particle_array_beadchain_fluid,
-                              get_particle_array_beadchain_solid,
-                              get_particle_array_beadchain_fiber)
-
+from pysph.base.utils import (get_particle_array_beadchain_fiber,
+                              get_particle_array_beadchain_fluid,
+                              get_particle_array_beadchain_solid)
 from pysph.solver.application import Application
 from pysph.solver.utils import load, remove_irrelevant_files
-
 from pysph.sph.scheme import BeadChainScheme
-from pysph.base.kernels import CubicSpline
 
 
 class SingleParticle(Application):
@@ -48,10 +47,6 @@ class SingleParticle(Application):
         group.add_argument(
             "--t", action="store", type=float, dest="t",
             default=0.001, help="Cube size (multiples of fiber diameter)"
-        )
-        group.add_argument(
-            "--vtk", action="store_true", dest='vtk',
-            default=False, help="Enable vtk-output during solving."
         )
 
     def consume_user_options(self):
@@ -96,7 +91,7 @@ class SingleParticle(Application):
 
         self.kernel = CubicSpline(dim=3)
         self.scheme.configure_solver(
-            tf=self.options.t, vtk=self.options.vtk, N=20, kernel=self.kernel)
+            tf=self.options.t, N=20, kernel=self.kernel)
 
     def create_particles(self):
         """Three particle arrays are created.
@@ -326,7 +321,7 @@ class SingleParticle(Application):
         fig = os.path.join(self.output_dir, 'velocity.png')
         plt.savefig(fig, dpi=300, bbox_inches='tight')
         try:
-            from matplotlib2tikz import save as tikz_save
+            from tikzplotlib import save as tikz_save
             tikz_save(fig.replace('.png', '.tex'))
         except ImportError:
             print("Did not write tikz figure.")
@@ -340,7 +335,7 @@ class SingleParticle(Application):
         fig = os.path.join(self.output_dir, 'pressure.png')
         plt.savefig(fig, dpi=300, bbox_inches='tight')
         try:
-            from matplotlib2tikz import save as tikz_save
+            from tikzplotlib import save as tikz_save
             tikz_save(fig.replace('.png', '.tex'))
         except ImportError:
             print("Did not write tikz figure.")

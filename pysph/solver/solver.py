@@ -1,19 +1,18 @@
 """ An implementation of a general solver base class """
 from __future__ import print_function
+
+import logging
 # System library imports.
 import os
+
 import numpy
 
 # PySPH imports
 from pysph.base.kernels import CubicSpline
+from pysph.solver.utils import ProgressBar, dump, load
 from pysph.sph.acceleration_eval import make_acceleration_evals
 from pysph.sph.sph_compiler import SPHCompiler
 
-from pysph.solver.utils import FloatPBar, load, dump
-
-from pysph.solver.vtk_output import dump_vtk
-
-import logging
 logger = logging.getLogger(__name__)
 
 EPSILON = numpy.finfo(float).eps*2
@@ -27,7 +26,7 @@ class Solver(object):
                  adaptive_timestep=False, cfl=0.3,
                  output_at_times=(),
                  fixed_h=False,
-                 vtk=False,**kwargs):
+                 **kwargs):
         """**Constructor**
 
         Any additional keyword args are used to set the values of any
@@ -75,8 +74,9 @@ class Solver(object):
         fixed_h : bint
             Flag for constant smoothing lengths `h`
 
-        vtk: bool
-            Flag indicating wether VTK files should be dumped as well
+        reorder_freq : int
+            The number of iterations after which particles should
+            be re-ordered.  If zero, do not do this.
 
         Example
         -------
@@ -100,6 +100,7 @@ class Solver(object):
         self.particles = None
 
         self.acceleration_evals = None
+        self.nnps = None
 
         # solver time and iteration count
         self.t = 0
@@ -176,8 +177,7 @@ class Solver(object):
         # flag for constant smoothing lengths
         self.fixed_h = fixed_h
 
-        # flag indicating VTK output
-        self.vtk = vtk
+        self.reorder_freq = 0
 
         # Set all extra keyword arguments
         for attr, value in kwargs.items():
@@ -218,6 +218,7 @@ class Solver(object):
         sph_compiler.compile()
 
         # Set the nnps for all concerned objects.
+        self.nnps = nnps
         for ae in self.acceleration_evals:
             ae.set_nnps(nnps)
         self.integrator.set_nnps(nnps)
@@ -297,6 +298,14 @@ class Solver(object):
                     array.append_parray(arr)
 
         self.setup(self.particles)
+
+    def reorder_particles(self):
+        """Re-order particles so as to coalesce memory access.
+        """
+        for i in range(len(self.particles)):
+            self.nnps.spatially_order_particles(i)
+        # We must update after the reorder.
+        self.nnps.update()
 
     def set_adaptive_timestep(self, value):
         """Set it to True to use adaptive timestepping based on
@@ -410,6 +419,11 @@ class Solver(object):
     def set_parallel_manager(self, pm):
         self.pm = pm
 
+    def set_reorder_freq(self, freq):
+        """Set the reorder frequency in number of iterations.
+        """
+        self.reorder_freq = freq
+
     def barrier(self):
         if self.comm:
             self.comm.barrier()
@@ -430,12 +444,16 @@ class Solver(object):
             show = False
         else:
             show = show_progress
-        bar = FloatPBar(self.t, self.tf, show=show)
+        bar = ProgressBar(self.t, self.tf, show=show)
         self._epsilon = EPSILON*self.tf
 
         # Initial solution
         self.dump_output()
         self.barrier()  # everybody waits for this to complete
+
+        reorder_freq = self.reorder_freq
+        if reorder_freq > 0:
+            self.reorder_particles()
 
         # Compute the accelerations once for the predictor corrector
         # integrator to work correctly at the first time step.
@@ -482,6 +500,9 @@ class Solver(object):
 
             # update the time for all arrays
             self.update_particle_time()
+
+            if reorder_freq > 0 and (self.count % reorder_freq == 0):
+                self.reorder_particles()
 
             if self.execute_commands is not None:
                 if self.count % self.command_interval == 0:
@@ -551,8 +572,6 @@ class Solver(object):
              detailed_output=self.detailed_output,
              only_real=self.output_only_real, mpi_comm=comm,
              compress=self.compress_output)
-        if self.vtk:
-            dump_vtk(fname, self.particles)
 
     def load_output(self, count):
         """Load particle data from dumped output file.
@@ -686,7 +705,7 @@ class Solver(object):
         # dump output if the iteration number is a multiple of the printing
         # frequency.
         if self.N > 0:
-            self.pfreq=int(self.tf/(self.N*self.dt))
+            self.pfreq = int(self.tf/(self.N*self.dt))
         dump = self.count % self.pfreq == 0
 
         # Consider the other cases if user has requested output at a specified

@@ -14,8 +14,9 @@ References
 
 """
 
+from math import pi, sin
+
 from pysph.sph.equation import Equation
-from math import sin, pi
 
 # constants
 M_PI = pi
@@ -618,7 +619,6 @@ class SolidWallNoSlipBC(Equation):
              d_au, d_av, d_aw,
              s_ug, s_vg, s_wg,
              DWIJ, R2IJ, EPS, XIJ):
-
         # averaged shear viscosity Eq. (6).
         etai = self.nu * d_rho[d_idx]
         etaj = self.nu * s_rho[s_idx]
@@ -679,7 +679,7 @@ class FiberViscousTraction(Equation):
 
         etaij = 2 * (etai * etaj)/(etai + etaj)
 
-        # particle volumes; d_V inverse volume.
+        # particle volumes; d_V is inverse volume
         Vi = 1./d_V[d_idx]
         Vj = 1./s_V[s_idx]
         Vi2 = Vi * Vi

@@ -4,24 +4,21 @@
 3D shearflow with a single fiber
 ################################################################################
 """
-# general imports
+
 import os
+
 import numpy as np
-from scipy.integrate import odeint
-from matplotlib import pyplot as plt
 
-
-# PySPH imports
 from pysph.base.nnps import DomainManager
-from pysph.base.utils import (get_particle_array_beadchain_fluid,
-                              get_particle_array_beadchain_solid,
-                              get_particle_array_beadchain_fiber)
-
+from pysph.base.utils import (get_particle_array_beadchain_fiber,
+                              get_particle_array_beadchain_fluid,
+                              get_particle_array_beadchain_solid)
 from pysph.solver.application import Application
 from pysph.solver.utils import load, remove_irrelevant_files
-# from pysph.solver.tools import FiberIntegrator
-
 from pysph.sph.scheme import BeadChainScheme
+from scipy.integrate import odeint
+
+# from pysph.solver.tools import FiberIntegrator
 
 
 def get_zhang_aspect_ratio(aspect_ratio):
@@ -68,10 +65,6 @@ class Channel(Application):
         group.add_argument(
             "--G", action="store", type=float, dest="G",
             default=1.0, help="Shear rate"
-        )
-        group.add_argument(
-            "--vtk", action="store_true", dest='vtk',
-            default=False, help="Enable vtk-output during solving."
         )
         group.add_argument(
             "--Re", action="store", type=float, dest="Re",
@@ -162,8 +155,9 @@ class Channel(Application):
             direct=True)
         self.scheme.configure_solver(
             tf=self.t,
-            vtk=self.options.vtk,
-            N=self.options.rot*200)
+            # pfreq=1,
+            N=self.options.rot*200
+            )
 
     def create_particles(self):
         """Three particle arrays are created.
@@ -280,6 +274,7 @@ class Channel(Application):
 
         It is employing a iteration over all time steps.
         """
+        from matplotlib import pyplot as plt
         # empty list for time and orientation angle
         t = []
         angle = []
@@ -321,9 +316,9 @@ class Channel(Application):
         plt.plot(t*self.options.G, angle_jeffery_zhang, '--k', color='grey')
 
         # labels
-        plt.xlabel('Strains')
-        plt.ylabel('Rotation angle')
-        plt.legend(['SPH Simulation', 'Jeffery'])
+        plt.xlabel('Strains $tG$')
+        plt.ylabel('Rotation angle $\phi$')
+        plt.legend(['SPH Simulation', 'Jeffery (Zhang)'])
         plt.grid()
         x1, x2, y1, y2 = plt.axis()
         plt.axis((0, x2, 0, y2))
@@ -337,7 +332,7 @@ class Channel(Application):
         plt.savefig(angfig, dpi=300, bbox_inches='tight')
         try:
             tex_fig = os.path.join(self.output_dir, "angleplot.tex")
-            from matplotlib2tikz import save as tikz_save
+            from tikzplotlib import save as tikz_save
             tikz_save(tex_fig)
         except ImportError:
             print("Did not write tikz figure.")

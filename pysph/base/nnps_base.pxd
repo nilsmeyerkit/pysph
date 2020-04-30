@@ -147,12 +147,13 @@ cdef class NNPSParticleArrayWrapper:
     # get the number of particles
     cdef int get_number_of_particles(self)
 
+
 cdef class DomainManager:
     cdef public object backend
     cdef public object manager
 
-# Domain limits for the simulation
-cdef class CPUDomainManager:
+
+cdef class DomainManagerBase:
     cdef public double xmin, xmax
     cdef public double ymin, ymax
     cdef public double zmin, zmax
@@ -168,7 +169,11 @@ cdef class CPUDomainManager:
     cdef public int dim
     cdef public bint periodic_in_x, periodic_in_y, periodic_in_z
     cdef public bint is_periodic
+    cdef public bint mirror_in_x, mirror_in_y, mirror_in_z
+    cdef public bint is_mirror
 
+    cdef public object props
+    cdef public list copy_props
     cdef public list pa_wrappers     # NNPS particle array wrappers
     cdef public int narrays          # number of arrays
     cdef public double cell_size     # distance to create ghosts
@@ -186,20 +191,40 @@ cdef class CPUDomainManager:
 
 
     # remove ghost particles from a previous iteration
-    cdef _remove_ghosts(self)
+    cpdef _remove_ghosts(self)
+
+
+# Domain limits for the simulation
+cdef class CPUDomainManager(DomainManagerBase):
+    cdef public bint use_double
+    cdef public object dtype
+    cdef public double dtype_max
+    cdef public list ghosts
 
     # box-wrap particles within the physical domain
     cdef _box_wrap_periodic(self)
 
     # Convenience function to add a value to a carray
-    cdef _add_to_array(self, DoubleArray arr, double disp)
+    cdef _add_to_array(self, DoubleArray arr, double disp, int start=*)
 
     # Functions to shift ghost particle periodically in a direction
     cdef _shift_periodic(self, DoubleArray arr, double disp, double min_pos,
-                         double max_pos)
+                         double max_pos, int start=*)
 
-    # create new ghosts
+    # Convenience function to multiply a value to a carray
+    cdef _mul_to_array(self, DoubleArray arr, double val)
+
+    # Convenience function to add a carray to a carray elementwise
+    cdef _add_array_to_array(self, DoubleArray arr, DoubleArray translate)
+
+    # Convenience function to add a value to a carray
+    cdef _change_velocity(self, DoubleArray arr, double disp)
+
+    # create new periodic ghosts
     cdef _create_ghosts_periodic(self)
+
+    # create new mirror ghosts
+    cdef _create_ghosts_mirror(self)
 
     # Compute the cell size across processors. The cell size is taken
     # as max(h)*radius_scale
@@ -249,7 +274,8 @@ cdef class NeighborCache:
     cdef UIntArray _start_stop
     cdef IntArray _cached
     cdef void **_neighbors
-    cdef list _neighbor_arrays
+    # This is made public purely for testing!
+    cdef public list _neighbor_arrays
     cdef int _last_avg_nbr_size
 
     cdef void get_neighbors_raw(self, size_t d_idx, UIntArray nbrs) nogil
@@ -267,8 +293,8 @@ cdef class NNPSBase:
     cdef public list particles        # list of particle arrays
     cdef public list pa_wrappers      # list of particle array wrappers
     cdef public int narrays           # Number of particle arrays
-    cdef public bint use_cache        # Use cache or not.
-    cdef list cache                   # The neighbor cache.
+    cdef bint use_cache               # Use cache or not.
+    cdef public list cache            # The neighbor cache.
     cdef int src_index, dst_index     # The current source and dest indices
 
     cdef public DomainManager domain  # Domain manager

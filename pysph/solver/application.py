@@ -1,14 +1,15 @@
 # Standard imports.
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import glob
 import inspect
 import json
 import logging
 import os
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from os.path import (abspath, basename, dirname, isdir, join, realpath,
                      splitext)
 import socket
 import sys
+from textwrap import dedent
 import time
 import numpy as np
 import warnings
@@ -124,7 +125,9 @@ class Application(object):
     10. :py:meth:`create_tools()`: Add any ``pysph.solver.tools.Tool``
         instances.
 
-    Additionally, as the appliction runs there are several convenient optional
+    11. :py:meth:`customize_output()`: Customize the output visualization.
+
+    Additionally, as the application runs there are several convenient optional
     callbacks setup:
 
     1. :py:meth:`pre_step`: Called before each time step.
@@ -136,15 +139,49 @@ class Application(object):
     Finally, it is a good idea to overload the :py:meth:`post_process` method
     to perform any post processing for the generated data.
 
+    The application instance also has several important attributes, some of
+    these are as follows:
+
+    - ``args``: command line arguments, typically ``sys.argv[1:]``.
+
+    - ``domain``: optional :py:class:`pysph.base.nnps_base.DomainManager`
+      instance.
+
+    - ``fname``: filename pattern to use when dumping output.
+
+    - ``inlet_outlet``: list of inlet/outlets.
+
+    - ``nnps``: instance of :py:class:`pysph.base.nnps_base.NNPS`.
+
+    - ``num_procs``: total number of processes running.
+
+    - ``output_dir``: Output directory.
+
+    - ``parallel_manager``: in parallel, an instance of
+      :py:class:`pysph.parallel.parallel_manager.ParallelManager`.
+
+    - ``particles``: list of
+      :py:class:`pysph.base.particle_array.ParticleArray`s.
+
+    - ``rank``: Rank of this process.
+
+    - ``scheme``: the optional :py:class:`pysph.sph.scheme.Scheme` instance.
+
+    - ``solver``: the solver instance, :py:class:`pysph.solver.solver.Solver`.
+
+    - ``tools``: a list of possible :py:class:`pysph.solver.tools.Tool`s.
+
     """
 
-    def __init__(self, fname=None, domain=None):
+    def __init__(self, fname=None, output_dir=None, domain=None):
         """ Constructor
 
         Parameters
         ----------
         fname : str
             file name to use for the output files.
+        output_dir : str
+            output directory name.
         domain : pysph.base.nnps_base.DomainManager
             A domain manager to use. This is used for periodic domains etc.
         """
@@ -183,9 +220,16 @@ class Application(object):
             'none': None
         }
 
-        self.output_dir = abspath(self._get_output_dir_from_fname())
+        if output_dir is None:
+            self.output_dir = abspath(self._get_output_dir_from_fname())
+        else:
+            self.output_dir = output_dir
         self.particles = []
         self.inlet_outlet = []
+        # The default value that is overridden by the command line
+        # options passed or in initialize.
+        self.cache_nnps = False
+        self.iom = None
 
         self.initialize()
         self.scheme = self.create_scheme()
@@ -344,6 +388,12 @@ class Application(object):
             type=int,
             help="Printing frequency for the output")
 
+        parser.add_argument(
+            '--reorder-freq', action="store", dest="reorder_freq",
+            default=None, type=int,
+            help="Frequency between spatially reordering particles."
+        )
+
         # --detailed-output.
         parser.add_argument(
             "--detailed-output",
@@ -374,7 +424,7 @@ class Application(object):
             "--directory",
             action="store",
             dest="output_dir",
-            default=self._get_output_dir_from_fname(),
+            default=self.output_dir,
             help="Dump output in the specified directory.")
 
         # --openmp
@@ -410,6 +460,15 @@ class Application(object):
             default=False,
             help="Use OpenCL to run the simulation.")
 
+        # --cuda
+        parser.add_argument(
+            "--cuda",
+            action="store_true",
+            dest="with_cuda",
+            default=False,
+            help="Use CUDA to run the simulation."
+        )
+
         # --use-local-memory
         parser.add_argument(
             "--use-local-memory",
@@ -432,7 +491,7 @@ class Application(object):
             action="store_true",
             dest="use_double",
             default=False,
-            help="Use double precision for OpenCL code.")
+            help="Use double precision for OpenCL/CUDA code.")
 
         # --kernel
         all_kernels = list_all_kernels()
@@ -443,6 +502,12 @@ class Application(object):
             default=None,
             choices=all_kernels,
             help="Use specified kernel from %s" % all_kernels)
+
+        parser.add_argument(
+            '--post-process', action="store",
+            dest="post_process", default=None,
+            help="Only perform post-processing and exit."
+        )
 
         # Restart options
         restart = parser.add_argument_group("Restart options",
@@ -536,7 +601,7 @@ class Application(object):
             "--cache-nnps",
             dest="cache_nnps",
             action="store_true",
-            default=False,
+            default=self.cache_nnps,
             help="Option to enable the use of neighbor caching.")
 
         nnps_options.add_argument(
@@ -737,11 +802,27 @@ class Application(object):
 
         self.options = options
 
+    def _process_command_line(self):
+        """Process the parsed command line arguments.
+
+        This method calls the scheme's ``consume_user_options`` and
+        :py:meth:`consume_user_options` as well as the
+        :py:meth:`configure_scheme`.
+
+        """
+        options = self.options
+        if options.post_process:
+            self._message('-'*70)
+            self._message('Performing post processing alone.')
+            self.post_process(options.post_process)
+            # Exit right after this so even if the user
+            # has an app.post_process call, it doesn't call it.
+            sys.exit(0)
         # save the path where we want to dump output
         self.output_dir = abspath(options.output_dir)
         mkdir(self.output_dir)
         if self.scheme is not None:
-            self.scheme.consume_user_options(self.options)
+            self.scheme.consume_user_options(options)
         self.consume_user_options()
         if self.scheme is not None:
             self.configure_scheme()
@@ -765,7 +846,12 @@ class Application(object):
             filename = self.fname + '.log'
 
         if len(filename) > 0:
+            # This is needed if the application is launched twice,
+            # as in that case, the old handlers must be removed.
+            for handler in logging.root.handlers[:]:
+                logging.root.removeHandler(handler)
             lfn = os.path.join(self.output_dir, filename)
+            mkdir(self.output_dir)
             format = '%(levelname)s|%(asctime)s|%(name)s|%(message)s'
             logging.basicConfig(
                 level=level, format=format, filename=lfn, filemode='a')
@@ -795,7 +881,7 @@ class Application(object):
             # Hook up the inlet/outlet's update method to be called after
             # each stage.
             for obj in self.inlet_outlet:
-                solver.add_post_step_callback(obj.update)
+                solver.add_post_stage_callback(obj.update)
 
     def _create_particles(self, particle_factory, *args, **kw):
         """ Create particles given a callable `particle_factory` and any
@@ -860,27 +946,39 @@ class Application(object):
         if rank != 0:
             self.particles = utils.create_dummy_particles(particles_info)
 
-    def _configure(self):
+    def _configure_global_config(self):
+        options = self.options
+        # Setup configuration options.
+        config = get_config()
+        if options.with_openmp is not None:
+            config.use_openmp = options.with_openmp
+            logger.info('Using OpenMP')
+        if options.omp_schedule is not None:
+            config.set_omp_schedule(options.omp_schedule)
+            logger.info('Using OpenMP schedule %s', options.omp_schedule)
+
+        if options.with_opencl:
+            config.use_opencl = True
+            logger.info('Using OpenCL')
+        elif options.with_cuda:
+            config.use_cuda = True
+            logger.info('Using CUDA')
+
+        if options.with_local_memory:
+            leaf_size = int(options.octree_leaf_size)
+            config.wgs = leaf_size
+            config.use_local_memory = True
+        if options.use_double:
+            config.use_double = options.use_double
+            logger.info('Using double precision')
+        if options.profile:
+            config.profile = options.profile
+
+    def _configure_solver(self):
         """Configures the application using the options from the
         command-line.
         """
         options = self.options
-        # Setup configuration options.
-        if options.with_openmp is not None:
-            get_config().use_openmp = options.with_openmp
-        if options.omp_schedule is not None:
-            get_config().set_omp_schedule(options.omp_schedule)
-        if options.with_opencl:
-            get_config().use_opencl = True
-        if options.with_local_memory:
-            leaf_size = int(options.octree_leaf_size)
-            get_config().wgs = leaf_size
-            get_config().use_local_memory = True
-        if options.use_double:
-            get_config().use_double = options.use_double
-        if options.profile:
-            get_config().profile = options.profile
-
         # setup the solver using any options
         self.solver.setup_solver(options.__dict__)
 
@@ -902,7 +1000,7 @@ class Application(object):
             cache = options.cache_nnps
 
             # create the NNPS object
-            if options.with_opencl:
+            if options.with_opencl or options.with_cuda:
                 if options.nnps == 'gpu_octree':
                     leaf_size = int(options.octree_leaf_size)
                     # if leaf_size % 32 != 0:
@@ -1044,11 +1142,6 @@ class Application(object):
             self.nnps = nnps
 
         nnps = self.nnps
-        # once the NNPS has been set-up, we set the default Solver
-        # post-stage callback to the DomainManager.setup_domain
-        # method. This method is responsible to computing the new cell
-        # size and doing any periodicity checks if needed.
-        solver.add_post_stage_callback(nnps.update_domain)
 
         # inform NNPS if it's working in parallel
         if self.num_procs > 1:
@@ -1087,6 +1180,12 @@ class Application(object):
         solver.set_compress_output(options.compress_output)
         # disable_output
         solver.set_disable_output(options.disable_output)
+
+        if options.reorder_freq is None:
+            if options.with_opencl:
+                solver.set_reorder_freq(50)
+        else:
+            solver.set_reorder_freq(options.reorder_freq)
 
         # output print frequency
         if options.freq is not None:
@@ -1174,6 +1273,13 @@ class Application(object):
 
                 logger.info('started multiprocessing interface on %s' %
                             (interface.address, ))
+
+    def _configure(self):
+        """Configures the application using the options from the
+        command-line.
+        """
+        self._configure_global_config()
+        self._configure_solver()
 
     def _setup_parallel_manager_and_initial_load_balance(self):
         """This will automatically distribute the particles among processors
@@ -1295,10 +1401,15 @@ class Application(object):
     def _log_solver_info(self, solver):
         sep = '-'*70
 
+        pa_info = {p.name: p.get_number_of_particles()
+                   for p in solver.particles}
         particle_info = '\n  '.join(
-            ['%s: %d' % (p.name, len(p.gid)) for p in solver.particles]
+            ['%s: %d' % (k, v) for k, v in pa_info.items()]
         )
-        p_msg = 'No of particles:\n%s\n  %s\n%s' % (sep, particle_info, sep)
+        total = sum(pa_info.values())
+        if len(pa_info) > 1:
+            particle_info += '\n  Total: %d' % total
+        p_msg = '%s\nNo of particles:\n  %s\n%s' % (sep, particle_info, sep)
         self._message(p_msg)
 
         kernel_name = solver.kernel.__class__.__name__
@@ -1319,6 +1430,17 @@ class Application(object):
         else:
             eqn_info = equations
         logger.info('Using equations:\n%s\n%s\n%s', sep, eqn_info, sep)
+
+    def _mayavi_config(self, code):
+        """Write out the given code to a `mayavi_config.py` in the output
+        directory.
+
+        Note that this will call `textwrap.dedent` on the code.
+        """
+        cfg = os.path.join(self.output_dir, 'mayavi_config.py')
+        if not os.path.exists(cfg):
+            with open(cfg, 'w') as fp:
+                fp.write(dedent(code))
 
     ######################################################################
     # Public interface.
@@ -1357,7 +1479,12 @@ class Application(object):
         info_dir = dirname(fname_or_dir)
         with open(fname_or_dir, 'r') as f:
             info = json.load(f)
+
+        self.args = info.get('args', self.args)
+        self._parse_command_line(force=True)
+
         self.fname = info.get('fname', self.fname)
+
         output_dir = info.get('output_dir', self.output_dir)
         if realpath(info_dir) != realpath(output_dir):
             # Happens if someone moved the directory!
@@ -1366,8 +1493,11 @@ class Application(object):
         else:
             self.output_dir = output_dir
 
-        self.args = info.get('args', self.args)
-        self._parse_command_line(force=True)
+        # Set the output directory of the options so it is corrected as per the
+        # info file.
+        self.options.output_dir = self.output_dir
+        self._process_command_line()
+
         return info
 
     def run(self, argv=None):
@@ -1380,7 +1510,9 @@ class Application(object):
             start_time = time.time()
 
             self._parse_command_line(force=argv is not None)
+            self._process_command_line()
             self._setup_logging()
+            self._configure_global_config()
 
             self.solver = self.create_solver()
             msg = "Solver is None, you may have forgotten to return it!"
@@ -1399,7 +1531,7 @@ class Application(object):
 
             self.nnps = self.create_nnps()
 
-            self._configure()
+            self._configure_solver()
 
             self._setup_solver_callbacks(self)
             for tool in self.create_tools():
@@ -1410,15 +1542,16 @@ class Application(object):
             self._message("Setup took: %.5f secs" % (setup_duration))
             self._write_info(self.info_filename, completed=False, cpu_time=0)
 
+        self.customize_output()
+
         start_time = time.time()
         self.solver.solve(not self.options.quiet)
         end_time = time.time()
         run_duration = end_time - start_time
         self._message("Run took: %.5f secs" % (run_duration))
         if self.options.with_opencl and self.options.profile:
-            from pysph.base.opencl import print_profile, print_mem_usage
+            from compyle.opencl import print_profile
             print_profile()
-            print_mem_usage()
         self._write_info(
             self.info_filename, completed=True, cpu_time=run_duration)
 
@@ -1478,7 +1611,9 @@ class Application(object):
         self.equations = equations
         solver.get_options(self.arg_parse)
         self._parse_command_line()
+        self._process_command_line()
         self._setup_logging()
+        self._configure_global_config()
 
         # Create particles either from scratch or restart
         self._create_particles(particle_factory, *args, **kwargs)
@@ -1489,7 +1624,7 @@ class Application(object):
         if nnps is not None:
             self.nnps = nnps
 
-        self._configure()
+        self._configure_solver()
 
         end_time = time.time()
         setup_duration = end_time - start_time
@@ -1589,6 +1724,18 @@ class Application(object):
         called after particles/inlets etc. are all setup, configured etc.
         """
         return []
+
+    def customize_output(self):
+        """Customize the output file visualization by adding any files.
+
+        For example, the pysph view command will look for a
+        ``mayavi_config.py`` file that can be used to script the viewer. You
+        can use self._mayavi_config('code') to add a default customization
+        here.
+
+        Note that this is executed before the simulation starts.
+        """
+        pass
 
     def pre_step(self, solver):
         """If overloaded, this is called automatically before each integrator
