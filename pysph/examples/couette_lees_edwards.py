@@ -1,7 +1,8 @@
-"""Couette flow with Lees-Edwards boundary conidtions.
+"""Couette flow with Lees-Edwards boundary conditions.
 
-his is using the transport velocity formulation and
-Lees-Edwards Boundary Conditions (120 seconds).
+This is using the transport velocity formulation and Lees-Edwards Boundary
+Conditions (300 seconds) to form a shearflow without walls. The shearflow is superposed
+with a constant lateral velocity to test particle transition across the boundary.
 """
 
 import numpy as np
@@ -20,13 +21,15 @@ Ly = 0.4 * Lx
 rho0 = 1.0
 nu = 0.01
 
-# upper wall velocity based on the Reynolds number and channel width
+# compute shear rate
 Vmax = nu * Re / (2 * d)
 gamma = 2 * Vmax / Lx
+
+# compute reference pressure
 c0 = 10 * Vmax
 p0 = c0 * c0 * rho0
 
-# Numerical setup
+# numerical setup
 dx = 0.05
 hdx = 1.0
 
@@ -36,12 +39,19 @@ dt_cfl = 0.25 * h0 / (c0 + Vmax)
 dt_viscous = 0.125 * h0 ** 2 / nu
 dt_force = 1.0
 
-tf = 400.0
+# time integration
+tf = 3200.0
 dt = min(dt_cfl, dt_viscous, dt_force)
 
 
 class CouetteFlow(Application):
     def create_domain(self):
+        """Create a DomainManager with Lees-Edwards BCs.
+
+        Both directions are set as periodic and the value gamma_yx ist set to the
+        shear rate to shift particles crossing the x-boundary. As the BC has to keep
+        track of time, the time step is passed as well.
+        """
         return DomainManager(
             xmin=0,
             xmax=Lx,
@@ -50,6 +60,7 @@ class CouetteFlow(Application):
             ymax=Ly,
             periodic_in_y=True,
             gamma_yx=gamma,
+            n_layers=1,
             dt=dt,
         )
 
@@ -85,6 +96,7 @@ class CouetteFlow(Application):
 
         # initial speed
         fluid.v[:] = (fluid.x[:] - Lx / 2) * gamma
+        fluid.u[:] = Vmax
 
         # return the particle list
         return [fluid]

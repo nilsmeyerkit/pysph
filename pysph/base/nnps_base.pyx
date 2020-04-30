@@ -249,7 +249,7 @@ cdef class DomainManager:
                  double gamma_yx=0.0, double gamma_zx=0.0,double gamma_zy=0.0,
                  periodic_in_x=False, periodic_in_y=False, periodic_in_z=False,
                  double n_layers=2.0, backend=None, double dt=0.0,
-                 int calls_per_step=1, props=None,
+                 int calls_per_step=2, props=None,
                  mirror_in_x=False, mirror_in_y=False, mirror_in_z=False):
         """Constructor
 
@@ -328,7 +328,7 @@ cdef class DomainManagerBase(object):
                  periodic_in_x=False, periodic_in_y=False, periodic_in_z=False,
                  double gamma_yx=0.0, double gamma_zx=0.0, double gamma_zy=0.0,
                  double n_layers=2.0, backend=None, props=None,
-                 double dt=0.0, int calls_per_step=1,
+                 double dt=0.0, int calls_per_step=2,
                  mirror_in_x=False, mirror_in_y=False, mirror_in_z=False):
         """Constructor
 
@@ -459,7 +459,7 @@ cdef class CPUDomainManager(DomainManagerBase):
                  periodic_in_x=False, periodic_in_y=False, periodic_in_z=False,
                  double gamma_yx=0.0, double gamma_zx=0.0, double gamma_zy=0.0,
                  double n_layers=2.0, backend=None, props=None,
-                 double dt=0.0, int calls_per_step=1,
+                 double dt=0.0, int calls_per_step=2,
                  mirror_in_x=False, mirror_in_y=False, mirror_in_z=False):
 
         """Constructor
@@ -527,7 +527,7 @@ cdef class CPUDomainManager(DomainManagerBase):
             # update total time (Designed for Transport velocity step)
             # print("Loops: %d" % self.loops)
             # print("calls_per_step : %d" % self.calls_per_step)
-            if self.loops > 0 and (self.loops % self.calls_per_step) == 1:
+            if self.loops > 0 and (self.loops % self.calls_per_step) == 0:
                 self.t = self.t + self.dt
             # print(self.t)
             self.loops =self.loops + 1
@@ -558,11 +558,14 @@ cdef class CPUDomainManager(DomainManagerBase):
         cdef int i
         cdef double L = max_pos-min_pos
         for i in range(arr.length - start):
-            arr.data[i] += disp % L
-            if arr.data[i] < min_pos:
-                arr.data[i] += L
-            elif arr.data[i] > max_pos:
-                arr.data[i] -= L
+            if disp > 0.0:
+              arr.data[start + i] += disp % L
+            else:
+              arr.data[start + i] -= (-disp) % L
+            if arr.data[start + i] < min_pos:
+                arr.data[start + i] += L
+            elif arr.data[start + i] > max_pos:
+                arr.data[start + i] -= L
 
     cdef _create_ghosts_mirror(self):
         """Identify boundary particles and create images.
@@ -804,30 +807,42 @@ cdef class CPUDomainManager(DomainManagerBase):
                     if x.data[i] < xmin :
                         x.data[i] = x.data[i] + xtranslate
                         if periodic_in_y:
-                            y.data[i] = y.data[i] + (xtranslate*self.gamma_yx*self.t) % ytranslate
+                            y.data[i] = (
+                              y.data[i] + (xtranslate*self.gamma_yx*self.t) % ytranslate
+                            )
                             v.data[i] = v.data[i] + xtranslate*self.gamma_yx
                         if periodic_in_z:
-                            z.data[i] = z.data[i] + (xtranslate*self.gamma_zx*self.t) % ztranslate
+                            z.data[i] = (
+                              z.data[i] + (xtranslate*self.gamma_zx*self.t) % ztranslate
+                            )
                             w.data[i] = w.data[i] + xtranslate*self.gamma_zx
                     if x.data[i] > xmax :
                         x.data[i] = x.data[i] - xtranslate
                         if periodic_in_y:
-                            y.data[i] = y.data[i] - (xtranslate*self.gamma_yx*self.t) % ytranslate
+                            y.data[i] = (
+                              y.data[i] - (xtranslate*self.gamma_yx*self.t) % ytranslate
+                            )
                             v.data[i] = v.data[i] - xtranslate*self.gamma_yx
                         if periodic_in_z:
-                            z.data[i] = z.data[i] - (xtranslate*self.gamma_zx*self.t) % ztranslate
+                            z.data[i] = (
+                              z.data[i] - (xtranslate*self.gamma_zx*self.t) % ztranslate
+                            )
                             w.data[i] = w.data[i] - xtranslate*self.gamma_zx
 
                 if periodic_in_y:
                     if y.data[i] < ymin :
                         y.data[i] = y.data[i] + ytranslate
                         if periodic_in_z:
-                            z.data[i] = z.data[i] + (ytranslate*self.gamma_zy*self.t) % ztranslate
+                            z.data[i] = (
+                              z.data[i] + (ytranslate*self.gamma_zy*self.t) % ztranslate
+                              )
                             w.data[i] = w.data[i] + ytranslate*self.gamma_zy
                     if y.data[i] > ymax :
                         y.data[i] = y.data[i] - ytranslate
                         if periodic_in_z:
-                            z.data[i] = z.data[i] - (ytranslate*self.gamma_zy*self.t) % ztranslate
+                            z.data[i] = (
+                              z.data[i] - (ytranslate*self.gamma_zy*self.t) % ztranslate
+                              )
                             w.data[i] = w.data[i] - ytranslate*self.gamma_zy
 
                 if periodic_in_z:
@@ -936,8 +951,6 @@ cdef class CPUDomainManager(DomainManagerBase):
             z = ghost_pa.get_carray('z')
             if periodic_in_x:
                 # x_low
-                # copy = pa.extract_particles( x_low )
-                # self._add_to_array(copy.get_carray('x'), xtranslate)
                 start = ghost_pa.get_number_of_particles()
                 pa.extract_particles(
                     x_low, ghost_pa, align=False, props=copy_props[array_index]
@@ -948,19 +961,18 @@ cdef class CPUDomainManager(DomainManagerBase):
                     shift = xtranslate*self.gamma_yx
                     L = self.ymin
                     U = self.ymax
-                    self._shift_periodic(ghost_pa.get_carray('y'), shift*self.t, L, U, start=start)
+                    self._shift_periodic(ghost_pa.get_carray('y'),
+                      shift*self.t, L, U, start=start)
                     self._add_to_array(ghost_pa.get_carray('v'), shift, start=start)
                 if periodic_in_z and self.gamma_zx:
                     shift = xtranslate*self.gamma_zx
                     L = self.zmin
                     U = self.zmax
-                    self._shift_periodic(ghost_pa.get_carray('z'), shift*self.t, L, U, start=start)
+                    self._shift_periodic(ghost_pa.get_carray('z'),
+                      shift*self.t, L, U, start=start)
                     self._add_to_array(ghost_pa.get_carray('w'), shift, start=start)
-                # added.append_parray(copy)
 
                 # x_high
-                # copy = pa.extract_particles( x_high )
-                # self._add_to_array(copy.get_carray('x'), -xtranslate)
                 start = ghost_pa.get_number_of_particles()
                 pa.extract_particles(
                     x_high, ghost_pa, align=False, props=copy_props[array_index]
@@ -968,18 +980,19 @@ cdef class CPUDomainManager(DomainManagerBase):
                 self._add_to_array(ghost_pa.get_carray('x'), -xtranslate,
                                    start=start)
                 if periodic_in_y and self.gamma_yx:
-                    shift = xtranslate*self.gamma_yx
+                    shift = -xtranslate*self.gamma_yx
                     L = self.ymin
                     U = self.ymax
-                    self._shift_periodic(ghost_pa.get_carray('y'), -shift*self.t, L, U, start=start)
-                    self._add_to_array(ghost_pa.get_carray('v'), -shift, start=start)
+                    self._shift_periodic(ghost_pa.get_carray('y'),
+                      shift*self.t, L, U, start=start)
+                    self._add_to_array(ghost_pa.get_carray('v'), shift, start=start)
                 if periodic_in_z and self.gamma_zx:
-                    shift = xtranslate*self.gamma_zx
+                    shift = -xtranslate*self.gamma_zx
                     L = self.zmin
                     U = self.zmax
-                    self._shift_periodic(ghost_pa.get_carray('z'), -shift*self.t, L, U, start=start)
-                    self._add_to_array(ghost_pa.get_carray('w'), -shift, start=start)
-                # added.append_parray(copy)
+                    self._shift_periodic(ghost_pa.get_carray('z'),
+                      shift*self.t, L, U, start=start)
+                    self._add_to_array(ghost_pa.get_carray('w'), shift, start=start)
 
             if periodic_in_y:
                 # Now do the corners from the previous.
@@ -990,8 +1003,6 @@ cdef class CPUDomainManager(DomainManagerBase):
                     if ( (yi - ymin) <= cell_size ): low.append(i)
                     if ( (ymax - yi) <= cell_size ): high.append(i)
                 if np > 0:
-                    # copy = added.extract_particles(low)
-                    # self._add_to_array(copy.get_carray('y'), ytranslate)
                     start = ghost_pa.get_number_of_particles()
                     ghost_pa.extract_particles(
                         low, ghost_pa, align=False, props=copy_props[array_index]
@@ -1002,12 +1013,11 @@ cdef class CPUDomainManager(DomainManagerBase):
                         shift = ytranslate*self.gamma_zy
                         L = self.zmin
                         U = self.zmax
-                        self._shift_periodic(ghost_pa.get_carray('z'), shift*self.t, L, U, start=start)
-                        self._add_to_array(ghost_pa.get_carray('w'), shift, start=start)
-                    # added.append_parray(copy)
+                        self._shift_periodic(ghost_pa.get_carray('z'),
+                          shift*self.t, L, U, start=start)
+                        self._add_to_array(ghost_pa.get_carray('w'),
+                          shift, start=start)
 
-                    # copy = added.extract_particles(high)
-                    # self._add_to_array(copy.get_carray('y'), -ytranslate)
                     start = ghost_pa.get_number_of_particles()
                     ghost_pa.extract_particles(
                         high, ghost_pa, align=False, props=copy_props[array_index]
@@ -1018,14 +1028,14 @@ cdef class CPUDomainManager(DomainManagerBase):
                         shift = ytranslate*self.gamma_zy
                         L = self.zmin
                         U = self.zmax
-                        self._shift_periodic(ghost_pa.get_carray('z'), -shift*self.t, L, U, start=start)
-                        self._add_to_array(ghost_pa.get_carray('w'), -shift, start=start)
-                    # added.append_parray(copy)
+                        self._shift_periodic(ghost_pa.get_carray('z'),
+                          -shift*self.t, L, U, start=start)
+                        self._add_to_array(ghost_pa.get_carray('w'),
+                          -shift, start=start)
+
 
                 # Add the actual y_high and y_low now.
                 # y_high
-                # copy = pa.extract_particles(y_high)
-                # self._add_to_array(copy.get_carray('y'), -ytranslate)
                 start = ghost_pa.get_number_of_particles()
                 pa.extract_particles(
                     y_high, ghost_pa, align=False, props=copy_props[array_index]
@@ -1043,8 +1053,6 @@ cdef class CPUDomainManager(DomainManagerBase):
                 # added.append_parray(copy)
 
                 # y_low
-                # copy = pa.extract_particles( y_low )
-                # self._add_to_array(copy.get_carray('y'), ytranslate)
                 start = ghost_pa.get_number_of_particles()
                 pa.extract_particles(
                     y_low, ghost_pa, align=False, props=copy_props[array_index]
@@ -1057,7 +1065,6 @@ cdef class CPUDomainManager(DomainManagerBase):
                     U = self.zmax
                     self._shift_periodic(ghost_pa.get_carray('z'), shift*self.t, L, U, start=start)
                     self._add_to_array(ghost_pa.get_carray('w'), shift, start=start)
-                # added.append_parray(copy)
 
             if periodic_in_z:
                 # Now do the corners from the previous.
@@ -1069,13 +1076,6 @@ cdef class CPUDomainManager(DomainManagerBase):
                     if ( (zmax - zi) <= cell_size ): high.append(i)
 
                 if np > 0:
-                    # copy = added.extract_particles(low)
-                    # self._add_to_array(copy.get_carray('z'), ztranslate)
-                    # added.append_parray(copy)
-                    #
-                    # copy = added.extract_particles(high)
-                    # self._add_to_array(copy.get_carray('z'), -ztranslate)
-                    # added.append_parray(copy)
                     start = ghost_pa.get_number_of_particles()
                     ghost_pa.extract_particles(
                         low, ghost_pa, align=False, props=copy_props[array_index]
@@ -1100,9 +1100,6 @@ cdef class CPUDomainManager(DomainManagerBase):
                                    start=start)
 
                 # z_low
-                # copy = pa.extract_particles( z_low )
-                # self._add_to_array(copy.get_carray('z'), ztranslate)
-                # added.append_parray(copy)
                 start = ghost_pa.get_number_of_particles()
                 pa.extract_particles(
                     z_low, ghost_pa, align=False, props=copy_props[array_index]
@@ -1110,8 +1107,6 @@ cdef class CPUDomainManager(DomainManagerBase):
                 self._add_to_array(ghost_pa.get_carray('z'), ztranslate,
                                    start=start)
 
-            # added.tag[:] = Ghost
-            # pa.append_parray(added)
             ghost_pa.set_num_real_particles(ghost_pa.get_number_of_particles())
             ghost_pa.tag[:] = Ghost
             pa.append_parray(ghost_pa, align=False)
