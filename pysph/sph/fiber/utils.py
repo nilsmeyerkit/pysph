@@ -347,7 +347,8 @@ class Contact(Equation):
             if d >= 0.0:
                 self.compute_contact_force(VIJ[0], VIJ[1], VIJ[2], w, d)
             elif alpha > 0.0:
-                self.compute_lubrication_force(VIJ[0], VIJ[1], VIJ[2], w, d, alpha)
+                pass
+                # self.compute_lubrication_force(VIJ[0], VIJ[1], VIJ[2], w, d, alpha)
             else:
                 self.Fx = 0.0
                 self.Fy = 0.0
