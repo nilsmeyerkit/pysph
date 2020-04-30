@@ -1,6 +1,6 @@
 #!/bin/bash
 
-rot=0.01
+rot=2
 
 mkdir results
 
