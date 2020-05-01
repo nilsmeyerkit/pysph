@@ -11,7 +11,7 @@ do
   pysph run fiber.rve --volfrac $volfrac --openmp --rot $rot
   mkdir results/volfrac01
   mkdir results/volfrac01/${N}
-  cp -a rve_output results/volfrac01/${N}
+  mv rve_output results/volfrac01/${N}
 done
 
 volfrac=0.01
@@ -21,7 +21,7 @@ do
   pysph run fiber.rve --volfrac $volfrac --openmp --rot $rot
   mkdir results/volfrac1
   mkdir results/volfrac1/${N}
-  cp -a rve_output results/volfrac1/${N}
+  mv rve_output results/volfrac1/${N}
 done
 
 volfrac=0.1
@@ -31,7 +31,7 @@ do
   pysph run fiber.rve --volfrac $volfrac --openmp --rot $rot
   mkdir results/volfrac10
   mkdir results/volfrac10/${N}
-  cp -a rve_output results/volfrac10/${N}
+  mv rve_output results/volfrac10/${N}
 done
 
 volfrac=0.3
@@ -41,5 +41,5 @@ do
   pysph run fiber.rve --volfrac $volfrac --openmp --rot $rot
   mkdir results/volfrac30
   mkdir results/volfrac30/${N}
-  cp -a rve_output results/volfrac30/${N}
+  mv rve_output results/volfrac30/${N}
 done
