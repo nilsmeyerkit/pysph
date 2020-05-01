@@ -75,7 +75,7 @@ class RVE(Application):
             action="store",
             type=float,
             dest="Re",
-            default=1.0,
+            default=0.5,
             help="Desired Reynolds number.",
         )
         group.add_argument(
