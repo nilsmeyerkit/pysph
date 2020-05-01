@@ -68,7 +68,7 @@ class Channel(Application):
         )
         group.add_argument(
             "--Re", action="store", type=float, dest="Re",
-            default=0.5, help="Desired Particle Reynolds number."
+            default=1.0, help="Desired Reynolds number."
         )
         group.add_argument(
             "--frac", action="store", type=float, dest="phifrac",
