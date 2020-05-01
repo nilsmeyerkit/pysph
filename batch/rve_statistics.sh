@@ -1,12 +1,12 @@
 #!/bin/bash
 
-rot=2
+rot=4
 
 mkdir results
 
 volfrac=0.001
 
-for N in {1..2}
+for N in {1..5}
 do
   pysph run fiber.rve --volfrac $volfrac --openmp --rot $rot
   mkdir results/volfrac01
@@ -16,7 +16,7 @@ done
 
 volfrac=0.01
 
-for N in {1..2}
+for N in {1..5}
 do
   pysph run fiber.rve --volfrac $volfrac --openmp --rot $rot
   mkdir results/volfrac1
@@ -26,7 +26,7 @@ done
 
 volfrac=0.1
 
-for N in {1..2}
+for N in {1..5}
 do
   pysph run fiber.rve --volfrac $volfrac --openmp --rot $rot
   mkdir results/volfrac10
@@ -36,7 +36,7 @@ done
 
 volfrac=0.3
 
-for N in {1..2}
+for N in {1..5}
 do
   pysph run fiber.rve --volfrac $volfrac --openmp --rot $rot
   mkdir results/volfrac30
