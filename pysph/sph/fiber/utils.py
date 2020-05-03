@@ -236,7 +236,7 @@ class Contact(Equation):
     computes the force between two spheres based on Hertz pressure between two
     cylinders. This Equation requires a computation of ditances by the Bending
     equation."""
-    def __init__(self, dest, sources, E, d, dim, pois=0.3, k=0.0, lim=0.5,
+    def __init__(self, dest, sources, E, d, dim, pois=0.3, k=0.0, lim=0.1,
                  eta0=0.0, dt=0.0):
         r"""
         Parameters
