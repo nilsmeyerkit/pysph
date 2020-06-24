@@ -1,6 +1,11 @@
-"""
-Utitlity equations for fibers
-##############################
+"""Utitlity equations for fibers.
+
+Reference
+---------
+
+    .. [Meyer2020] N. Meyer et. al "Parameter Identification of Fiber Orientation
+    Models Based on Direct Fiber Simulation with Smoothed Particle Hydrodynamics",
+    Journal of Composites Science, 2020, 4, 77; doi:10.3390/jcs4020077
 
 """
 
@@ -10,8 +15,10 @@ from pysph.sph.equation import Equation
 
 
 class ComputeDistance(Equation):
-    r"""** Compute Distances to neighbours**
-    The loop saves vectors to previous and next particle only."""
+    """Compute Distances to neighbours.
+
+    The loop saves vectors to previous and next particle only.
+    """
 
     def loop(self, d_idx, s_idx, d_rxnext, d_rynext, d_rznext, d_rnext,
              d_rxprev, d_ryprev, d_rzprev, d_rprev, s_fractag, d_fidx,
@@ -50,7 +57,7 @@ class ComputeDistance(Equation):
 
 
 class HoldPoints(Equation):
-    r"""**Holds flagged points **
+    """Holds flagged points.
 
     Points tagged with 'holdtag' == tag are excluded from accelaration. This
     little trick allows testing of fibers with fixed BCs.
@@ -115,7 +122,7 @@ class HoldPoints(Equation):
 
 
 class Vorticity(Equation):
-    r"""** Computes vorticity of velocity field**
+    """Computes vorticity of velocity field
 
     According to Monaghan 1992 (2.12).
     """
@@ -134,7 +141,9 @@ class Vorticity(Equation):
 
 
 class VelocityGradient(Equation):
-    r"""** Computes 2nd order tensor representing the velocity gradient**
+    """Computes 2nd order tensor representing the velocity gradient.
+
+    See eq. (25) in [Meyer2020].
     """
 
     def initialize(self, d_idx, d_dudx, d_dudy, d_dudz, d_dvdx, d_dvdy, d_dvdz,
@@ -168,10 +177,11 @@ class VelocityGradient(Equation):
 
 
 class Damping(Equation):
-    r"""**Damp particle motion**
+    """Damp particle motion.
 
     Particles are damped. Difference to ArtificialDamping: This damps real
-    particle velocities and therefore affects not only the fiber iteration.
+    particle velocities and therefore affects not only the fiber iteration. In this
+    contect it may be used to test fiber contact in a damped environment.
     """
 
     def __init__(self, dest, sources, d):
@@ -196,8 +206,11 @@ class Damping(Equation):
 
 
 class SimpleContact(Equation):
-    """This class computes simple fiber repulsion to stop penetration. It
-    computes the force between two spheres as Hertz pressure."""
+    """This class computes simple fiber repulsion to stop penetration.
+
+    It computes the force between two spheres as Hertz pressure.
+    """
+
     def __init__(self, dest, sources, E, d, pois=0.3):
         r"""
         Parameters
@@ -232,10 +245,14 @@ class SimpleContact(Equation):
 
 
 class Contact(Equation):
-    """This class computes fiber repulsion to stop penetration. It
-    computes the force between two spheres based on Hertz pressure between two
+    """This class computes fiber repulsion to stop penetration.
+
+    Itcomputes the force between two spheres based on Hertz pressure between two
     cylinders. This Equation requires a computation of ditances by the Bending
-    equation."""
+    equation.
+
+    See eq. (27)-(34) in [Meyer2020].
+    """
     def __init__(self, dest, sources, E, d, dim, pois=0.3, k=0.0, lim=0.1,
                  eta0=0.0, dt=0.0):
         r"""

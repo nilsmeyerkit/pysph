@@ -1,4 +1,15 @@
-"""Collision of a fiber in a damped field (10 minutes)."""
+"""Collision of a fiber in a damped field (10 minutes).
+
+################################################################################
+Beam Collision
+################################################################################
+
+Reference
+---------
+N. Meyer et. al "Parameter Identification of Fiber Orientation Models Based on Direct
+Fiber Simulation with Smoothed Particle Hydrodynamics",
+Journal of Composites Science, 2020, 4, 77; doi:10.3390/jcs4020077
+"""
 from math import sqrt
 
 import numpy as np

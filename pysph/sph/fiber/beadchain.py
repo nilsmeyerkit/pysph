@@ -1,15 +1,24 @@
-"""
-Equations for fibers based on bead chain model.
-##############################
+"""Equations for fibers based on bead chain model.
+
+Reference
+---------
+
+    .. [Meyer2020] N. Meyer et. al "Parameter Identification of Fiber Orientation
+    Models Based on Direct Fiber Simulation with Smoothed Particle Hydrodynamics",
+    Journal of Composites Science, 2020, 4, 77; doi:10.3390/jcs4020077
 
 """
 
-from math import sqrt, acos, sin, pi
+from math import acos, pi, sin, sqrt
+
 from pysph.sph.equation import Equation
 
 
 class EBGVelocityReset(Equation):
-    r"""** Resets EBG velocities **"""
+    """Reset EBG velocities.
+
+    This is only necessary, if subcycling is used.
+    """
 
     def loop(self, d_idx, d_eu, d_ev, d_ew, d_ex, d_ey, d_ez,
              d_u, d_v, d_w, dt):
@@ -27,10 +36,11 @@ class EBGVelocityReset(Equation):
 
 
 class Tension(Equation):
-    r"""**Linear elastic fiber tension**
+    """Linear elastic fiber tension.
 
     Particle acceleration based on fiber tension is computed. The source
-    must be chosen to be the same as the destination particles
+    must be chosen to be the same as the destination particles.
+    See eq. (16) in [Meyer2020].
     """
 
     def __init__(self, dest, sources, ea):
@@ -68,10 +78,10 @@ class Tension(Equation):
 
 
 class ArtificialDamping(Equation):
-    r"""**Damp EBG particle motion**
+    """Damp EBG particle motion.
 
     EBG Particles are damped based on EBG velocity. Use this in combination
-    with EBGStep and EBGVelocityReset.
+    with EBGStep and EBGVelocityReset, if subcycles are applied.
     """
 
     def __init__(self, dest, sources, d):
@@ -96,14 +106,15 @@ class ArtificialDamping(Equation):
 
 
 class Bending(Equation):
-    r"""**Linear elastic fiber bending**
+    r"""Linear elastic fiber bending
 
     Particle acceleration based on fiber bending is computed. The source
-    particles must be chosen to be the same as the destination particles
+    particles must be chosen to be the same as the destination particles.
+    See eq. (17) in [Meyer2020].
     """
 
     def __init__(self, dest, sources, ei):
-        r"""
+        """
         Parameters
         ----------
         ei : float
@@ -174,12 +185,13 @@ class Bending(Equation):
 
 
 class Friction(Equation):
-    r"""**Fiber bending due to friction on fictive surfaces**
+    """Fiber bending due to friction on fictive surfaces
 
     Since the fiber represented by a beadchain of particles has no thickness, a
     term has do compensate fritction due to shear on the particles surface.
     The source particles must be chosen to be the same as the destination
     particles.
+    See Appendix A in [Meyer2020].
     """
 
     def __init__(self, dest, sources, J, dx, mu, d):
