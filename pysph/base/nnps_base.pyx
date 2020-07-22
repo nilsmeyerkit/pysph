@@ -1,5 +1,5 @@
-#cython: embedsignature=True
-#cython: profile=True
+# cython: language_level=3, embedsignature=True
+# distutils: language=c++
 # Library imports.
 import numpy as np
 cimport numpy as np
@@ -56,7 +56,7 @@ IF UNAME_SYSNAME == "Windows":
 
 # Particle Tag information
 from cyarray.carray cimport BaseArray, aligned_malloc, aligned_free
-from utils import ParticleTAGS
+from .utils import ParticleTAGS
 
 cdef int Local = ParticleTAGS.Local
 cdef int Remote = ParticleTAGS.Remote
@@ -552,6 +552,7 @@ cdef class CPUDomainManager(DomainManagerBase):
         cdef int i
         for i in range(arr.length):
             arr.data[i] *= val
+
 
     cdef _shift_periodic(self, DoubleArray arr, double disp, double min_pos,
                          double max_pos, int start=0):
@@ -1401,7 +1402,7 @@ cdef class NeighborCache:
             arr = <UIntArray>self._neighbors[i]
             arr.c_reset()
             arr.c_reserve(
-                self._last_avg_nbr_size*np/n_threads + safety
+                <size_t>(self._last_avg_nbr_size*np/n_threads) + safety
             )
 
     #### Private protocol ################################################

@@ -2,6 +2,7 @@ import numpy as np
 import shutil
 import os
 from os.path import join
+import socket
 from tempfile import mkdtemp
 from pysph import has_h5py
 
@@ -12,7 +13,7 @@ except ImportError:
     from unittest import TestCase, main, skipUnless
 
 from pysph.base.utils import get_particle_array, get_particle_array_wcsph
-from pysph.solver.utils import dump, load, dump_v1, get_files
+from pysph.solver.utils import dump, load, dump_v1, get_files, get_free_port
 
 
 class TestGetFiles(TestCase):
@@ -76,7 +77,7 @@ class TestOutputNumpy(TestCase):
         self.assertTrue(np.allclose(pa.y, pa1.y, atol=1e-14))
 
     def test_dump_and_load_works_with_compress(self):
-        x = np.linspace(0, 1.0, 10)
+        x = np.linspace(0, 1.0, 1000)
         y = x*2.0
         dt = 1.0
         pa = get_particle_array(name='fluid', x=x, y=y)
@@ -185,6 +186,39 @@ class TestOutputNumpyV1(TestCase):
                              list(sorted(pa1.properties.keys())))
         self.assertTrue(np.allclose(pa.x, pa1.x, atol=1e-14))
         self.assertTrue(np.allclose(pa.y, pa1.y, atol=1e-14))
+
+
+class TestGetFreePort(TestCase):
+    def test_finds_port_not_taken(self):
+        # Given
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(('', 9800))
+        self.addCleanup(sock.close)
+
+        # When
+        port = get_free_port(9800)
+
+        # Then
+        self.assertNotEqual(port, 9800)
+        self.assertTrue(port > 9800)
+
+        # When
+        port1 = get_free_port(port)
+
+        # Then
+        # getting a free port should not block that port.
+        self.assertEqual(port, port1)
+
+    def test_free_port_skips_given(self):
+        # Given
+        skip = (9800, 9801)
+
+        # When
+        port = get_free_port(9800, skip=skip)
+
+        # Then
+        self.assertNotIn(port, skip)
+        self.assertTrue(port > 9801)
 
 
 if __name__ == '__main__':
